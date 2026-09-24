@@ -293,7 +293,7 @@ table.qt tbody tr.dragging{opacity:.4;}
 @keyframes sp{to{transform:rotate(360deg)}}
 
 /* ══ TOAST ══════════════════════════════════════ */
-#toast{position:fixed;bottom:1.1rem;left:50%;transform:translateX(-50%) translateY(50px);background:var(--primary);color:white;padding:.55rem 1.2rem;border-radius:20px;font-size:.8rem;font-weight:700;opacity:0;transition:all .28s;z-index:999;pointer-events:none;white-space:nowrap;}
+#toast{position:fixed;bottom:1.1rem;left:50%;transform:translateX(-50%) translateY(50px);background:var(--primary);color:white;padding:.55rem 1.2rem;border-radius:20px;font-size:.8rem;font-weight:700;opacity:0;transition:all .28s;z-index:10001;pointer-events:none;white-space:nowrap;}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 
 /* ══ MODAL ══════════════════════════════════════ */
@@ -306,6 +306,40 @@ table.qt tbody tr.dragging{opacity:.4;}
 .modal input{width:100%;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;margin-bottom:.85rem;direction:ltr;}
 .modal input:focus{outline:none;border-color:var(--primary);}
 .modal-btns{display:flex;gap:.6rem;justify-content:flex-end;}
+
+/* ══ FORMS (settings tabs, invoice dialog) ══════ */
+.modal{max-height:92vh;overflow-y:auto;}
+.modal-wide{width:620px;}
+.modal select,.modal textarea{width:100%;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;margin-bottom:.85rem;background:white;direction:rtl;}
+.modal textarea{resize:vertical;line-height:1.6;}
+.modal select:focus,.modal textarea:focus{outline:none;border-color:var(--primary);}
+.modal input.rtl{direction:rtl;}
+.modal input.bad{border-color:var(--red);background:#fff6f6;}
+.set-tabs{display:flex;gap:.2rem;margin:.2rem 0 1rem;border-bottom:1.5px solid var(--border);}
+.set-tab{padding:.45rem .8rem;border:none;background:transparent;font-family:'Tajawal',sans-serif;font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;}
+.set-tab:hover{color:var(--primary);}
+.set-tab.active{color:var(--primary);border-bottom-color:var(--orange);}
+.set-pane{display:none;}
+.set-pane.active{display:block;}
+.set-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 .75rem;}
+.set-grid .full{grid-column:1/-1;}
+.set-sec{font-size:.72rem;font-weight:800;color:var(--gold-dk);margin:.1rem 0 .55rem;padding-bottom:.25rem;border-bottom:1px dashed var(--border2);}
+.fld-hint{font-size:.64rem;color:var(--muted);margin:-.65rem 0 .75rem;line-height:1.5;}
+.form-err{display:none;background:#fde8e8;border:1px solid #f5c6c6;color:var(--red);border-radius:6px;padding:.5rem .75rem;font-size:.74rem;line-height:1.8;margin-bottom:.85rem;}
+.form-warn{background:var(--gold-pale);border:1px solid #EFE3C0;color:#6b5520;border-radius:6px;padding:.45rem .75rem;font-size:.74rem;line-height:1.7;margin-bottom:.6rem;}
+.form-warn a{color:var(--primary);font-weight:800;}
+.form-ok{background:#EFF6EE;border:1px solid #cfe3cc;color:var(--primary);border-radius:6px;padding:.45rem .75rem;font-size:.74rem;margin-bottom:.6rem;}
+#invDataOverlay.simplified .req-std{display:none;}
+@media (max-width:600px){ .set-grid{grid-template-columns:1fr;} }
+
+/* ══ OPTIONS MENU ═══════════════════════════════ */
+.opt-wrap{position:relative;}
+.opt-menu{position:absolute;top:calc(100% + 8px);left:0;min-width:250px;background:white;border:1px solid var(--border);border-top:3px solid var(--orange);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:.35rem;display:none;z-index:250;direction:rtl;}
+.opt-menu.open{display:block;}
+.opt-item{display:flex;align-items:center;gap:.6rem;width:100%;padding:.5rem .6rem;border:none;background:transparent;border-radius:6px;font-family:'Tajawal',sans-serif;font-size:.8rem;font-weight:700;color:var(--text);cursor:pointer;text-align:right;}
+.opt-item:hover{background:var(--th-bg);color:var(--primary);}
+.opt-item small{display:block;font-size:.66rem;font-weight:500;color:var(--muted);}
+.opt-sep{height:1px;background:var(--border);margin:.3rem .2rem;}
 
 /* ══ MOBILE ══════════════════════════════════════
    Phone layout: single column, collapsible catalog
@@ -558,6 +592,70 @@ table.qt tbody tr.dragging{opacity:.4;}
   .ct-section-title{page-break-after:avoid;}
   .ct-signature{page-break-inside:avoid;}
 }
+
+/* ══ TAX INVOICE (ZATCA) ═════════════════════════════════════════════════ */
+.inv-overlay{position:fixed;inset:0;z-index:9998;background:#dde1e7;overflow-y:auto;display:none;}
+.inv-page{max-width:840px;margin:1.5rem auto 3rem;background:white;padding:1cm 1.1cm;box-shadow:0 4px 24px rgba(0,0,0,.14);border-radius:4px;font-size:.72rem;line-height:1.55;direction:rtl;position:relative;overflow:hidden;}
+.inv-page .en{direction:ltr;}
+.inv-draft-wm{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%) rotate(-22deg);font-size:4.5rem;font-weight:900;color:rgba(192,57,43,.1);pointer-events:none;white-space:nowrap;z-index:0;}
+.inv-head{display:grid;grid-template-columns:1fr auto 1fr;gap:.9rem;align-items:center;padding-bottom:.55rem;border-bottom:3px solid var(--primary);}
+.inv-head .en{text-align:left;}
+.inv-seller-name{font-weight:900;font-size:.9rem;color:var(--primary);line-height:1.35;margin-bottom:.15rem;}
+.inv-logo{height:66px;object-fit:contain;display:block;}
+.inv-title{display:flex;justify-content:space-between;align-items:center;margin:.55rem 0;padding:.35rem .7rem;background:var(--gold-pale);border-right:4px solid var(--orange);font-weight:900;font-size:1rem;color:var(--primary);}
+.inv-meta{display:grid;grid-template-columns:auto 1fr;gap:.8rem;align-items:start;}
+.inv-qr{width:150px;text-align:center;}
+.inv-qr svg{width:150px;height:150px;display:block;}
+.inv-qr-note{font-size:.58rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+.inv-qr-ph{width:150px;height:150px;border:2px dashed var(--border2);border-radius:6px;display:grid;place-items:center;text-align:center;font-size:.66rem;color:var(--muted);padding:.5rem;}
+.inv-kv{width:100%;border-collapse:collapse;}
+.inv-kv td{border:1px solid var(--border);padding:.24rem .5rem;vertical-align:middle;}
+.inv-kv td.k{color:#333;font-weight:700;white-space:nowrap;width:1%;background:#FAFBF9;line-height:1.3;}
+.inv-kv td.k .en,.inv-totals td.k .en{display:block;font-size:.6rem;font-weight:500;color:var(--muted);text-align:right;}
+.inv-kv td.v{font-weight:700;text-align:center;word-break:break-word;}
+.inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.65rem;}
+.inv-parties.single{grid-template-columns:1fr;}
+.inv-sec{display:flex;justify-content:space-between;background:var(--primary);color:white;font-weight:800;font-size:.72rem;padding:.28rem .55rem;}
+.inv-items-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:.65rem;}
+.inv-items{width:100%;border-collapse:collapse;font-size:.66rem;}
+.inv-items th{background:var(--primary);color:white;padding:.32rem .25rem;border:1px solid var(--primary);font-weight:700;line-height:1.3;text-align:center;}
+.inv-items td{border:1px solid var(--border);padding:.32rem .25rem;text-align:center;vertical-align:top;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.inv-items td.d{text-align:right;white-space:normal;min-width:180px;}
+.inv-items .inv-desc{font-size:.62rem;color:#444;line-height:1.45;margin-top:.1rem;}
+.inv-items tbody tr:nth-child(even){background:#FAFBF9;}
+.inv-sum{display:grid;grid-template-columns:1fr minmax(300px,50%);gap:.8rem;margin-top:.65rem;align-items:start;}
+.inv-words{border:1px solid var(--border);background:var(--gold-pale);padding:.45rem .6rem;line-height:1.8;}
+.inv-totals{width:100%;border-collapse:collapse;}
+.inv-totals td{border:1px solid var(--border);padding:.28rem .5rem;}
+.inv-totals td.k{color:#333;font-weight:700;line-height:1.3;}
+.inv-totals td.a{text-align:left;direction:ltr;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;width:1%;}
+.inv-totals tr.grand td{background:var(--primary);color:white;border-color:var(--primary);font-size:.78rem;}
+.inv-totals tr.grand td.k .en{color:rgba(255,255,255,.75);}
+.inv-sar{height:.85em;width:auto;vertical-align:middle;margin:0 .15em;filter:brightness(0);}
+.inv-totals tr.grand .inv-sar{filter:brightness(0) invert(1);}
+.inv-prov{font-weight:500;font-size:.62rem;color:var(--muted);}
+.inv-note{margin-top:.6rem;border:1px solid var(--border);padding:.45rem .6rem;white-space:pre-wrap;line-height:1.7;}
+.inv-foot{margin-top:.8rem;padding-top:.4rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:1rem;font-size:.58rem;color:var(--muted);}
+/* Phones: stack the sections; the items table scrolls sideways (print always uses the A4 layout) */
+@media screen and (max-width:700px){
+  .inv-page{padding:.5cm .35cm;margin:.6rem .3rem 2rem;}
+  .inv-head,.inv-meta,.inv-parties,.inv-sum{grid-template-columns:1fr;}
+  .inv-head{text-align:center;}
+  .inv-head .en{text-align:center;}
+  .inv-logo{margin:0 auto;}
+  .inv-qr{margin:0 auto;}
+  .inv-foot{flex-direction:column;}
+}
+@media print{
+  body.invoice-mode .topnav,body.invoice-mode .workspace,body.invoice-mode #toast,body.invoice-mode .overlay,
+  body.invoice-mode .contract-overlay,body.invoice-mode #print-footer,body.invoice-mode .inv-toolbar{display:none !important;}
+  body.invoice-mode{min-height:0 !important;height:auto !important;overflow:visible !important;}
+  body.invoice-mode .inv-overlay{position:static !important;overflow:visible !important;background:white !important;height:auto !important;}
+  body.invoice-mode .inv-page{box-shadow:none !important;margin:0 !important;padding:0 !important;max-width:100% !important;border-radius:0 !important;overflow:visible !important;}
+  body.invoice-mode .inv-items-wrap{overflow:visible !important;}
+  .inv-items thead{display:table-header-group;}
+  .inv-items tr,.inv-meta,.inv-parties,.inv-sum{page-break-inside:avoid;}
+}
 </style>
 </head>
 <body>
@@ -568,6 +666,10 @@ table.qt tbody tr.dragging{opacity:.4;}
     <button class="btn btn-ghost" onclick="saveQuoteLocally()" title="حفظ محلي في المتصفح">💾 حفظ</button>
     <button class="btn btn-ghost" onclick="openLoadQuote()">📂 تحميل عرض</button>
     <button class="btn btn-outline" onclick="openSettings()">⚙️ الإعدادات</button>
+    <div class="opt-wrap no-print">
+      <button class="btn btn-outline" onclick="toggleOptions()" title="خيارات إضافية">☰ خيارات ▾</button>
+      <div class="opt-menu" id="optMenu"></div>
+    </div>
     <button class="btn btn-outline no-print" onclick="exportToExcel()" title="تصدير إلى Excel">📊 Excel</button>
     <button class="btn btn-orange" onclick="doPrint()">🖨️ طباعة / PDF</button>
   </div>
@@ -759,8 +861,13 @@ table.qt tbody tr.dragging{opacity:.4;}
 
 <!-- Settings Modal -->
 <div class="overlay" id="settingsOverlay">
-  <div class="modal">
-    <h2>⚙️ إعدادات الاتصال</h2>
+  <div class="modal modal-wide">
+    <h2>⚙️ الإعدادات</h2>
+    <div class="set-tabs">
+      <button class="set-tab active" data-tab="conn" onclick="switchSettingsTab('conn')">🔌 الاتصال</button>
+      <button class="set-tab" data-tab="seller" onclick="switchSettingsTab('seller')">🏢 بيانات المنشأة (الفاتورة الضريبية)</button>
+    </div>
+    <div class="set-pane active" data-tab="conn">
     <p class="sub">أدخل مفتاح Google API للاتصال بجداول البيانات ومجلد Drive.</p>
     <label>رقم المستخدم / User ID (مثال: 92)</label>
     <input id="userIdIn" placeholder="92" style="direction:ltr;font-size:1rem;font-weight:800;letter-spacing:2px;">
@@ -778,8 +885,50 @@ table.qt tbody tr.dragging{opacity:.4;}
     <input id="appsScriptUrlIn" placeholder="https://script.google.com/macros/s/...../exec" style="direction:ltr;font-size:.78rem;">
     <label>معرّف مجلد Drive (العقود المحفوظة)</label>
     <input id="contractsFolderIn" style="direction:ltr;font-size:.78rem;">
+    <label>معرّف مجلد Drive (الفواتير الضريبية الصادرة)</label>
+    <input id="invoicesFolderIn" style="direction:ltr;font-size:.78rem;">
+    <div class="fld-hint">مطلوب لإصدار الفواتير — أرشيف مشترك لكل المستخدمين، يُقرأ منه آخر رقم فاتورة محفوظة فيكون الرقم الجديد أكبر منه دائماً. شاركه بصلاحية «أي شخص لديه الرابط».</div>
     <label>رقم بداية تسلسل العقود / Contract Serial (مثال: 90)</label>
     <input id="contractSerialIn" type="number" min="1" step="1" placeholder="90" style="direction:ltr;font-weight:800;letter-spacing:1px;">
+    </div>
+    <div class="set-pane" data-tab="seller" oninput="updateSellerStatus()">
+      <p class="sub">بيانات المدى المبارك (البائع) كما هي مسجّلة لدى هيئة الزكاة والضريبة والجمارك — تظهر في كل فاتورة وفي رمز QR.</p>
+      <div id="sellerStatus"></div>
+      <div id="sellerErr" class="form-err"></div>
+      <div class="set-grid">
+        <div class="full"><label>اسم المنشأة المسجّل (عربي) *</label><input id="slNameAr" class="rtl">
+          <div class="fld-hint">كما في شهادة التسجيل في ضريبة القيمة المضافة تماماً — يُكتب في رمز QR</div></div>
+        <div class="full"><label>اسم المنشأة (إنجليزي) / Company name (English)</label><input id="slNameEn"></div>
+        <div><label>الرقم الضريبي (VAT) *</label><input id="slVat" inputmode="numeric" maxlength="15" placeholder="3XXXXXXXXXXXXX3">
+          <div class="fld-hint">15 رقماً يبدأ وينتهي بالرقم 3</div></div>
+        <div><label>رقم السجل التجاري (CR) *</label><input id="slCrn" inputmode="numeric"></div>
+      </div>
+      <div class="set-sec">العنوان الوطني / National Address</div>
+      <div class="set-grid">
+        <div><label>رقم المبنى *</label><input id="slBuilding" inputmode="numeric" maxlength="4" placeholder="0000">
+          <div class="fld-hint">4 أرقام — الرقم 76 يُكتب 0076</div></div>
+        <div><label>الرقم الإضافي *</label><input id="slAdditional" inputmode="numeric" maxlength="4" placeholder="0000">
+          <div class="fld-hint">4 أرقام من العنوان الوطني</div></div>
+        <div><label>اسم الشارع *</label><input id="slStreet" class="rtl"></div>
+        <div><label>الحي *</label><input id="slDistrict" class="rtl"></div>
+        <div><label>المدينة *</label><input id="slCity" class="rtl"></div>
+        <div><label>الرمز البريدي *</label><input id="slPostal" inputmode="numeric" maxlength="5" placeholder="00000">
+          <div class="fld-hint">5 أرقام</div></div>
+      </div>
+      <div class="set-sec">التواصل والحساب البنكي (اختياري — يظهر في الفاتورة)</div>
+      <div class="set-grid">
+        <div><label>الهاتف</label><input id="slPhone"></div>
+        <div><label>البريد الإلكتروني</label><input id="slEmail" type="email"></div>
+        <div><label>اسم البنك</label><input id="slBank" class="rtl"></div>
+        <div><label>رقم الآيبان (IBAN)</label><input id="slIban" placeholder="SA0000000000000000000000"></div>
+      </div>
+      <div class="set-sec">ترقيم الفواتير</div>
+      <div class="set-grid">
+        <div><label>بادئة رقم الفاتورة</label><input id="slInvPrefix" placeholder="MMC-INV-"></div>
+        <div><label>يبدأ التسلسل من</label><input id="slInvStart" type="number" min="1" step="1" placeholder="1"></div>
+      </div>
+      <div class="fld-hint" style="margin:0 0 .85rem">الترقيم تلقائي: رقم الفاتورة الجديدة = آخر فاتورة محفوظة + 1 (ولا يقل عن رقم البداية)، ولا يُعاد استخدام أي رقم. البادئة تُستخدم للفاتورة الأولى فقط، وبعدها يتبع الترقيم صيغة آخر فاتورة محفوظة.</div>
+    </div>
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="closeSettings()">إلغاء</button>
       <button id="ctcBtn" class="btn btn-outline" onclick="closeSettings();openContract()" style="display:none">📄 CTC</button>
@@ -846,6 +995,92 @@ table.qt tbody tr.dragging{opacity:.4;}
   </div>
 </div>
 
+<!-- In-app confirmation (native confirm() is suppressed in some embedded browsers) -->
+<div class="overlay" id="confirmOverlay" style="z-index:10000">
+  <div class="modal" style="width:420px">
+    <h2 id="confirmTitle"></h2>
+    <p class="sub" id="confirmMsg" style="white-space:pre-line;line-height:1.8"></p>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" id="confirmNo">إلغاء</button>
+      <button class="btn btn-orange" id="confirmYes">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tax Invoice: buyer (client) + invoice details -->
+<div class="overlay" id="invDataOverlay">
+  <div class="modal modal-wide">
+    <h2>🧾 فاتورة ضريبية — بيانات العميل والفاتورة</h2>
+    <p class="sub">تُعبّأ بيانات العميل من عرض السعر — أكمل الحقول المطلوبة (*) لإصدار فاتورة متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك.</p>
+    <div id="invSeqInfo" style="display:none"></div>
+    <div id="invDataWarn"></div>
+    <div id="invDataErr" class="form-err"></div>
+    <label>نوع الفاتورة</label>
+    <select id="invType" onchange="updateInvTypeHint()">
+      <option value="standard">فاتورة ضريبية — لمنشأة (B2B)</option>
+      <option value="simplified">فاتورة ضريبية مبسطة — لفرد (B2C)</option>
+    </select>
+    <div class="fld-hint" id="invTypeHint"></div>
+    <div class="set-sec">بيانات المشتري / Buyer</div>
+    <div class="set-grid">
+      <div class="full"><label>اسم المشتري (المنشأة أو الشخص) <span class="req-std">*</span></label><input id="byName" class="rtl"></div>
+      <div><label>الرقم الضريبي للمشتري</label><input id="byVat" inputmode="numeric" maxlength="15" placeholder="3XXXXXXXXXXXXX3"></div>
+      <div><label>رقم السجل التجاري</label><input id="byCrn" inputmode="numeric">
+        <div class="fld-hint">مطلوب للمنشأة غير المسجّلة في الضريبة</div></div>
+      <div><label>رقم المبنى <span class="req-std">*</span></label><input id="byBuilding" inputmode="numeric" maxlength="4" placeholder="0000"></div>
+      <div><label>الرقم الإضافي</label><input id="byAdditional" inputmode="numeric" maxlength="4" placeholder="0000"></div>
+      <div><label>اسم الشارع <span class="req-std">*</span></label><input id="byStreet" class="rtl"></div>
+      <div><label>الحي <span class="req-std">*</span></label><input id="byDistrict" class="rtl"></div>
+      <div><label>المدينة <span class="req-std">*</span></label><input id="byCity" class="rtl"></div>
+      <div><label>الرمز البريدي <span class="req-std">*</span></label><input id="byPostal" inputmode="numeric" maxlength="5" placeholder="00000"></div>
+      <div><label>رمز الدولة</label><input id="byCountry" maxlength="2" placeholder="SA" style="text-transform:uppercase"></div>
+      <div><label>الجوال</label><input id="byPhone"></div>
+    </div>
+    <div class="set-sec">تفاصيل الفاتورة</div>
+    <div class="set-grid">
+      <div><label>تاريخ التوريد *</label><input id="invSupplyDate" type="date"></div>
+      <div><label>طريقة الدفع</label>
+        <select id="invPayment">
+          <option value="42">تحويل بنكي / Bank transfer</option>
+          <option value="10">نقداً / Cash</option>
+          <option value="48">بطاقة بنكية / Bank card</option>
+          <option value="1">أخرى / Other</option>
+        </select></div>
+      <div class="full"><label>ملاحظات (تظهر في الفاتورة)</label><textarea id="invNotes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeInvoiceDialog()">إلغاء</button>
+      <button class="btn btn-orange" onclick="previewInvoice()">👁️ معاينة الفاتورة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tax Invoice view (draft preview / issued, read-only) -->
+<div class="inv-overlay" id="invoiceOverlay">
+  <div class="ct-toolbar inv-toolbar">
+    <div class="ct-toolbar-title" id="invToolbarTitle">فاتورة ضريبية</div>
+    <div style="display:flex;gap:.5rem" id="invToolbarBtns"></div>
+  </div>
+  <div id="invContent"></div>
+</div>
+
+<!-- Issued Invoices Modal -->
+<div class="overlay" id="invListOverlay">
+  <div class="modal">
+    <h2>📂 الفواتير الصادرة</h2>
+    <p class="sub">بحث برقم الفاتورة أو * لعرض الكل</p>
+    <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
+      <input id="invSearch" placeholder="MMC-INV-00001 أو *" style="flex:1;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;direction:ltr;"
+        onkeydown="if(event.key==='Enter')searchInvoices()">
+      <button class="btn btn-orange" onclick="searchInvoices()">🔍 بحث</button>
+    </div>
+    <div id="invListResults" style="max-height:340px;overflow-y:auto;margin-bottom:.85rem;"></div>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeInvoiceList()">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <!-- Print watermark: body-level, position:fixed repeats it on every printed page -->
 <div id="printWatermark"><img id="printWatermarkImg" alt="" /></div>
 
@@ -867,10 +1102,26 @@ let cfg={
   folderId:localStorage.getItem('gdrive_folder')||'',
   quotesFolderId:localStorage.getItem('gquotes_folder')||'',
   contractsFolderId:localStorage.getItem('gcontracts_folder')||'',
+  invoicesFolderId:localStorage.getItem('ginvoices_folder')||'',
   appsScriptUrl:localStorage.getItem('gapps_script_url')||'',
   userId:localStorage.getItem('guser_id')||'00',
   contractSerial:localStorage.getItem('gcontract_serial')||'1',
 };
+// Admin-only features: quote navigation, contracts (CTC/LC), purchase-cost calculation
+const ADMIN_USER_ID='6753';
+function isAdminUser(){ return (cfg.userId||'') === ADMIN_USER_ID; }
+
+// Seller (المدى المبارك) identity for ZATCA tax invoices — edited in Settings → بيانات المنشأة.
+// Defaults come from the contract's second-party block.
+const SELLER_DEFAULTS={
+  nameAr:'المدى المبارك للتجارة والحلول الذكية', nameEn:'', vat:'', crn:'7054249128',
+  building:'', street:'', district:'النخيل', city:'جدة', postal:'', additional:'',
+  phone:'', email:'', bank:'', iban:'', invPrefix:'MMC-INV-', invStart:'1',
+};
+let seller=(()=>{
+  try{ return {...SELLER_DEFAULTS, ...JSON.parse(localStorage.getItem('gseller_info')||'{}')}; }
+  catch(e){ return {...SELLER_DEFAULTS}; }
+})();
 
 document.addEventListener('DOMContentLoaded',()=>{
   // Watermark: set both screen watermark and body-level print watermark
@@ -915,7 +1166,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   window.addEventListener('afterprint', () => markEmptyCells(false));
 });
 
-function openSettings(){
+function openSettings(tab){
   document.getElementById('userIdIn').value=cfg.userId;
   document.getElementById('apiKeyIn').value=cfg.apiKey;
   document.getElementById('sheetIdIn').value=cfg.sheetId;
@@ -925,13 +1176,38 @@ function openSettings(){
   document.getElementById('contractsFolderIn').value=cfg.contractsFolderId;
   document.getElementById('contractSerialIn').value=cfg.contractSerial;
   document.getElementById('appsScriptUrlIn').value=cfg.appsScriptUrl;
-  const isAdmin = (cfg.userId||'') === '6753';
+  document.getElementById('invoicesFolderIn').value=cfg.invoicesFolderId;
+  Object.entries(SELLER_FIELDS).forEach(([id,k])=>{
+    const el=document.getElementById(id);
+    el.value=seller[k]??''; el.classList.remove('bad');
+  });
+  hideFormErr('sellerErr');
+  updateSellerStatus();
+  switchSettingsTab(typeof tab==='string'?tab:'conn');
+  const isAdmin = isAdminUser();
   document.getElementById('ctcBtn').style.display = isAdmin ? '' : 'none';
   document.getElementById('lcBtn').style.display  = isAdmin ? '' : 'none';
   document.getElementById('settingsOverlay').classList.add('open');
 }
 function closeSettings(){document.getElementById('settingsOverlay').classList.remove('open');}
+function switchSettingsTab(t){
+  document.querySelectorAll('#settingsOverlay .set-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  document.querySelectorAll('#settingsOverlay .set-pane').forEach(p=>p.classList.toggle('active',p.dataset.tab===t));
+}
 function saveSettings(){
+  // Seller (ZATCA) fields are format-checked first — a refused save stores nothing at all.
+  const s=readSellerForm();
+  const fmtErrs=sellerErrors(s,true);
+  markBad(SELLER_FIELDS,fmtErrs);
+  if(fmtErrs.length){
+    switchSettingsTab('seller');
+    showFormErr('sellerErr',['لم يُحفظ أي إعداد — صحّح الحقول التالية ثم احفظ:',...fmtErrs.map(e=>'• '+e.msg)]);
+    return;
+  }
+  seller=s;
+  localStorage.setItem('gseller_info',JSON.stringify(seller));
+  cfg.invoicesFolderId=document.getElementById('invoicesFolderIn').value.trim();
+  localStorage.setItem('ginvoices_folder',cfg.invoicesFolderId);
   cfg.userId=document.getElementById('userIdIn').value.trim()||'00';
   cfg.apiKey=document.getElementById('apiKeyIn').value.trim();
   cfg.sheetId=document.getElementById('sheetIdIn').value.trim();
@@ -957,6 +1233,8 @@ async function loadAll(){
   document.getElementById('catList').innerHTML='<div class="loading-s"><div class="spin"></div><p style="font-size:.78rem">جاري التحميل...</p></div>';
   try{
     await Promise.all([loadSheet(),loadImages()]);
+    // Purchase-cost conversion rate (sheet cell I2) — only the admin's cost calculation uses it
+    if(isAdminUser()) loadCostRate().catch(e=>console.warn('Cost rate (I2) not loaded:',e));
     renderCat();
     toast(products.length?'✅ تم تحميل '+products.length+' منتج':'⚠️ لا توجد منتجات');
     // Fetch next quote number from Drive
@@ -1007,6 +1285,7 @@ async function loadSheet(){
   // Column B: Description (1)
   // Column C: Price (2)
   // Column D: Installation fees (3)
+  // Column E: Purchase price in USD (COST_COL) — admin cost calculation only
   let priceCol = 2;
   let installCol = 3;
   // Validate against available width
@@ -1020,6 +1299,10 @@ async function loadSheet(){
     installCost: (()=>{
       if(installCol < 0 || installCol >= (r.length||0)) return 0;
       return parseFloat(r[installCol]?.toString().replace(/[,،\s]/g,'').replace(/[^\d.]/g,'')) || 0;
+    })(),
+    cost: (()=>{
+      if(COST_COL >= (r.length||0)) return 0;
+      return parseFloat(r[COST_COL]?.toString().replace(/[,،\s]/g,'').replace(/[^\d.]/g,'')) || 0;
     })(),
   })).filter(p=>p.code.length>0);
   filtered=[...products];
@@ -1437,8 +1720,8 @@ function loadQuoteLocally(key) {
   }
 }
 
-function deleteLocalQuote(key) {
-  if (!confirm('حذف هذا العرض من الحفظ المحلي؟')) return;
+async function deleteLocalQuote(key) {
+  if (!await appConfirm('حذف العرض المحلي؟', 'حذف هذا العرض من الحفظ المحلي في هذا المتصفح؟', '🗑️ حذف')) return;
   localStorage.removeItem(key);
   document.getElementById('localQuotesList').innerHTML = listLocalQuotes();
 }
@@ -1468,6 +1751,7 @@ function getQuoteState() {
     vatEnabled: document.getElementById('vatToggle').checked,
     techNotes: document.getElementById('techNotes').value,
     terms: document.getElementById('terms').value,
+    invoiceBuyer: invBuyer,
     savedAt: new Date().toISOString(),
   };
 }
@@ -1490,6 +1774,7 @@ function loadQuoteState(state) {
   document.getElementById('vatToggle').checked = state.vatEnabled !== false;
   document.getElementById('techNotes').value = state.techNotes || '';
   document.getElementById('terms').value = state.terms || '';
+  invBuyer = state.invoiceBuyer || null;
 
   // Restore items
   items = (state.items || []).map(it => ({
@@ -1779,7 +2064,7 @@ function setCurrentQuoteIndex(name){
 function updateQuoteNavButtons(){
   const prev = document.getElementById('quotePrevBtn');
   const next = document.getElementById('quoteNextBtn');
-  const isAdmin = (cfg.userId||'') === '6753';
+  const isAdmin = isAdminUser();
   if (prev) prev.style.display = isAdmin ? '' : 'none';
   if (next) next.style.display = isAdmin ? '' : 'none';
   if (!prev || !next || !isAdmin){
@@ -1794,7 +2079,7 @@ function updateQuoteNavButtons(){
 async function refreshQuoteNavigationList(){
   quoteNavFiles = [];
   quoteNavIndex = -1;
-  if ((cfg.userId||'') !== '6753' || !cfg.apiKey || !cfg.quotesFolderId) {
+  if (!isAdminUser() || !cfg.apiKey || !cfg.quotesFolderId) {
     updateQuoteNavButtons();
     return;
   }
@@ -2181,18 +2466,28 @@ function printContract(){
   document.body.appendChild(content);
   overlay.style.display='none';
   document.body.classList.add('contract-mode');
+  let restored = false;
   const restore = ()=>{
+    if(restored) return;
+    restored = true;
     overlay.appendChild(content);
     overlay.style.display='block';
     window.removeEventListener('afterprint', restore);
   };
   window.addEventListener('afterprint', restore);
   window.print();
+  restore(); // some browsers never fire afterprint — don't leave the contract hidden
 }
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
+    // A pending yes/no question answers "no", and nothing underneath it closes
+    if(document.getElementById('confirmOverlay').classList.contains('open')){ document.getElementById('confirmNo').click(); return; }
     if(document.getElementById('contractOverlay').style.display==='block') closeContract();
     if(document.getElementById('loadContractOverlay').classList.contains('open')) closeLoadContract();
+    if(document.getElementById('invoiceOverlay').style.display==='block') closeInvoice();
+    if(document.getElementById('invDataOverlay').classList.contains('open')) closeInvoiceDialog();
+    if(document.getElementById('invListOverlay').classList.contains('open')) closeInvoiceList();
+    closeOptions();
   }
 });
 
@@ -2476,7 +2771,795 @@ async function exportToExcel(){
     toast('✅ تم التصدير: '+quoteNo+'.xlsx');
   }catch(e){toast('❌ خطأ في التصدير: '+e.message);console.error(e);}
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// OPTIONS MENU (☰ خيارات)
+// ══════════════════════════════════════════════════════════════════════════
+function renderOptionsMenu(){
+  const rate = costRate ? ` · 1 USD = ${costRate} CNY` : '';
+  document.getElementById('optMenu').innerHTML = `
+    <button class="opt-item" onclick="closeOptions();openInvoiceDialog()"><span>🧾</span><span>فاتورة ضريبية<small>Tax invoice — ZATCA</small></span></button>
+    <button class="opt-item" onclick="closeOptions();openInvoiceList()"><span>📂</span><span>الفواتير الصادرة<small>Issued invoices</small></span></button>
+    ${isAdminUser() ? `<div class="opt-sep"></div>
+    <button class="opt-item" onclick="closeOptions();calculateCost()"><span>💰</span><span>حساب التكلفة<small>Calculate cost (CSV)${rate}</small></span></button>` : ''}`;
+}
+function toggleOptions(){
+  const menu = document.getElementById('optMenu');
+  if(menu.classList.contains('open')){ closeOptions(); return; }
+  renderOptionsMenu();
+  menu.classList.add('open');
+}
+function closeOptions(){ document.getElementById('optMenu')?.classList.remove('open'); }
+document.addEventListener('click', e => { if(!e.target.closest?.('.opt-wrap')) closeOptions(); });
+
+// ══════════════════════════════════════════════════════════════════════════
+// PURCHASE COST CALCULATION → CSV   (admin 6753 only)
+//   Unit cost = column E of the product's sheet row: the purchase price in USD
+//               (the sheet derives it from the supplier's yuan price ÷ the rate in I2)
+//   Rate      = cell I2 "سعر التحويل (يوان - دولار)" — CNY per 1 USD
+// ══════════════════════════════════════════════════════════════════════════
+const COST_COL = 4;              // column E
+const COST_RATE_CELL = 'I2';
+const USD_TO_SAR = 3.75;         // SAMA peg
+const AIR_SHIPPING_PCT = 17;     // added on top of the cost when shipping by air
+let costRate = null;
+
+async function loadCostRate(){
+  const range = `'${cfg.sheetName.replace(/'/g,"''")}'!${COST_RATE_CELL}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${cfg.sheetId}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE&key=${cfg.apiKey}`;
+  const res = await fetch(url);
+  if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.error?.message||'HTTP '+res.status);}
+  const data = await res.json();
+  const v = parseFloat(String(data.values?.[0]?.[0] ?? '').replace(/[,،\s]/g,''));
+  costRate = (isFinite(v) && v > 0) ? v : null;
+  return costRate;
+}
+
+async function calculateCost(){
+  if(!isAdminUser()) return;
+  const lines = items.filter(it => it.code !== 'INS');   // installation is labour, not a purchase
+  if(!lines.length){ toast('⚠️ أضف منتجات أولاً'); return; }
+  toast('⏳ جاري حساب التكلفة...');
+  // Re-read the sheet so the CSV uses the current purchase prices (col E) and rate (I2)
+  try{ await Promise.all([loadSheet(), loadCostRate()]); filterCat(); }
+  catch(e){ console.warn('Cost data refresh failed — using the last loaded values:', e); }
+
+  const byCode = {};
+  products.forEach(p => { byCode[p.code.trim().toUpperCase()] = p; });
+  const r2 = v => Math.round(v*100)/100;
+  const rate = costRate;
+  const missing = [];
+  let totUsd = 0, totCny = 0, totSar = 0;
+  const rows = lines.map((it, i) => {
+    const unit = r2(byCode[it.code.trim().toUpperCase()]?.cost || 0);   // the shown unit cost is the one multiplied
+    if(!unit){ missing.push(it.code); return [i+1, csvText(it.code), csvText(it.desc), it.qty, '', '', '', ''].join(','); }
+    const usd = r2(unit*it.qty), cny = rate ? r2(usd*rate) : 0, sar = r2(usd*USD_TO_SAR);
+    totUsd += usd; totCny += cny; totSar += sar;
+    return [i+1, csvText(it.code), csvText(it.desc), it.qty, csvNum(unit), csvNum(usd), rate ? csvNum(cny) : '', csvNum(sar)].join(',');
+  });
+  totUsd = r2(totUsd); totCny = r2(totCny); totSar = r2(totSar);
+  const air = v => r2(v*AIR_SHIPPING_PCT/100);
+  const sumRow = (label, usd, cny, sar) => ['', '', csvText(label), '', '', csvNum(usd), rate ? csvNum(cny) : '', csvNum(sar)].join(',');
+
+  const quoteNo = document.getElementById('quoteNo').value.trim();
+  const client  = document.getElementById('clientCo').value.trim() || document.getElementById('clientName').value.trim();
+  const out = [
+    csvText('حساب تكلفة الشراء / Purchase Cost Calculation'),
+    [csvText('رقم العرض / Quote No.'), csvText(quoteNo)].join(','),
+    [csvText('العميل / Client'), csvText(client)].join(','),
+    [csvText('التاريخ / Date'), csvText(riyadhNow().date)].join(','),
+    [csvText('سعر التحويل (يوان - دولار) — خلية I2 / CNY per 1 USD (cell I2)'), rate ? String(rate) : csvText('غير متوفر / N/A')].join(','),
+    [csvText('سعر صرف الريال / SAR per 1 USD'), String(USD_TO_SAR)].join(','),
+    '',
+    ['#', 'رقم القطعة / Part No.', 'الوصف / Description', 'الكمية / Qty', 'سعر الوحدة (دولار) / Unit Cost (USD)',
+     'الإجمالي (دولار) / Total (USD)', 'الإجمالي (يوان) / Total (CNY)', 'الإجمالي (ريال) / Total (SAR)'].map(csvText).join(','),
+    ...rows,
+    '',
+    sumRow('إجمالي تكلفة الشراء / Total purchase cost', totUsd, totCny, totSar),
+    '',
+    csvText(`💡 تنبيه: في حال الشحن الجوي يُضاف ${AIR_SHIPPING_PCT}% لتغطية تكلفة الشحن / Hint: if shipping by air, add +${AIR_SHIPPING_PCT}% to cover the shipping cost`),
+    sumRow(`تكلفة الشحن الجوي +${AIR_SHIPPING_PCT}% / Air shipping +${AIR_SHIPPING_PCT}%`, air(totUsd), air(totCny), air(totSar)),
+    sumRow('الإجمالي مع الشحن الجوي / Total incl. air shipping', totUsd+air(totUsd), totCny+air(totCny), totSar+air(totSar)),
+  ];
+  if(missing.length) out.push('', csvText(`⚠️ بدون سعر شراء في العمود E (غير محتسبة في الإجمالي) / No purchase price in column E (not in totals): ${missing.join(', ')}`));
+
+  const blob = new Blob(['﻿' + out.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Cost-' + (quoteNo || 'quote').replace(/[^a-zA-Z0-9؀-ۿ_-]/g,'_') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(missing.length
+    ? `⚠️ تم تنزيل ملف التكلفة — ${missing.length} صنف بدون سعر شراء في الشيت`
+    : `✅ تم تنزيل ملف التكلفة — الشحن الجوي يضيف ${AIR_SHIPPING_PCT}%`);
+}
+
+// CSV cells: text is quoted (and kept from being read as an Excel formula); money has 2 decimals.
+function csvText(v){
+  let s = String(v ?? '');
+  if(/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function csvNum(v){ return Number(v).toFixed(2); }
+
+// ══════════════════════════════════════════════════════════════════════════
+// ZATCA TAX INVOICE — Phase 1 (generation): tax / simplified tax invoice + QR
+//   Seller identity → ⚙️ Settings → بيانات المنشأة; buyer + invoice details → the invoice dialog.
+//   Field rules and the QR encoding follow iHotel's ZATCA implementation, verified against the
+//   official ZATCA SDK 3.4.6 (server/lib/zatca-validation.js, zatca-buyer.js, integrations/zatca/qr-tlv.js).
+//   Flow: dialog → preview (draft) → issue (number, UUID, Riyadh timestamp, QR) → read-only.
+// ══════════════════════════════════════════════════════════════════════════
+const VAT_RATE = 15;
+const ZATCA_RE = { vat:/^3\d{13}3$/, postal:/^\d{5}$/, building:/^\d{4}$/, additional:/^\d{4}$/ };
+const PAYMENT_MEANS = { '10':'نقداً / Cash', '42':'تحويل بنكي / Bank transfer', '48':'بطاقة بنكية / Bank card', '1':'أخرى / Other' };
+const INVOICE_TITLES = {
+  standard:   { ar:'فاتورة ضريبية', en:'Tax Invoice' },
+  simplified: { ar:'فاتورة ضريبية مبسطة', en:'Simplified Tax Invoice' },
+};
+const SELLER_FIELDS = {
+  slNameAr:'nameAr', slNameEn:'nameEn', slVat:'vat', slCrn:'crn', slBuilding:'building', slAdditional:'additional',
+  slStreet:'street', slDistrict:'district', slCity:'city', slPostal:'postal', slPhone:'phone', slEmail:'email',
+  slBank:'bank', slIban:'iban', slInvPrefix:'invPrefix', slInvStart:'invStart',
+};
+const BUYER_FIELDS = {
+  byName:'name', byVat:'vat', byCrn:'crn', byBuilding:'building', byAdditional:'additional', byStreet:'street',
+  byDistrict:'district', byCity:'city', byPostal:'postal', byCountry:'country', byPhone:'phone',
+};
+let invBuyer = null;    // buyer + invoice details entered for the current quotation (saved with it)
+let _invDraft = null;   // previewed invoice, not issued yet
+
+// ── Field rules ──────────────────────────────────────────────────────────
+const pad4 = v => /^\d{1,3}$/.test(v) ? v.padStart(4,'0') : v;   // building / additional no.: 76 → 0076
+const filled = v => String(v ?? '').trim() !== '';
+function fieldErr(k, label, hint){ return { k, label, msg: label + ' — ' + hint }; }
+
+// formatOnly: check only the fields that were typed in (a settings save); otherwise also require them.
+function sellerErrors(s, formatOnly){
+  const e = [];
+  const need = (k,label) => { if(!formatOnly && !filled(s[k])) e.push(fieldErr(k,label,'مطلوب')); };
+  const fmt = (k,re,label,hint) => {
+    if(filled(s[k])){ if(!re.test(String(s[k]).trim())) e.push(fieldErr(k,label,hint)); }
+    else if(!formatOnly) e.push(fieldErr(k,label,'مطلوب'));
+  };
+  need('nameAr','اسم المنشأة');
+  fmt('vat', ZATCA_RE.vat, 'الرقم الضريبي', '15 رقماً يبدأ وينتهي بالرقم 3');
+  need('crn','السجل التجاري');
+  fmt('building', ZATCA_RE.building, 'رقم المبنى', '4 أرقام بالضبط (76 تُكتب 0076)');
+  need('street','الشارع'); need('district','الحي'); need('city','المدينة');
+  fmt('postal', ZATCA_RE.postal, 'الرمز البريدي', '5 أرقام بالضبط');
+  fmt('additional', ZATCA_RE.additional, 'الرقم الإضافي', '4 أرقام بالضبط');
+  return e;
+}
+
+// Standard (B2B) invoice: buyer name, a VAT no. or CRN, and the full national address are mandatory
+// (BR-KSA-42/44/14/10/63/67). Simplified (B2C): the buyer is optional, but what is typed must be valid.
+function buyerErrors(type, b){
+  const e = [], std = type === 'standard', sa = (b.country || 'SA') === 'SA';
+  const need = (k,label,req) => { if(req && !filled(b[k])) e.push(fieldErr(k,label,'مطلوب')); };
+  const fmt = (k,re,label,hint,req) => {
+    if(filled(b[k])){ if(!re.test(String(b[k]).trim())) e.push(fieldErr(k,label,hint)); }
+    else if(req) e.push(fieldErr(k,label,'مطلوب'));
+  };
+  need('name','اسم المشتري',std);
+  fmt('vat', ZATCA_RE.vat, 'الرقم الضريبي للمشتري', '15 رقماً يبدأ وينتهي بالرقم 3', false);
+  if(std && !filled(b.vat) && !filled(b.crn)) e.push(fieldErr('crn','السجل التجاري للمشتري','مطلوب عند عدم وجود رقم ضريبي'));
+  need('street','الشارع',std); need('city','المدينة',std);
+  if(sa){
+    fmt('building', ZATCA_RE.building, 'رقم المبنى', '4 أرقام بالضبط', std);
+    need('district','الحي',std);
+    fmt('postal', ZATCA_RE.postal, 'الرمز البريدي', '5 أرقام بالضبط', std);
+    fmt('additional', ZATCA_RE.additional, 'الرقم الإضافي', '4 أرقام بالضبط', false);
+  }
+  if(!/^[A-Z]{2}$/.test(b.country || '')) e.push(fieldErr('country','رمز الدولة','حرفان مثل SA'));
+  return e;
+}
+
+function readSellerForm(){
+  const s = {};
+  Object.entries(SELLER_FIELDS).forEach(([id,k]) => { s[k] = document.getElementById(id).value.trim(); });
+  s.vat = s.vat.replace(/\s/g,''); s.crn = s.crn.replace(/\s/g,'');
+  s.building = pad4(s.building); s.additional = pad4(s.additional);
+  s.iban = s.iban.replace(/\s/g,'').toUpperCase();
+  s.invPrefix = s.invPrefix.replace(/[^A-Za-z0-9_-]/g,'') || SELLER_DEFAULTS.invPrefix;
+  s.invStart = String(Math.max(1, parseInt(s.invStart,10) || 1));
+  return s;
+}
+function updateSellerStatus(){
+  const errs = sellerErrors(readSellerForm());
+  document.getElementById('sellerStatus').innerHTML = errs.length
+    ? `<div class="form-warn">⚠️ لإصدار الفواتير الضريبية أكمل: ${errs.map(e => e.label).join('، ')}</div>`
+    : `<div class="form-ok">✅ بيانات المنشأة مكتملة — جاهزة لإصدار الفواتير الضريبية</div>`;
+}
+function markBad(fieldMap, errs){
+  const bad = new Set(errs.map(e => e.k));
+  Object.entries(fieldMap).forEach(([id,k]) => document.getElementById(id)?.classList.toggle('bad', bad.has(k)));
+}
+function showFormErr(id, lines){
+  const el = document.getElementById(id);
+  el.innerHTML = lines.join('<br>');
+  el.style.display = 'block';
+  el.scrollIntoView({ block:'nearest', behavior:'smooth' });
+}
+function hideFormErr(id){ const el = document.getElementById(id); el.style.display = 'none'; el.innerHTML = ''; }
+
+// ── Dates, ids ───────────────────────────────────────────────────────────
+// Saudi local time — the invoice timestamp and QR must not depend on this PC's time zone.
+function riyadhDateTime(d){
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Riyadh', year:'numeric', month:'2-digit',
+    day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' })
+    .formatToParts(d).map(x => [x.type, x.value]));
+  return { date:`${p.year}-${p.month}-${p.day}`, time:`${p.hour}:${p.minute}:${p.second}` };
+}
+function riyadhNow(){ return riyadhDateTime(new Date()); }
+function hijriDate(iso){
+  try{
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', { day:'2-digit', month:'2-digit', year:'numeric', timeZone:'UTC' })
+      .formatToParts(new Date(iso + 'T12:00:00Z'));
+    const g = t => (parts.find(x => x.type === t) || {}).value || '';
+    return g('year') ? `${g('day')}/${g('month')}/${g('year')} هـ` : '';
+  }catch(e){ return ''; }
+}
+const dmy = iso => iso ? iso.split('-').reverse().join('/') : '';
+function newUuid(){
+  if(crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+// ── ZATCA QR: base64 of TLV fields ───────────────────────────────────────
+// Same contract as iHotel's qr-tlv.js (proven against ZATCA SDK 3.4.6):
+//   • the length is BER — a value of 128+ bytes takes the 0x81 / 0x82 long form. Arabic is 2 bytes
+//     per letter, so a seller name crosses 128 easily, and a bare length byte there makes ZATCA
+//     reject the QR (QRCODE_INVALID);
+//   • tag 3 is "YYYY-MM-DDTHH:MM:SS" with no trailing "Z"; tags 4 and 5 are 2-dp decimals.
+// Tags 6-9 (invoice hash, ECDSA signature, public key, ZATCA's certificate signature) only exist
+// after Phase-2 onboarding issues the company a ZATCA certificate — until then there is no honest
+// value for them, so this is the complete Phase-1 QR (tags 1-5).
+function zatcaTlvBase64(fields){
+  const utf8 = new TextEncoder(), bytes = [];
+  fields.forEach(([tag, value]) => {
+    const v = utf8.encode(String(value));
+    const len = v.length < 0x80 ? [v.length]
+      : v.length <= 0xff ? [0x81, v.length]
+      : v.length <= 0xffff ? [0x82, v.length >> 8, v.length & 0xff] : null;
+    if(!len) throw new Error('QR field too long (tag ' + tag + ')');
+    bytes.push(tag, ...len, ...v);
+  });
+  return btoa(String.fromCharCode(...bytes));
+}
+function invoiceQrBase64(inv){
+  return zatcaTlvBase64([
+    [1, inv.seller.nameAr],
+    [2, inv.seller.vat],
+    [3, `${inv.issueDate}T${inv.issueTime}`],
+    [4, inv.totals.total.toFixed(2)],
+    [5, inv.totals.vat.toFixed(2)],
+  ]);
+}
+function qrSvg(text){
+  if(typeof qrcode === 'undefined') return '';
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize:4, margin:2, scalable:true });
+}
+
+// ── Amounts ──────────────────────────────────────────────────────────────
+// Split an amount (in halalas) across lines in proportion to their weights; leftover halalas go to
+// the largest remainders, so the parts always add up exactly to the total.
+function allocateHalalas(total, weights){
+  const sum = weights.reduce((a,b) => a+b, 0);
+  if(!total || !sum) return weights.map(() => 0);
+  const exact = weights.map(w => total*w/sum);
+  const out = exact.map(v => Math.floor(v));
+  let rest = total - out.reduce((a,b) => a+b, 0);
+  exact.map((v,i) => [v - out[i], i]).sort((a,b) => b[0]-a[0]).forEach(([,i]) => { if(rest > 0){ out[i]++; rest--; } });
+  return out;
+}
+// Invoice lines from the quotation: the quote's discount is spread over the lines, then 15% VAT is
+// taken on the discounted total and spread the same way — every column adds up, and the VAT total
+// equals the quotation's VAT.
+function computeInvoiceLines(){
+  const src = items.filter(it => it.qty > 0);
+  const grossH = src.map(it => Math.round(it.unitPrice*it.qty*100));
+  const subH = grossH.reduce((a,b) => a+b, 0);
+  const discH = Math.min(subH, Math.max(0, Math.round(getDiscountAmount(subH/100)*100)));
+  const lineDisc = allocateHalalas(discH, grossH);
+  const netH = grossH.map((g,i) => g - lineDisc[i]);
+  const taxableH = subH - discH;
+  const vatH = Math.round(taxableH*VAT_RATE/100);
+  const lineVat = allocateHalalas(vatH, netH);
+  return {
+    lines: src.map((it,i) => ({
+      code: it.code, name: it.desc, qty: it.qty, unitPrice: Math.round(it.unitPrice*100)/100,
+      gross: grossH[i]/100, discount: lineDisc[i]/100, net: netH[i]/100,
+      vatRate: VAT_RATE, vat: lineVat[i]/100, total: (netH[i]+lineVat[i])/100,
+    })),
+    totals: { gross: subH/100, discount: discH/100, taxable: taxableH/100, vat: vatH/100, total: (taxableH+vatH)/100 },
+  };
+}
+
+// ── Invoice dialog: buyer (client) + invoice details ─────────────────────
+function openInvoiceDialog(){
+  if(!items.length){ toast('⚠️ أضف منتجات أولاً'); return; }
+  const val = id => document.getElementById(id).value.trim();
+  const quoteNo = val('quoteNo');
+  // Details already entered for this quotation win; otherwise start from the quotation's client block.
+  const b = (invBuyer && invBuyer.quoteNo === quoteNo) ? invBuyer : {
+    type: (val('clientCo') || val('taxCard')) ? 'standard' : 'simplified',
+    name: val('clientCo') || val('clientName'), vat: val('taxCard'), crn: val('crNumber'),
+    street: val('clientAddress'), phone: val('clientPhone'), country: 'SA',
+  };
+  Object.entries(BUYER_FIELDS).forEach(([id,k]) => {
+    const el = document.getElementById(id);
+    el.value = b[k] || (k === 'country' ? 'SA' : '');
+    el.classList.remove('bad');
+  });
+  document.getElementById('invType').value = b.type || 'standard';
+  document.getElementById('invSupplyDate').value = b.supplyDate || riyadhNow().date;
+  document.getElementById('invSupplyDate').classList.remove('bad');
+  document.getElementById('invPayment').value = b.paymentMeans || '42';
+  document.getElementById('invNotes').value = b.notes || '';
+
+  const warn = [];
+  const sErr = sellerErrors(seller);
+  if(sErr.length) warn.push(`⚠️ بيانات المنشأة (البائع) غير مكتملة: ${sErr.map(e => e.label).join('، ')} — <a href="#" onclick="closeInvoiceDialog();openSettings('seller');return false">أكملها من الإعدادات</a>`);
+  if(!document.getElementById('vatToggle').checked) warn.push('⚠️ ضريبة القيمة المضافة غير مفعّلة في عرض السعر — الفاتورة الضريبية تحتسب 15% على المبلغ الخاضع للضريبة.');
+  if(!invoiceArchiveOnDrive()) warn.push(`⚠️ لإصدار الفواتير حدّد مجلد الفواتير في الإعدادات (مع مفتاح API ورابط Apps Script) — منه يُقرأ آخر رقم فاتورة محفوظة ليكون الرقم الجديد أكبر منه دائماً. المعاينة متاحة الآن. <a href="#" onclick="closeInvoiceDialog();openSettings('conn');return false">فتح الإعدادات</a>`);
+  document.getElementById('invDataWarn').innerHTML = warn.map(w => `<div class="form-warn">${w}</div>`).join('');
+  hideFormErr('invDataErr');
+  updateInvTypeHint();
+  document.getElementById('invDataOverlay').classList.add('open');
+  refreshInvoiceSeqInfo();
+}
+function closeInvoiceDialog(){ document.getElementById('invDataOverlay').classList.remove('open'); }
+function updateInvTypeHint(){
+  const std = document.getElementById('invType').value === 'standard';
+  document.getElementById('invDataOverlay').classList.toggle('simplified', !std);
+  document.getElementById('invTypeHint').textContent = std
+    ? 'للمنشآت: يلزم اسم المشتري ورقمه الضريبي (أو السجل التجاري) وعنوانه الوطني كاملاً.'
+    : 'للأفراد: بيانات المشتري اختيارية — وما يُكتب منها يجب أن يكون صحيحاً.';
+}
+function readInvoiceForm(){
+  const b = {};
+  Object.entries(BUYER_FIELDS).forEach(([id,k]) => { b[k] = document.getElementById(id).value.trim(); });
+  b.vat = b.vat.replace(/\s/g,''); b.crn = b.crn.replace(/\s/g,'');
+  b.building = pad4(b.building); b.additional = pad4(b.additional);
+  b.country = (b.country || 'SA').toUpperCase();
+  return {
+    type: document.getElementById('invType').value, buyer: b,
+    supplyDate: document.getElementById('invSupplyDate').value,
+    paymentMeans: document.getElementById('invPayment').value,
+    notes: document.getElementById('invNotes').value.trim(),
+  };
+}
+async function previewInvoice(){
+  const f = readInvoiceForm();
+  const quoteNo = document.getElementById('quoteNo').value.trim();
+  document.getElementById('byBuilding').value = f.buyer.building;
+  document.getElementById('byAdditional').value = f.buyer.additional;
+  document.getElementById('byCountry').value = f.buyer.country;
+  invBuyer = { ...f.buyer, type: f.type, supplyDate: f.supplyDate, paymentMeans: f.paymentMeans, notes: f.notes, quoteNo };
+
+  const sErr = sellerErrors(seller), bErr = buyerErrors(f.type, f.buyer);
+  if(!f.supplyDate) bErr.push(fieldErr('supplyDate','تاريخ التوريد','مطلوب'));
+  markBad({ ...BUYER_FIELDS, invSupplyDate:'supplyDate' }, bErr);
+  if(sErr.length || bErr.length){
+    showFormErr('invDataErr', [
+      ...(sErr.length ? [`<b>بيانات المنشأة (من ⚙️ الإعدادات):</b> ${sErr.map(e => e.msg).join('، ')}`] : []),
+      ...bErr.map(e => '• ' + e.msg),
+    ]);
+    return;
+  }
+  // The number this invoice will take (the latest saved + 1); fixed only when it is issued.
+  let provisionalNumber = null;
+  if(invoiceArchiveOnDrive()){
+    try{ provisionalNumber = (await nextInvoiceNumber()).number; }
+    catch(e){ console.warn('Next invoice number unavailable:', e); }
+  }
+  _invDraft = {
+    version: 1, kind: 'invoice', status: 'draft', type: f.type, quoteNo, currency: 'SAR',
+    seller: sellerSnapshot(), buyer: f.buyer, supplyDate: f.supplyDate,
+    paymentMeans: f.paymentMeans, notes: f.notes, ...computeInvoiceLines(), provisionalNumber,
+  };
+  closeInvoiceDialog();
+  showInvoice(_invDraft);
+}
+function sellerSnapshot(){
+  const { invPrefix, invStart, ...s } = seller;
+  return { ...s, country: 'SA' };
+}
+
+// ── Invoice view: draft preview → issue → read-only ──────────────────────
+function showInvoice(inv){
+  const issued = inv.status === 'issued';
+  document.getElementById('invContent').innerHTML = renderInvoiceHtml(inv);
+  document.getElementById('invToolbarTitle').textContent = issued
+    ? `${(INVOICE_TITLES[inv.type] || INVOICE_TITLES.standard).ar} — ${inv.number}`
+    : 'معاينة — مسودة لم تصدر بعد';
+  document.getElementById('invToolbarBtns').innerHTML = issued
+    ? `<button class="btn btn-ghost" onclick="closeInvoice()">✕ إغلاق</button>
+       <button class="btn btn-orange" onclick="printInvoice()">🖨️ طباعة / PDF</button>`
+    : `<button class="btn btn-ghost" onclick="closeInvoice()">✕ إغلاق</button>
+       <button class="btn btn-ghost" onclick="closeInvoice();openInvoiceDialog()">✏️ تعديل البيانات</button>
+       <button class="btn btn-orange" id="invIssueBtn" onclick="issueInvoice()">✅ إصدار الفاتورة</button>`;
+  const ov = document.getElementById('invoiceOverlay');
+  ov.style.display = 'block';
+  ov.scrollTop = 0;
+  document.body.classList.add('invoice-mode');
+}
+function closeInvoice(){
+  document.getElementById('invoiceOverlay').style.display = 'none';
+  document.body.classList.remove('invoice-mode');
+}
+async function issueInvoice(){
+  if(!_invDraft) return;
+  if(typeof qrcode === 'undefined'){ toast('⚠️ مكتبة رمز QR لم تُحمّل — تحقق من الاتصال وأعد تحميل الصفحة'); return; }
+  if(!invoiceArchiveOnDrive()){ toast('⚠️ حدّد مجلد الفواتير في ⚙️ الإعدادات أولاً — منه يُقرأ آخر رقم فاتورة'); return; }
+  const provisional = _invDraft.provisionalNumber;
+  if(!await appConfirm('إصدار الفاتورة نهائياً؟',
+    `ستصدر الفاتورة برقم ${provisional || 'التالي في التسلسل'} مع رمز QR، ولا يمكن بعدها تعديلها أو حذفها.\nأي تصحيح لاحق يكون بإشعار دائن أو مدين.`,
+    '✅ نعم، إصدار الفاتورة')) return;
+  const btn = document.getElementById('invIssueBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري الإصدار...'; }
+  try{
+    const { inv, overwrote } = await finalizeInvoice(_invDraft);
+    _invDraft = null;
+    showInvoice(inv);
+    toast('✅ تم إصدار الفاتورة: ' + inv.number
+      + (provisional && provisional !== inv.number ? ' — صدرت فاتورة أخرى قبلها فأخذت الرقم التالي' : ''));
+    if(overwrote){
+      console.error('Invoice file already existed and was replaced:', inv.number);
+      appAlert('⚠️ تنبيه: تكرار رقم فاتورة',
+        `الرقم ${inv.number} حُفظ من جهاز آخر في اللحظة نفسها، فاستُبدل ملفه في مجلد الفواتير.\nاسترجع النسخة السابقة من «إدارة النسخ» للملف في Google Drive، وعالج إحدى الفاتورتين بإشعار دائن.`);
+    }
+  }catch(e){
+    console.error('Issue invoice failed:', e);
+    toast('❌ تعذر إصدار الفاتورة: ' + e.message);
+    if(btn){ btn.disabled = false; btn.textContent = '✅ إصدار الفاتورة'; }
+  }
+}
+// In-app yes/no — native confirm() is suppressed in some embedded browsers (it returns false
+// without showing anything, so the action just looks dead).
+function appConfirm(title, message, okLabel){
+  return new Promise(resolve => {
+    const ov = document.getElementById('confirmOverlay');
+    const yes = document.getElementById('confirmYes'), no = document.getElementById('confirmNo');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = message;
+    yes.textContent = okLabel || 'تأكيد';
+    const done = ok => { ov.classList.remove('open'); yes.onclick = no.onclick = null; resolve(ok); };
+    yes.onclick = () => done(true);
+    no.onclick = () => done(false);
+    ov.classList.add('open');
+    yes.focus();
+  });
+}
+function appAlert(title, message){
+  const no = document.getElementById('confirmNo');
+  no.style.display = 'none';
+  return appConfirm(title, message, 'حسناً').finally(() => { no.style.display = ''; });
+}
+function printInvoice(){
+  const overlay = document.getElementById('invoiceOverlay');
+  const content = document.getElementById('invContent');
+  document.body.appendChild(content);
+  overlay.style.display = 'none';
+  let restored = false;
+  const restore = () => {
+    if(restored) return;
+    restored = true;
+    overlay.appendChild(content);
+    overlay.style.display = 'block';
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
+  // print() blocks until the dialog closes; some browsers never fire afterprint, which would leave
+  // the invoice hidden — the print CSS lays it out correctly either way.
+  restore();
+}
+
+// ── Archive + sequential numbering (same idea as the quotation numbers) ──
+// Next invoice number = the LATEST SAVED invoice + 1, where the latest saved invoice is the highest of
+//   • the shared invoices folder on Drive — every user's invoices, the source of truth — and
+//   • this browser's reference to the last invoice it issued (INV_LAST_KEY). Like qnum_ for quotes it
+//     only ever moves forward, so a Drive listing that lags right after a save can't repeat a number.
+// Issuing requires the Drive folder: without one shared archive, two PCs would count separately.
+// An issued invoice is never overwritten or renumbered.
+const INV_LOCAL_PREFIX = 'zinv_';   // local copy of each issued invoice
+const INV_LAST_KEY = 'ginv_last';   // { number, seq, date } of the last invoice issued from this browser
+function invoiceArchiveOnDrive(){ return !!(cfg.apiKey && cfg.invoicesFolderId && cfg.appsScriptUrl); }
+function localInvoiceNumbers(){
+  return Object.keys(localStorage).filter(k => k.startsWith(INV_LOCAL_PREFIX)).map(k => k.slice(INV_LOCAL_PREFIX.length));
+}
+// The sequence is the number's trailing digits (MMC-INV-00012 → 12), so it keeps climbing even if
+// the prefix is changed later.
+const invoiceSeq = no => { const m = String(no || '').match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+function localLastInvoice(){ try{ return JSON.parse(localStorage.getItem(INV_LAST_KEY) || 'null'); }catch(e){ return null; } }
+async function listInvoiceFiles(){
+  let files = [], token = '';
+  do{
+    const url = `https://www.googleapis.com/drive/v3/files?q='${cfg.invoicesFolderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000${token?`&pageToken=${token}`:''}&key=${cfg.apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(!res.ok){
+      const hint = res.status === 403 ? ' — تأكد أن مجلد الفواتير مشارك بصلاحية "أي شخص لديه الرابط"' : '';
+      throw new Error(((data.error && data.error.message) || ('HTTP ' + res.status)) + hint);
+    }
+    files = files.concat(data.files || []);
+    token = data.nextPageToken || '';
+  }while(token);
+  return files.filter(f => f.name.endsWith('.json'));
+}
+// The latest saved invoice → { number, seq, date }, or null before the first one.
+async function lastSavedInvoice(){
+  let last = null;
+  const consider = (number, date) => {
+    const seq = invoiceSeq(number);
+    if(seq > (last ? last.seq : 0)) last = { number, seq, date: date || '' };
+  };
+  const ref = localLastInvoice();
+  if(ref) consider(ref.number, ref.date);
+  localInvoiceNumbers().forEach(no => consider(no));
+  if(invoiceArchiveOnDrive())
+    (await listInvoiceFiles()).forEach(f => consider(f.name.replace(/\.json$/,''), f.modifiedTime && riyadhDateTime(new Date(f.modifiedTime)).date));
+  return last;
+}
+async function nextInvoiceNumber(){
+  const last = await lastSavedInvoice();
+  // Same format as the latest saved invoice — every PC continues one series even if a browser's
+  // prefix setting differs; that setting only seeds the very first invoice.
+  const prefix = last ? last.number.replace(/\d+$/, '') : (seller.invPrefix || SELLER_DEFAULTS.invPrefix);
+  const width = last ? last.number.match(/\d+$/)[0].length : 5;
+  const seq = Math.max(Math.max(1, parseInt(seller.invStart, 10) || 1), (last ? last.seq : 0) + 1);
+  return { number: prefix + String(seq).padStart(width, '0'), seq, last };
+}
+// Number, stamp and archive a previewed draft. If another PC took the number in the meantime,
+// the next free one is used.
+async function finalizeInvoice(draft){
+  for(let attempt = 1; ; attempt++){
+    const { number, seq, last } = await nextInvoiceNumber();
+    const now = riyadhNow();
+    const { provisionalNumber, ...base } = draft;
+    const inv = { ...base, status: 'issued', number, icv: seq, prevNumber: last ? last.number : null,
+      uuid: newUuid(), issueDate: now.date, issueTime: now.time, issuedBy: cfg.userId, savedAt: new Date().toISOString() };
+    inv.qr = invoiceQrBase64(inv);
+    try{ return { inv, overwrote: (await storeInvoice(inv)) === 'updated' }; }
+    catch(e){ if(e.code !== 'NUMBER_TAKEN' || attempt >= 3) throw e; }
+  }
+}
+async function storeInvoice(inv){
+  // The save endpoint overwrites same-name files, so re-check right before saving that no invoice
+  // holds this sequence number yet (whatever its prefix).
+  if((await listInvoiceFiles()).some(f => invoiceSeq(f.name.replace(/\.json$/,'')) === inv.icv)){
+    const err = new Error('الرقم ' + inv.number + ' مستخدم'); err.code = 'NUMBER_TAKEN'; throw err;
+  }
+  const res = await fetch(cfg.appsScriptUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' }, // Apps Script requires text/plain for CORS
+    body: JSON.stringify({ fileName: inv.number + '.json', state: inv, folderId: cfg.invoicesFolderId }),
+  });
+  const data = await res.json();
+  if(!data.success) throw new Error(data.error || 'Unknown error');
+  // Saved. Move this browser's reference forward (never back) and keep a local copy.
+  try{
+    if(inv.icv > (localLastInvoice()?.seq || 0))
+      localStorage.setItem(INV_LAST_KEY, JSON.stringify({ number: inv.number, seq: inv.icv, date: inv.issueDate }));
+    localStorage.setItem(INV_LOCAL_PREFIX + inv.number, JSON.stringify(inv));
+  }catch(e){ console.warn('Local invoice reference/copy not saved:', e); }
+  return data.action;   // 'updated' = a file with this number already existed (saved elsewhere in the same moment)
+}
+async function refreshInvoiceSeqInfo(){
+  const el = document.getElementById('invSeqInfo');
+  if(!invoiceArchiveOnDrive()){ el.style.display = 'none'; return; }
+  el.className = 'form-ok'; el.style.display = 'block';
+  el.textContent = '⏳ جاري قراءة آخر فاتورة محفوظة...';
+  try{
+    const { number, last } = await nextInvoiceNumber();
+    el.innerHTML = (last
+      ? `🧾 آخر فاتورة محفوظة: <b><bdi>${escHtml(last.number)}</bdi></b>${last.date ? ` (<bdi>${dmy(last.date)}</bdi>)` : ''}`
+      : '🧾 لا توجد فواتير محفوظة بعد')
+      + ` ← الفاتورة الجديدة ستأخذ الرقم: <b><bdi>${escHtml(number)}</bdi></b>`;
+  }catch(e){
+    el.className = 'form-err'; el.style.display = 'block';
+    el.textContent = '❌ تعذّر قراءة آخر فاتورة من مجلد الفواتير: ' + e.message;
+  }
+}
+
+// ── Issued invoices list ─────────────────────────────────────────────────
+let _invListRows = [];
+function openInvoiceList(){
+  document.getElementById('invSearch').value = '*';
+  document.getElementById('invListOverlay').classList.add('open');
+  searchInvoices();
+}
+function closeInvoiceList(){ document.getElementById('invListOverlay').classList.remove('open'); }
+async function searchInvoices(){
+  const q = document.getElementById('invSearch').value.trim().toLowerCase();
+  const el = document.getElementById('invListResults');
+  if(!q){ toast('⚠️ أدخل رقم الفاتورة أو * لعرض الكل'); return; }
+  el.innerHTML = '<div style="text-align:center;padding:1rem"><div class="spin"></div><p style="font-size:.78rem;color:var(--muted)">جاري البحث...</p></div>';
+  try{
+    const rows = new Map();   // number → { number, id?, date? }
+    if(invoiceArchiveOnDrive()){
+      (await listInvoiceFiles()).forEach(f => {
+        const no = f.name.replace(/\.json$/,'');
+        rows.set(no, { number: no, id: f.id, date: f.modifiedTime });
+      });
+    }
+    localInvoiceNumbers().forEach(no => { if(!rows.has(no)) rows.set(no, { number: no }); });
+    const latestSeq = Math.max(0, ...[...rows.keys()].map(invoiceSeq));
+    _invListRows = [...rows.values()]
+      .filter(r => q === '*' || r.number.toLowerCase().includes(q))
+      .sort((a,b) => invoiceSeq(b.number) - invoiceSeq(a.number) || b.number.localeCompare(a.number));
+    if(!_invListRows.length){
+      el.innerHTML = '<div style="text-align:center;color:var(--red);font-size:.82rem;padding:1rem">لا توجد فواتير مطابقة</div>';
+      return;
+    }
+    el.innerHTML = `<div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem;text-align:center">${_invListRows.length} فاتورة</div>` +
+      _invListRows.map((r,i) => `<div class="cat-row" style="margin-bottom:.3rem;cursor:pointer" onclick="openIssuedInvoice(${i})">
+        <div class="cat-ph" style="width:36px;height:36px;font-size:.85rem">🧾</div>
+        <div class="cat-info"><span class="cat-code">${escHtml(r.number)}${invoiceSeq(r.number) === latestSeq ? '<span class="count-badge">آخر فاتورة</span>' : ''}</span>
+          <div class="cat-price">${r.date ? new Date(r.date).toLocaleDateString('ar-SA') : 'نسخة محلية — هذا المتصفح'}</div></div>
+        <button class="add-btn2" style="background:var(--orange)" title="فتح">↓</button>
+      </div>`).join('');
+  }catch(e){
+    console.error('searchInvoices error:', e);
+    el.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:1rem">❌ خطأ: ${escHtml(e.message)}</div>`;
+  }
+}
+async function openIssuedInvoice(i){
+  const r = _invListRows[i];
+  if(!r) return;
+  try{
+    let inv = null;
+    if(r.id){
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${r.id}?alt=media&key=${cfg.apiKey}`);
+      if(res.ok) inv = await res.json();
+    }
+    if(!inv) inv = JSON.parse(localStorage.getItem(INV_LOCAL_PREFIX + r.number) || 'null');
+    if(!inv || inv.kind !== 'invoice' || !inv.qr) throw new Error('ملف فاتورة غير صالح أو غير متاح');
+    closeInvoiceList();
+    showInvoice(inv);
+  }catch(e){ toast('❌ خطأ في تحميل الفاتورة: ' + e.message); }
+}
+
+// ── Invoice HTML ─────────────────────────────────────────────────────────
+function escHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function sarIconHtml(){
+  const src = document.querySelector('img[aria-label="ريال سعودي"]')?.src;
+  return src ? `<img src="${src}" class="inv-sar" alt="SAR">` : 'SAR ';
+}
+function renderInvoiceHtml(inv){
+  const issued = inv.status === 'issued';
+  const title = INVOICE_TITLES[inv.type] || INVOICE_TITLES.standard;
+  const S = inv.seller, B = inv.buyer || {}, T = inv.totals;
+  const V = v => filled(v) ? `<bdi>${escHtml(v)}</bdi>` : '—';
+  const m2 = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sar = sarIconHtml();
+  const money = v => `${sar}${m2(v)}`;
+  // Bilingual label (Arabic over English) | value — two columns so values keep their width on A4
+  const kv = (ar, v, en) => `<tr><td class="k">${ar}<span class="en">${en}</span></td><td class="v">${v}</td></tr>`;
+  const tot = (ar, v, en, cls = '') => `<tr${cls ? ` class="${cls}"` : ''}><td class="k">${ar}<span class="en">${en}</span></td><td class="a">${v}</td></tr>`;
+  const country = c => c === 'SA' ? 'المملكة العربية السعودية (SA)' : c;
+  const hasDisc = T.discount > 0;
+  const hasBuyer = filled(B.name) || filled(B.vat);
+  const logo = document.querySelector('.company-logo')?.src || '';
+  const address = p => [
+    kv('رقم المبنى', V(p.building), 'Building No.'),
+    kv('الشارع', V(p.street), 'Street'),
+    kv('الحي', V(p.district), 'District'),
+    kv('المدينة', V(p.city), 'City'),
+    kv('الرمز البريدي', V(p.postal), 'Postal code'),
+    kv('الرقم الإضافي', V(p.additional), 'Additional No.'),
+    kv('الدولة', V(country(p.country || 'SA')), 'Country'),
+  ].join('');
+  const qrBlock = issued
+    ? `<div class="inv-qr">${qrSvg(inv.qr) || '<div class="inv-qr-ph">تعذر رسم رمز QR — تحقق من الاتصال</div>'}
+         <div class="inv-qr-note">رمز الاستجابة السريعة<br>هيئة الزكاة والضريبة والجمارك</div></div>`
+    : `<div class="inv-qr"><div class="inv-qr-ph">يُنشأ رمز QR<br>عند إصدار الفاتورة</div></div>`;
+  const hijri = issued ? hijriDate(inv.issueDate) : '';
+  const issuedAt = issued
+    ? `<bdi>${dmy(inv.issueDate)} ${inv.issueTime}</bdi>${hijri ? ` · <bdi>${hijri}</bdi>` : ''}`
+    : 'يُحدد عند الإصدار';
+  const itemRows = inv.lines.map((l,i) => `<tr>
+      <td>${i+1}</td>
+      <td class="d"><b><bdi>${escHtml(l.code)}</bdi></b><div class="inv-desc">${escHtml(l.name)}</div></td>
+      <td>${Number(l.qty).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+      <td>${m2(l.unitPrice)}</td>
+      ${hasDisc ? `<td>${m2(l.gross)}</td><td>${m2(l.discount)}</td>` : ''}
+      <td>${m2(l.net)}</td>
+      <td>${l.vatRate}%</td>
+      <td>${m2(l.vat)}</td>
+      <td><b>${m2(l.total)}</b></td>
+    </tr>`).join('');
+
+  return `<div class="inv-page">
+  ${issued ? '' : '<div class="inv-draft-wm">مسودة · DRAFT</div>'}
+  <div class="inv-head">
+    <div>
+      <div class="inv-seller-name">${escHtml(S.nameAr)}</div>
+      <div>الرقم الضريبي: ${V(S.vat)}</div>
+      <div>السجل التجاري: ${V(S.crn)}</div>
+      <div>${escHtml([S.district, S.city].filter(filled).join('، '))}</div>
+    </div>
+    ${logo ? `<img class="inv-logo" src="${logo}" alt="">` : '<div></div>'}
+    <div class="en">
+      <div class="inv-seller-name">${escHtml(S.nameEn || S.nameAr)}</div>
+      <div>VAT No.: ${V(S.vat)}</div>
+      <div>CR No.: ${V(S.crn)}</div>
+      <div>${escHtml([S.phone, S.email].filter(filled).join(' · '))}</div>
+    </div>
+  </div>
+  <div class="inv-title"><span>${title.ar}</span><span class="en">${title.en}</span></div>
+  <div class="inv-meta">
+    ${qrBlock}
+    <table class="inv-kv">
+      ${kv('رقم الفاتورة', issued ? V(inv.number)
+        : inv.provisionalNumber ? `${V(inv.provisionalNumber)} <span class="inv-prov">(مبدئي — يُثبَّت عند الإصدار)</span>`
+        : 'يُحدد عند الإصدار', 'Invoice No.')}
+      ${kv('تاريخ ووقت الإصدار', issuedAt, 'Issue date &amp; time')}
+      ${kv('تاريخ التوريد', V(dmy(inv.supplyDate)), 'Supply date')}
+      ${kv('مرجع عرض السعر', V(inv.quoteNo), 'Quotation ref.')}
+      ${kv('طريقة الدفع', V(PAYMENT_MEANS[inv.paymentMeans] || ''), 'Payment means')}
+      ${kv('العملة', 'ريال سعودي (SAR)', 'Currency')}
+    </table>
+  </div>
+  <div class="inv-parties${hasBuyer ? '' : ' single'}">
+    <div>
+      <div class="inv-sec"><span>البائع</span><span class="en">Seller</span></div>
+      <table class="inv-kv">
+        ${kv('الاسم', V(S.nameAr), 'Name')}
+        ${kv('الرقم الضريبي', V(S.vat), 'VAT No.')}
+        ${kv('السجل التجاري', V(S.crn), 'CR No.')}
+        ${address(S)}
+      </table>
+    </div>
+    ${hasBuyer ? `<div>
+      <div class="inv-sec"><span>المشتري</span><span class="en">Buyer</span></div>
+      <table class="inv-kv">
+        ${kv('الاسم', V(B.name), 'Name')}
+        ${kv('الرقم الضريبي', V(B.vat), 'VAT No.')}
+        ${kv('السجل التجاري', V(B.crn), 'CR No.')}
+        ${address(B)}
+        ${filled(B.phone) ? kv('الجوال', V(B.phone), 'Mobile') : ''}
+      </table>
+    </div>` : ''}
+  </div>
+  <div class="inv-items-wrap"><table class="inv-items">
+    <thead><tr>
+      <th>#</th><th>الصنف والوصف<br>Item &amp; description</th><th>الكمية<br>Qty</th><th>سعر الوحدة<br>Unit price</th>
+      ${hasDisc ? '<th>المبلغ<br>Amount</th><th>الخصم<br>Discount</th>' : ''}
+      <th>المبلغ الخاضع للضريبة<br>Taxable amount</th><th>نسبة الضريبة<br>VAT rate</th>
+      <th>مبلغ الضريبة<br>VAT amount</th><th>الإجمالي شامل الضريبة<br>Total incl. VAT</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table></div>
+  <div class="inv-sum">
+    <div class="inv-words"><b>المبلغ كتابةً:</b> فقط ${tafqit(T.total)} لا غير</div>
+    <table class="inv-totals">
+      ${tot('الإجمالي غير شامل ضريبة القيمة المضافة', money(T.gross), 'Total (excl. VAT)')}
+      ${hasDisc ? tot('الخصم', '- ' + money(T.discount), 'Discount') : ''}
+      ${tot('الإجمالي الخاضع للضريبة', money(T.taxable), 'Total taxable amount')}
+      ${tot(`مجموع ضريبة القيمة المضافة (${VAT_RATE}%)`, money(T.vat), `Total VAT (${VAT_RATE}%)`)}
+      ${tot('الإجمالي المستحق شامل الضريبة', money(T.total), 'Total amount due (incl. VAT)', 'grand')}
+    </table>
+  </div>
+  ${filled(inv.notes) ? `<div class="inv-note"><b>ملاحظات:</b> ${escHtml(inv.notes)}</div>` : ''}
+  ${filled(S.iban) ? `<div class="inv-note"><b>الحساب البنكي للسداد / Bank account:</b> ${escHtml(S.bank || '')} — IBAN: <bdi>${escHtml(S.iban)}</bdi></div>` : ''}
+  <div class="inv-foot">
+    <span>${issued ? `UUID: <bdi>${escHtml(inv.uuid)}</bdi>`
+      + (inv.icv ? ` · التسلسل (ICV): <bdi>${inv.icv}</bdi>` : '')
+      + (inv.prevNumber ? ` · الفاتورة السابقة: <bdi>${escHtml(inv.prevNumber)}</bdi>` : '') : ''}</span>
+    <span>فاتورة إلكترونية · <span class="en">Electronic tax invoice</span></span>
+  </div>
+</div>`;
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 </body>
 </html>
