@@ -329,7 +329,9 @@ table.qt tbody tr.dragging{opacity:.4;}
 .form-warn{background:var(--gold-pale);border:1px solid #EFE3C0;color:#6b5520;border-radius:6px;padding:.45rem .75rem;font-size:.74rem;line-height:1.7;margin-bottom:.6rem;}
 .form-warn a{color:var(--primary);font-weight:800;}
 .form-ok{background:#EFF6EE;border:1px solid #cfe3cc;color:var(--primary);border-radius:6px;padding:.45rem .75rem;font-size:.74rem;margin-bottom:.6rem;}
-#invDataOverlay.simplified .req-std{display:none;}
+#invDataOverlay.simplified .req-std,#invDataOverlay.no-vat .tax-only{display:none;}
+.modal .set-check{display:flex;align-items:center;gap:.55rem;padding:.55rem .7rem;margin-bottom:.35rem;border:1.5px solid var(--border);border-radius:7px;background:var(--th-bg);cursor:pointer;}
+.modal .set-check input{width:auto;margin:0;accent-color:var(--primary);}
 @media (max-width:600px){ .set-grid{grid-template-columns:1fr;} }
 
 /* ══ OPTIONS MENU ═══════════════════════════════ */
@@ -604,6 +606,7 @@ table.qt tbody tr.dragging{opacity:.4;}
 .inv-logo{height:66px;object-fit:contain;display:block;}
 .inv-title{display:flex;justify-content:space-between;align-items:center;margin:.55rem 0;padding:.35rem .7rem;background:var(--gold-pale);border-right:4px solid var(--orange);font-weight:900;font-size:1rem;color:var(--primary);}
 .inv-meta{display:grid;grid-template-columns:auto 1fr;gap:.8rem;align-items:start;}
+.inv-meta.no-qr{grid-template-columns:1fr;}
 .inv-qr{width:150px;text-align:center;}
 .inv-qr svg{width:150px;height:150px;display:block;}
 .inv-qr-note{font-size:.58rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
@@ -767,7 +770,7 @@ table.qt tbody tr.dragging{opacity:.4;}
       <div style="display:flex;align-items:center;gap:.75rem">
         <label class="vat-lbl no-print">
           <input type="checkbox" id="vatToggle" onchange="recalc()" checked>
-          إضافة ضريبة القيمة المضافة 15%
+          <span id="vatToggleTxt">إضافة ضريبة القيمة المضافة 15%</span>
         </label>
         <button class="btn btn-outline btn-sm no-print" onclick="addInsManually()" title="إضافة صف تركيب يدوي">🔧 إضافة تركيب</button>
         <button class="btn btn-ghost btn-sm no-print" onclick="clearAll()">🗑️ مسح الكل</button>
@@ -893,6 +896,8 @@ table.qt tbody tr.dragging{opacity:.4;}
     </div>
     <div class="set-pane" data-tab="seller" oninput="updateSellerStatus()">
       <p class="sub">بيانات المدى المبارك (البائع) كما هي مسجّلة لدى هيئة الزكاة والضريبة والجمارك — تظهر في كل فاتورة وفي رمز QR.</p>
+      <label class="set-check"><input type="checkbox" id="slNoVat" onchange="updateSellerStatus()"> المنشأة غير مسجلة في ضريبة القيمة المضافة</label>
+      <div class="fld-hint" style="margin:0 0 .8rem">عند التفعيل: تصدر «فاتورة» عادية بدون ضريبة وبدون رقم ضريبي أو رمز QR، وتُحسب عروض الأسعار والعقود بدون ضريبة. بعد التسجيل في الضريبة ألغِ التفعيل وأدخل الرقم الضريبي من شهادة التسجيل في ضريبة القيمة المضافة.</div>
       <div id="sellerStatus"></div>
       <div id="sellerErr" class="form-err"></div>
       <div class="set-grid">
@@ -1010,17 +1015,19 @@ table.qt tbody tr.dragging{opacity:.4;}
 <!-- Tax Invoice: buyer (client) + invoice details -->
 <div class="overlay" id="invDataOverlay">
   <div class="modal modal-wide">
-    <h2>🧾 فاتورة ضريبية — بيانات العميل والفاتورة</h2>
-    <p class="sub">تُعبّأ بيانات العميل من عرض السعر — أكمل الحقول المطلوبة (*) لإصدار فاتورة متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك.</p>
+    <h2 id="invDataTitle">🧾 فاتورة ضريبية — بيانات العميل والفاتورة</h2>
+    <p class="sub" id="invDataSub">تُعبّأ بيانات العميل من عرض السعر — أكمل الحقول المطلوبة (*) لإصدار فاتورة متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك.</p>
     <div id="invSeqInfo" style="display:none"></div>
     <div id="invDataWarn"></div>
     <div id="invDataErr" class="form-err"></div>
-    <label>نوع الفاتورة</label>
-    <select id="invType" onchange="updateInvTypeHint()">
-      <option value="standard">فاتورة ضريبية — لمنشأة (B2B)</option>
-      <option value="simplified">فاتورة ضريبية مبسطة — لفرد (B2C)</option>
-    </select>
-    <div class="fld-hint" id="invTypeHint"></div>
+    <div class="tax-only">
+      <label>نوع الفاتورة</label>
+      <select id="invType" onchange="updateInvTypeHint()">
+        <option value="standard">فاتورة ضريبية — لمنشأة (B2B)</option>
+        <option value="simplified">فاتورة ضريبية مبسطة — لفرد (B2C)</option>
+      </select>
+      <div class="fld-hint" id="invTypeHint"></div>
+    </div>
     <div class="set-sec">بيانات المشتري / Buyer</div>
     <div class="set-grid">
       <div class="full"><label>اسم المشتري (المنشأة أو الشخص) <span class="req-std">*</span></label><input id="byName" class="rtl"></div>
@@ -1117,6 +1124,7 @@ const SELLER_DEFAULTS={
   nameAr:'المدى المبارك للتجارة والحلول الذكية', nameEn:'', vat:'', crn:'7054249128',
   building:'', street:'', district:'النخيل', city:'جدة', postal:'', additional:'',
   phone:'', email:'', bank:'', iban:'', invPrefix:'MMC-INV-', invStart:'1',
+  vatRegistered:true,   // false → plain invoices without VAT, and no VAT on quotes/contracts
 };
 let seller=(()=>{
   try{ return {...SELLER_DEFAULTS, ...JSON.parse(localStorage.getItem('gseller_info')||'{}')}; }
@@ -1154,6 +1162,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     "[ الصلاحية ]  هذا العرض ساري لمدة 15 يوماً من تاريخ إصداره.\n" +
     "[ النطاق ]  التوريد والتركيب والبرمجة الأولية والتسليم الفعلي.";
 
+  applyVatMode();
   cfg.apiKey?loadAll():openSettings();
   // Refresh navigation buttons for user 6753
   refreshQuoteNavigationList();
@@ -1181,6 +1190,7 @@ function openSettings(tab){
     const el=document.getElementById(id);
     el.value=seller[k]??''; el.classList.remove('bad');
   });
+  document.getElementById('slNoVat').checked = seller.vatRegistered === false;
   hideFormErr('sellerErr');
   updateSellerStatus();
   switchSettingsTab(typeof tab==='string'?tab:'conn');
@@ -1206,6 +1216,7 @@ function saveSettings(){
   }
   seller=s;
   localStorage.setItem('gseller_info',JSON.stringify(seller));
+  applyVatMode();
   cfg.invoicesFolderId=document.getElementById('invoicesFolderIn').value.trim();
   localStorage.setItem('ginvoices_folder',cfg.invoicesFolderId);
   cfg.userId=document.getElementById('userIdIn').value.trim()||'00';
@@ -1771,7 +1782,7 @@ function loadQuoteState(state) {
   _discMode = state.discMode || 'pct';
   document.getElementById('discountPercent').value = (_discMode==='pct' && state.discountPercent) ? state.discountPercent : '';
   document.getElementById('discountValue').value   = (_discMode==='value' && state.discountValue)  ? state.discountValue  : '';
-  document.getElementById('vatToggle').checked = state.vatEnabled !== false;
+  document.getElementById('vatToggle').checked = state.vatEnabled !== false && seller.vatRegistered !== false;
   document.getElementById('techNotes').value = state.techNotes || '';
   document.getElementById('terms').value = state.terms || '';
   invBuyer = state.invoiceBuyer || null;
@@ -2265,7 +2276,7 @@ function openContract(){
         <span style="display:flex;align-items:center;gap:5px;color:var(--red)">- <input id="ctDiscAmt" class="ct-edit" type="number" min="0" step="0.01" value="${discAmt>0?r2c(discAmt):''}" placeholder="0" oninput="ctRecalc()"><img src="data:image/png;base64,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" style="height:.9em;width:auto;vertical-align:middle;margin-right:.15em;display:inline-block" aria-label="ريال سعودي"></span></div>
       <div class="ct-tot-row" id="ctAfterRow" style="${discAmt>0?'':'display:none'}"><span>السعر بعد الخصم</span><span id="ctAfter">${f2(afterD)} <img src="data:image/png;base64,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" style="height:.9em;width:auto;vertical-align:middle;margin-right:.15em;display:inline-block" aria-label="ريال سعودي"></span></div>
       <div class="ct-tot-row" id="ctVatRow" style="${vatOn?'':'display:none'}"><span>ضريبة القيمة المضافة 15% / VAT</span><span id="ctVat">${f2(vatAmt)} <img src="data:image/png;base64,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" style="height:.9em;width:auto;vertical-align:middle;margin-right:.15em;display:inline-block" aria-label="ريال سعودي"></span></div>
-      <div class="ct-tot-row grand"><span>الإجمالي شامل ضريبة القيمة المضافة / Grand Total</span><span id="ctGrand">${f2(grand)} <img src="data:image/png;base64,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" style="height:.9em;width:auto;vertical-align:middle;margin-right:.15em;display:inline-block" aria-label="ريال سعودي"></span></div>
+      <div class="ct-tot-row grand"><span>${vatOn ? 'الإجمالي شامل ضريبة القيمة المضافة / Grand Total' : 'الإجمالي / Grand Total'}</span><span id="ctGrand">${f2(grand)} <img src="data:image/png;base64,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" style="height:.9em;width:auto;vertical-align:middle;margin-right:.15em;display:inline-block" aria-label="ريال سعودي"></span></div>
     </div>
   </div>
 
@@ -2282,7 +2293,7 @@ function openContract(){
     <div class="ct-section-title" style="page-break-after:avoid">المادة (4): الدفعات وآلية السداد</div>
     <div class="ct-section-body" contenteditable="true">
       <p>يتم سداد قيمة هذا العقد على دفعات وفقًا لآلية السداد التالية:</p>
-      <p><strong>إجمالي قيمة العقد (شامل ضريبة القيمة المضافة):</strong> مبلغ وقدره (<strong><span id="ctGrandText">${f2(grand)}</span> ريال سعودي</strong>) فقط <span id="ctGrandWords" class="ct-words">${tafqit(grand)}</span> لا غير.</p>
+      <p><strong>إجمالي قيمة العقد${vatOn ? ' (شامل ضريبة القيمة المضافة)' : ''}:</strong> مبلغ وقدره (<strong><span id="ctGrandText">${f2(grand)}</span> ريال سعودي</strong>) فقط <span id="ctGrandWords" class="ct-words">${tafqit(grand)}</span> لا غير.</p>
       <p><strong>1- الدفعة الأولى (دفعة مقدمة):</strong> بنسبة 50% من إجمالي قيمة العقد، تُستحق وتُدفع عند توقيع العقد، وقدرها (<strong><span id="ctP50">${f2(p50)}</span> ريال سعودي</strong>) فقط <span id="ctP50Words" class="ct-words">${tafqit(p50)}</span> لا غير.</p>
       <p><strong>2- الدفعة الثانية (عند التوريد):</strong> بنسبة 40% من إجمالي قيمة العقد، تُستحق وتُدفع قبل توريد المواد إلى الموقع، وقدرها (<strong><span id="ctP40">${f2(p40)}</span> ريال سعودي</strong>) فقط <span id="ctP40Words" class="ct-words">${tafqit(p40)}</span> لا غير.</p>
       <p><strong>3- الدفعة الثالثة (بعد البرمجة):</strong> بنسبة 10% من إجمالي قيمة العقد، تُستحق وتُدفع عند الانتهاء من البرمجة، وقدرها (<strong><span id="ctP10">${f2(p10)}</span> ريال سعودي</strong>) فقط <span id="ctP10Words" class="ct-words">${tafqit(p10)}</span> لا غير.</p>
@@ -2777,8 +2788,9 @@ async function exportToExcel(){
 // ══════════════════════════════════════════════════════════════════════════
 function renderOptionsMenu(){
   const rate = costRate ? ` · 1 USD = ${costRate} CNY` : '';
+  const invLabel = seller.vatRegistered === false ? 'فاتورة<small>Invoice — no VAT</small>' : 'فاتورة ضريبية<small>Tax invoice — ZATCA</small>';
   document.getElementById('optMenu').innerHTML = `
-    <button class="opt-item" onclick="closeOptions();openInvoiceDialog()"><span>🧾</span><span>فاتورة ضريبية<small>Tax invoice — ZATCA</small></span></button>
+    <button class="opt-item" onclick="closeOptions();openInvoiceDialog()"><span>🧾</span><span>${invLabel}</span></button>
     <button class="opt-item" onclick="closeOptions();openInvoiceList()"><span>📂</span><span>الفواتير الصادرة<small>Issued invoices</small></span></button>
     ${isAdminUser() ? `<div class="opt-sep"></div>
     <button class="opt-item" onclick="closeOptions();calculateCost()"><span>💰</span><span>حساب التكلفة<small>Calculate cost (CSV)${rate}</small></span></button>` : ''}`;
@@ -2895,6 +2907,7 @@ const PAYMENT_MEANS = { '10':'نقداً / Cash', '42':'تحويل بنكي / Ba
 const INVOICE_TITLES = {
   standard:   { ar:'فاتورة ضريبية', en:'Tax Invoice' },
   simplified: { ar:'فاتورة ضريبية مبسطة', en:'Simplified Tax Invoice' },
+  plain:      { ar:'فاتورة', en:'Invoice' },   // seller not registered for VAT
 };
 const SELLER_FIELDS = {
   slNameAr:'nameAr', slNameEn:'nameEn', slVat:'vat', slCrn:'crn', slBuilding:'building', slAdditional:'additional',
@@ -2914,20 +2927,21 @@ const filled = v => String(v ?? '').trim() !== '';
 function fieldErr(k, label, hint){ return { k, label, msg: label + ' — ' + hint }; }
 
 // formatOnly: check only the fields that were typed in (a settings save); otherwise also require them.
+// A seller not registered for VAT issues plain invoices, which need only the name and CR.
 function sellerErrors(s, formatOnly){
-  const e = [];
-  const need = (k,label) => { if(!formatOnly && !filled(s[k])) e.push(fieldErr(k,label,'مطلوب')); };
-  const fmt = (k,re,label,hint) => {
+  const e = [], tax = s.vatRegistered !== false;
+  const need = (k,label,req = true) => { if(req && !formatOnly && !filled(s[k])) e.push(fieldErr(k,label,'مطلوب')); };
+  const fmt = (k,re,label,hint,req = true) => {
     if(filled(s[k])){ if(!re.test(String(s[k]).trim())) e.push(fieldErr(k,label,hint)); }
-    else if(!formatOnly) e.push(fieldErr(k,label,'مطلوب'));
+    else if(req && !formatOnly) e.push(fieldErr(k,label,'مطلوب'));
   };
   need('nameAr','اسم المنشأة');
-  fmt('vat', ZATCA_RE.vat, 'الرقم الضريبي', '15 رقماً يبدأ وينتهي بالرقم 3');
+  fmt('vat', ZATCA_RE.vat, 'الرقم الضريبي', '15 رقماً يبدأ وينتهي بالرقم 3', tax);
   need('crn','السجل التجاري');
-  fmt('building', ZATCA_RE.building, 'رقم المبنى', '4 أرقام بالضبط (76 تُكتب 0076)');
-  need('street','الشارع'); need('district','الحي'); need('city','المدينة');
-  fmt('postal', ZATCA_RE.postal, 'الرمز البريدي', '5 أرقام بالضبط');
-  fmt('additional', ZATCA_RE.additional, 'الرقم الإضافي', '4 أرقام بالضبط');
+  fmt('building', ZATCA_RE.building, 'رقم المبنى', '4 أرقام بالضبط (76 تُكتب 0076)', tax);
+  need('street','الشارع',tax); need('district','الحي',tax); need('city','المدينة',tax);
+  fmt('postal', ZATCA_RE.postal, 'الرمز البريدي', '5 أرقام بالضبط', tax);
+  fmt('additional', ZATCA_RE.additional, 'الرقم الإضافي', '4 أرقام بالضبط', tax);
   return e;
 }
 
@@ -2962,13 +2976,27 @@ function readSellerForm(){
   s.iban = s.iban.replace(/\s/g,'').toUpperCase();
   s.invPrefix = s.invPrefix.replace(/[^A-Za-z0-9_-]/g,'') || SELLER_DEFAULTS.invPrefix;
   s.invStart = String(Math.max(1, parseInt(s.invStart,10) || 1));
+  s.vatRegistered = !document.getElementById('slNoVat').checked;
   return s;
 }
 function updateSellerStatus(){
-  const errs = sellerErrors(readSellerForm());
+  const s = readSellerForm(), errs = sellerErrors(s);
+  const what = s.vatRegistered ? 'الفواتير الضريبية' : 'الفواتير (بدون ضريبة)';
   document.getElementById('sellerStatus').innerHTML = errs.length
-    ? `<div class="form-warn">⚠️ لإصدار الفواتير الضريبية أكمل: ${errs.map(e => e.label).join('، ')}</div>`
-    : `<div class="form-ok">✅ بيانات المنشأة مكتملة — جاهزة لإصدار الفواتير الضريبية</div>`;
+    ? `<div class="form-warn">⚠️ لإصدار ${what} أكمل: ${errs.map(e => e.label).join('، ')}</div>`
+    : `<div class="form-ok">✅ بيانات المنشأة مكتملة — جاهزة لإصدار ${what}</div>`;
+}
+// Not VAT-registered → no VAT on quotes: the quote's VAT switch is locked off (the contract and the
+// Excel export follow it). Registered → the switch is free again.
+function applyVatMode(){
+  const t = document.getElementById('vatToggle'), noVat = seller.vatRegistered === false;
+  if(noVat) t.checked = false;
+  else if(t.disabled) t.checked = true;   // back to the default after registering
+  t.disabled = noVat;
+  document.getElementById('vatToggleTxt').textContent = noVat
+    ? 'بدون ضريبة — المنشأة غير مسجلة في ضريبة القيمة المضافة'
+    : 'إضافة ضريبة القيمة المضافة 15%';
+  recalc();
 }
 function markBad(fieldMap, errs){
   const bad = new Set(errs.map(e => e.k));
@@ -3060,8 +3088,8 @@ function allocateHalalas(total, weights){
 }
 // Invoice lines from the quotation: the quote's discount is spread over the lines, then 15% VAT is
 // taken on the discounted total and spread the same way — every column adds up, and the VAT total
-// equals the quotation's VAT.
-function computeInvoiceLines(){
+// equals the quotation's VAT. rate 0 = plain invoice (seller not registered for VAT).
+function computeInvoiceLines(rate = VAT_RATE){
   const src = items.filter(it => it.qty > 0);
   const grossH = src.map(it => Math.round(it.unitPrice*it.qty*100));
   const subH = grossH.reduce((a,b) => a+b, 0);
@@ -3069,13 +3097,13 @@ function computeInvoiceLines(){
   const lineDisc = allocateHalalas(discH, grossH);
   const netH = grossH.map((g,i) => g - lineDisc[i]);
   const taxableH = subH - discH;
-  const vatH = Math.round(taxableH*VAT_RATE/100);
+  const vatH = Math.round(taxableH*rate/100);
   const lineVat = allocateHalalas(vatH, netH);
   return {
     lines: src.map((it,i) => ({
       code: it.code, name: it.desc, qty: it.qty, unitPrice: Math.round(it.unitPrice*100)/100,
       gross: grossH[i]/100, discount: lineDisc[i]/100, net: netH[i]/100,
-      vatRate: VAT_RATE, vat: lineVat[i]/100, total: (netH[i]+lineVat[i])/100,
+      vatRate: rate, vat: lineVat[i]/100, total: (netH[i]+lineVat[i])/100,
     })),
     totals: { gross: subH/100, discount: discH/100, taxable: taxableH/100, vat: vatH/100, total: (taxableH+vatH)/100 },
   };
@@ -3103,10 +3131,17 @@ function openInvoiceDialog(){
   document.getElementById('invPayment').value = b.paymentMeans || '42';
   document.getElementById('invNotes').value = b.notes || '';
 
+  const tax = seller.vatRegistered !== false;
+  document.getElementById('invDataTitle').textContent = tax ? '🧾 فاتورة ضريبية — بيانات العميل والفاتورة' : '🧾 فاتورة — بيانات العميل والفاتورة';
+  document.getElementById('invDataSub').textContent = tax
+    ? 'تُعبّأ بيانات العميل من عرض السعر — أكمل الحقول المطلوبة (*) لإصدار فاتورة متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك.'
+    : 'تُعبّأ بيانات العميل من عرض السعر — راجعها ثم عاين الفاتورة.';
+  document.getElementById('invDataOverlay').classList.toggle('no-vat', !tax);
   const warn = [];
+  if(!tax) warn.push(`ℹ️ المنشأة غير مسجلة في ضريبة القيمة المضافة — ستصدر «فاتورة» عادية بدون ضريبة وبدون رقم ضريبي أو رمز QR. <a href="#" onclick="closeInvoiceDialog();openSettings('seller');return false">تغيير ذلك من الإعدادات</a>`);
   const sErr = sellerErrors(seller);
   if(sErr.length) warn.push(`⚠️ بيانات المنشأة (البائع) غير مكتملة: ${sErr.map(e => e.label).join('، ')} — <a href="#" onclick="closeInvoiceDialog();openSettings('seller');return false">أكملها من الإعدادات</a>`);
-  if(!document.getElementById('vatToggle').checked) warn.push('⚠️ ضريبة القيمة المضافة غير مفعّلة في عرض السعر — الفاتورة الضريبية تحتسب 15% على المبلغ الخاضع للضريبة.');
+  if(tax && !document.getElementById('vatToggle').checked) warn.push('⚠️ ضريبة القيمة المضافة غير مفعّلة في عرض السعر — الفاتورة الضريبية تحتسب 15% على المبلغ الخاضع للضريبة.');
   if(!invoiceArchiveOnDrive()) warn.push(`⚠️ لإصدار الفواتير حدّد مجلد الفواتير في الإعدادات (مع مفتاح API ورابط Apps Script) — منه يُقرأ آخر رقم فاتورة محفوظة ليكون الرقم الجديد أكبر منه دائماً. المعاينة متاحة الآن. <a href="#" onclick="closeInvoiceDialog();openSettings('conn');return false">فتح الإعدادات</a>`);
   document.getElementById('invDataWarn').innerHTML = warn.map(w => `<div class="form-warn">${w}</div>`).join('');
   hideFormErr('invDataErr');
@@ -3116,7 +3151,8 @@ function openInvoiceDialog(){
 }
 function closeInvoiceDialog(){ document.getElementById('invDataOverlay').classList.remove('open'); }
 function updateInvTypeHint(){
-  const std = document.getElementById('invType').value === 'standard';
+  // A plain invoice (not VAT-registered) has no ZATCA buyer requirements — same as a simplified one.
+  const std = seller.vatRegistered !== false && document.getElementById('invType').value === 'standard';
   document.getElementById('invDataOverlay').classList.toggle('simplified', !std);
   document.getElementById('invTypeHint').textContent = std
     ? 'للمنشآت: يلزم اسم المشتري ورقمه الضريبي (أو السجل التجاري) وعنوانه الوطني كاملاً.'
@@ -3143,7 +3179,8 @@ async function previewInvoice(){
   document.getElementById('byCountry').value = f.buyer.country;
   invBuyer = { ...f.buyer, type: f.type, supplyDate: f.supplyDate, paymentMeans: f.paymentMeans, notes: f.notes, quoteNo };
 
-  const sErr = sellerErrors(seller), bErr = buyerErrors(f.type, f.buyer);
+  const tax = seller.vatRegistered !== false;
+  const sErr = sellerErrors(seller), bErr = buyerErrors(tax ? f.type : 'simplified', f.buyer);
   if(!f.supplyDate) bErr.push(fieldErr('supplyDate','تاريخ التوريد','مطلوب'));
   markBad({ ...BUYER_FIELDS, invSupplyDate:'supplyDate' }, bErr);
   if(sErr.length || bErr.length){
@@ -3160,16 +3197,17 @@ async function previewInvoice(){
     catch(e){ console.warn('Next invoice number unavailable:', e); }
   }
   _invDraft = {
-    version: 1, kind: 'invoice', status: 'draft', type: f.type, quoteNo, currency: 'SAR',
+    version: 1, kind: 'invoice', status: 'draft', type: tax ? f.type : 'plain', taxInvoice: tax, quoteNo, currency: 'SAR',
     seller: sellerSnapshot(), buyer: f.buyer, supplyDate: f.supplyDate,
-    paymentMeans: f.paymentMeans, notes: f.notes, ...computeInvoiceLines(), provisionalNumber,
+    paymentMeans: f.paymentMeans, notes: f.notes, ...computeInvoiceLines(tax ? VAT_RATE : 0), provisionalNumber,
   };
   closeInvoiceDialog();
   showInvoice(_invDraft);
 }
 function sellerSnapshot(){
   const { invPrefix, invStart, ...s } = seller;
-  return { ...s, country: 'SA' };
+  // A VAT number typed in Settings must never reach a plain invoice
+  return { ...s, vat: s.vatRegistered === false ? '' : s.vat, country: 'SA' };
 }
 
 // ── Invoice view: draft preview → issue → read-only ──────────────────────
@@ -3196,11 +3234,12 @@ function closeInvoice(){
 }
 async function issueInvoice(){
   if(!_invDraft) return;
-  if(typeof qrcode === 'undefined'){ toast('⚠️ مكتبة رمز QR لم تُحمّل — تحقق من الاتصال وأعد تحميل الصفحة'); return; }
+  const tax = _invDraft.taxInvoice !== false;
+  if(tax && typeof qrcode === 'undefined'){ toast('⚠️ مكتبة رمز QR لم تُحمّل — تحقق من الاتصال وأعد تحميل الصفحة'); return; }
   if(!invoiceArchiveOnDrive()){ toast('⚠️ حدّد مجلد الفواتير في ⚙️ الإعدادات أولاً — منه يُقرأ آخر رقم فاتورة'); return; }
   const provisional = _invDraft.provisionalNumber;
   if(!await appConfirm('إصدار الفاتورة نهائياً؟',
-    `ستصدر الفاتورة برقم ${provisional || 'التالي في التسلسل'} مع رمز QR، ولا يمكن بعدها تعديلها أو حذفها.\nأي تصحيح لاحق يكون بإشعار دائن أو مدين.`,
+    `ستصدر ${tax ? 'الفاتورة الضريبية' : 'الفاتورة (بدون ضريبة)'} برقم ${provisional || 'التالي في التسلسل'}${tax ? ' مع رمز QR' : ''}، ولا يمكن بعدها تعديلها أو حذفها.\nأي تصحيح لاحق يكون بإشعار دائن أو مدين.`,
     '✅ نعم، إصدار الفاتورة')) return;
   const btn = document.getElementById('invIssueBtn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ جاري الإصدار...'; }
@@ -3326,7 +3365,7 @@ async function finalizeInvoice(draft){
     const { provisionalNumber, ...base } = draft;
     const inv = { ...base, status: 'issued', number, icv: seq, prevNumber: last ? last.number : null,
       uuid: newUuid(), issueDate: now.date, issueTime: now.time, issuedBy: cfg.userId, savedAt: new Date().toISOString() };
-    inv.qr = invoiceQrBase64(inv);
+    if(inv.taxInvoice !== false) inv.qr = invoiceQrBase64(inv);   // the ZATCA QR belongs on tax invoices only
     try{ return { inv, overwrote: (await storeInvoice(inv)) === 'updated' }; }
     catch(e){ if(e.code !== 'NUMBER_TAKEN' || attempt >= 3) throw e; }
   }
@@ -3421,7 +3460,7 @@ async function openIssuedInvoice(i){
       if(res.ok) inv = await res.json();
     }
     if(!inv) inv = JSON.parse(localStorage.getItem(INV_LOCAL_PREFIX + r.number) || 'null');
-    if(!inv || inv.kind !== 'invoice' || !inv.qr) throw new Error('ملف فاتورة غير صالح أو غير متاح');
+    if(!inv || inv.kind !== 'invoice' || (!inv.qr && inv.taxInvoice !== false)) throw new Error('ملف فاتورة غير صالح أو غير متاح');
     closeInvoiceList();
     showInvoice(inv);
   }catch(e){ toast('❌ خطأ في تحميل الفاتورة: ' + e.message); }
@@ -3435,7 +3474,8 @@ function sarIconHtml(){
 }
 function renderInvoiceHtml(inv){
   const issued = inv.status === 'issued';
-  const title = INVOICE_TITLES[inv.type] || INVOICE_TITLES.standard;
+  const tax = inv.taxInvoice !== false;   // false = plain invoice: the seller is not registered for VAT
+  const title = tax ? (INVOICE_TITLES[inv.type] || INVOICE_TITLES.standard) : INVOICE_TITLES.plain;
   const S = inv.seller, B = inv.buyer || {}, T = inv.totals;
   const V = v => filled(v) ? `<bdi>${escHtml(v)}</bdi>` : '—';
   const m2 = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3457,7 +3497,7 @@ function renderInvoiceHtml(inv){
     kv('الرقم الإضافي', V(p.additional), 'Additional No.'),
     kv('الدولة', V(country(p.country || 'SA')), 'Country'),
   ].join('');
-  const qrBlock = issued
+  const qrBlock = !tax ? '' : issued
     ? `<div class="inv-qr">${qrSvg(inv.qr) || '<div class="inv-qr-ph">تعذر رسم رمز QR — تحقق من الاتصال</div>'}
          <div class="inv-qr-note">رمز الاستجابة السريعة<br>هيئة الزكاة والضريبة والجمارك</div></div>`
     : `<div class="inv-qr"><div class="inv-qr-ph">يُنشأ رمز QR<br>عند إصدار الفاتورة</div></div>`;
@@ -3471,10 +3511,8 @@ function renderInvoiceHtml(inv){
       <td>${Number(l.qty).toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
       <td>${m2(l.unitPrice)}</td>
       ${hasDisc ? `<td>${m2(l.gross)}</td><td>${m2(l.discount)}</td>` : ''}
-      <td>${m2(l.net)}</td>
-      <td>${l.vatRate}%</td>
-      <td>${m2(l.vat)}</td>
-      <td><b>${m2(l.total)}</b></td>
+      ${tax ? `<td>${m2(l.net)}</td><td>${l.vatRate}%</td><td>${m2(l.vat)}</td><td><b>${m2(l.total)}</b></td>`
+            : `<td><b>${m2(l.net)}</b></td>`}
     </tr>`).join('');
 
   return `<div class="inv-page">
@@ -3482,20 +3520,20 @@ function renderInvoiceHtml(inv){
   <div class="inv-head">
     <div>
       <div class="inv-seller-name">${escHtml(S.nameAr)}</div>
-      <div>الرقم الضريبي: ${V(S.vat)}</div>
+      ${tax ? `<div>الرقم الضريبي: ${V(S.vat)}</div>` : ''}
       <div>السجل التجاري: ${V(S.crn)}</div>
       <div>${escHtml([S.district, S.city].filter(filled).join('، '))}</div>
     </div>
     ${logo ? `<img class="inv-logo" src="${logo}" alt="">` : '<div></div>'}
     <div class="en">
       <div class="inv-seller-name">${escHtml(S.nameEn || S.nameAr)}</div>
-      <div>VAT No.: ${V(S.vat)}</div>
+      ${tax ? `<div>VAT No.: ${V(S.vat)}</div>` : ''}
       <div>CR No.: ${V(S.crn)}</div>
       <div>${escHtml([S.phone, S.email].filter(filled).join(' · '))}</div>
     </div>
   </div>
   <div class="inv-title"><span>${title.ar}</span><span class="en">${title.en}</span></div>
-  <div class="inv-meta">
+  <div class="inv-meta${tax ? '' : ' no-qr'}">
     ${qrBlock}
     <table class="inv-kv">
       ${kv('رقم الفاتورة', issued ? V(inv.number)
@@ -3513,7 +3551,7 @@ function renderInvoiceHtml(inv){
       <div class="inv-sec"><span>البائع</span><span class="en">Seller</span></div>
       <table class="inv-kv">
         ${kv('الاسم', V(S.nameAr), 'Name')}
-        ${kv('الرقم الضريبي', V(S.vat), 'VAT No.')}
+        ${tax ? kv('الرقم الضريبي', V(S.vat), 'VAT No.') : ''}
         ${kv('السجل التجاري', V(S.crn), 'CR No.')}
         ${address(S)}
       </table>
@@ -3533,28 +3571,32 @@ function renderInvoiceHtml(inv){
     <thead><tr>
       <th>#</th><th>الصنف والوصف<br>Item &amp; description</th><th>الكمية<br>Qty</th><th>سعر الوحدة<br>Unit price</th>
       ${hasDisc ? '<th>المبلغ<br>Amount</th><th>الخصم<br>Discount</th>' : ''}
-      <th>المبلغ الخاضع للضريبة<br>Taxable amount</th><th>نسبة الضريبة<br>VAT rate</th>
-      <th>مبلغ الضريبة<br>VAT amount</th><th>الإجمالي شامل الضريبة<br>Total incl. VAT</th>
+      ${tax ? `<th>المبلغ الخاضع للضريبة<br>Taxable amount</th><th>نسبة الضريبة<br>VAT rate</th>
+      <th>مبلغ الضريبة<br>VAT amount</th><th>الإجمالي شامل الضريبة<br>Total incl. VAT</th>` : '<th>الإجمالي<br>Total</th>'}
     </tr></thead>
     <tbody>${itemRows}</tbody>
   </table></div>
   <div class="inv-sum">
     <div class="inv-words"><b>المبلغ كتابةً:</b> فقط ${tafqit(T.total)} لا غير</div>
     <table class="inv-totals">
-      ${tot('الإجمالي غير شامل ضريبة القيمة المضافة', money(T.gross), 'Total (excl. VAT)')}
+      ${tax ? `${tot('الإجمالي غير شامل ضريبة القيمة المضافة', money(T.gross), 'Total (excl. VAT)')}
       ${hasDisc ? tot('الخصم', '- ' + money(T.discount), 'Discount') : ''}
       ${tot('الإجمالي الخاضع للضريبة', money(T.taxable), 'Total taxable amount')}
       ${tot(`مجموع ضريبة القيمة المضافة (${VAT_RATE}%)`, money(T.vat), `Total VAT (${VAT_RATE}%)`)}
-      ${tot('الإجمالي المستحق شامل الضريبة', money(T.total), 'Total amount due (incl. VAT)', 'grand')}
+      ${tot('الإجمالي المستحق شامل الضريبة', money(T.total), 'Total amount due (incl. VAT)', 'grand')}`
+      : `${hasDisc ? tot('الإجمالي', money(T.gross), 'Total') + tot('الخصم', '- ' + money(T.discount), 'Discount') : ''}
+      ${tot('الإجمالي المستحق', money(T.total), 'Total amount due', 'grand')}`}
     </table>
   </div>
+  ${tax ? '' : `<div class="inv-note"><b>البائع غير مسجل في ضريبة القيمة المضافة</b> — لا تتضمن هذه الفاتورة ضريبة القيمة المضافة.
+    <span class="en">The seller is not registered for VAT — no VAT is charged on this invoice.</span></div>`}
   ${filled(inv.notes) ? `<div class="inv-note"><b>ملاحظات:</b> ${escHtml(inv.notes)}</div>` : ''}
   ${filled(S.iban) ? `<div class="inv-note"><b>الحساب البنكي للسداد / Bank account:</b> ${escHtml(S.bank || '')} — IBAN: <bdi>${escHtml(S.iban)}</bdi></div>` : ''}
   <div class="inv-foot">
     <span>${issued ? `UUID: <bdi>${escHtml(inv.uuid)}</bdi>`
       + (inv.icv ? ` · التسلسل (ICV): <bdi>${inv.icv}</bdi>` : '')
       + (inv.prevNumber ? ` · الفاتورة السابقة: <bdi>${escHtml(inv.prevNumber)}</bdi>` : '') : ''}</span>
-    <span>فاتورة إلكترونية · <span class="en">Electronic tax invoice</span></span>
+    <span>فاتورة إلكترونية · <span class="en">${tax ? 'Electronic tax invoice' : 'Electronic invoice'}</span></span>
   </div>
 </div>`;
 }
