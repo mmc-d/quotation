@@ -3502,19 +3502,16 @@ function renderInvoiceHtml(inv){
   const country = c => c === 'SA' ? 'المملكة العربية السعودية (SA)' : c;
   const hasDisc = T.discount > 0;
   // No buyer (B2C / individual): the seller/buyer parties block is skipped entirely — the header
-  // above already carries the seller's full identity (name AR/EN, VAT, CR, district/city, phone/
-  // email), so repeating it in a full address table just ate page space for no new information.
+  // above already carries the seller's full identity (name AR/EN, VAT, CR, phone/email), and for
+  // this case (no separate Seller table below) its address line expands to the full one — building,
+  // street, district, city, postal/additional, country — folded into one line so nothing that used
+  // to be in that table is lost, without spending a whole row per field.
   const hasBuyer = filled(B.name) || filled(B.vat);
+  const addrLine = p => {
+    const cityPc = [p.city, [p.postal, p.additional].filter(filled).join('-')].filter(filled).join(' ');
+    return [p.building, p.street, p.district, cityPc, country(p.country || 'SA')].filter(filled).join('، ');
+  };
   const logo = document.querySelector('.company-logo')?.src || '';
-  const address = p => [
-    kv('رقم المبنى', V(p.building), 'Building No.'),
-    kv('الشارع', V(p.street), 'Street'),
-    kv('الحي', V(p.district), 'District'),
-    kv('المدينة', V(p.city), 'City'),
-    kv('الرمز البريدي', V(p.postal), 'Postal code'),
-    kv('الرقم الإضافي', V(p.additional), 'Additional No.'),
-    kv('الدولة', V(country(p.country || 'SA')), 'Country'),
-  ].join('');
   const qrBlock = !tax ? '' : issued
     ? `<div class="inv-qr">${qrSvg(inv.qr) || '<div class="inv-qr-ph">تعذر رسم رمز QR — تحقق من الاتصال</div>'}
          <div class="inv-qr-note">رمز الاستجابة السريعة<br>هيئة الزكاة والضريبة والجمارك</div></div>`
@@ -3540,7 +3537,7 @@ function renderInvoiceHtml(inv){
       <div class="inv-seller-name">${escHtml(S.nameAr)}</div>
       ${tax ? `<div>الرقم الضريبي: ${V(S.vat)}</div>` : ''}
       <div>السجل التجاري: ${V(S.crn)}</div>
-      <div>${escHtml([S.district, S.city].filter(filled).join('، '))}</div>
+      <div>${escHtml(hasBuyer ? [S.district, S.city].filter(filled).join('، ') : addrLine(S))}</div>
     </div>
     ${logo ? `<img class="inv-logo" src="${logo}" alt="">` : '<div></div>'}
     <div class="en">
@@ -3571,17 +3568,18 @@ function renderInvoiceHtml(inv){
         ${kv('الاسم', V(S.nameAr), 'Name')}
         ${tax ? kv('الرقم الضريبي', V(S.vat), 'VAT No.') : ''}
         ${kv('السجل التجاري', V(S.crn), 'CR No.')}
-        ${address(S)}
+        ${kv('العنوان', V(addrLine(S)), 'Address')}
+        ${kv('الجوال', V(S.phone), 'Mobile')}
       </table>
     </div>
     <div>
       <div class="inv-sec"><span>المشتري</span><span class="en">Buyer</span></div>
       <table class="inv-kv">
         ${kv('الاسم', V(B.name), 'Name')}
-        ${kv('الرقم الضريبي', V(B.vat), 'VAT No.')}
+        ${tax ? kv('الرقم الضريبي', V(B.vat), 'VAT No.') : ''}
         ${kv('السجل التجاري', V(B.crn), 'CR No.')}
-        ${address(B)}
-        ${filled(B.phone) ? kv('الجوال', V(B.phone), 'Mobile') : ''}
+        ${kv('العنوان', V(addrLine(B)), 'Address')}
+        ${kv('الجوال', V(B.phone), 'Mobile')}
       </table>
     </div>
   </div>` : ''}
