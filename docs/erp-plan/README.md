@@ -48,6 +48,8 @@ flowchart LR
 
 ## Phases
 
+> **Build status:** Phase 0 code done (owner actions open); Phases 1–3 built as MMC Core (`apps/`, `packages/`) — see [phase-1-3-status.md](phase-1-3-status.md) for what runs today and what is blocked on accounts/contracts.
+
 | Phase | Outcome | Indicative dates |
 |-------|---------|------------------|
 | 0 | Secure the current tool, back up data, confirm VAT registration & ZATCA status | Sep – Oct 2026 |
