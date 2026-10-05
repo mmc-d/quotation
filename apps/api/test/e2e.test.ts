@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ADMIN_SQL, Client, gotenbergUp, signIn, startServer, stopServer } from './helpers.js';
+import { ADMIN_SQL, Client, gotenbergUp, signIn, signInOrUp, startServer, stopServer } from './helpers.js';
 
 let base = '';
 let owner: Client;
@@ -29,17 +29,13 @@ describe('Phase 1 — login & platform', () => {
 
   it('does not open a session before the invited e-mail is verified', async () => {
     const c = new Client(base);
-    await c.post('/api/auth/sign-up/email', { email: 'owner@e2e.test', password: 'correct-horse-battery-staple', name: 'owner' }, { expect: 200 });
-    const res = await fetch(`${base}/api/auth/sign-in/email`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3999' }, body: JSON.stringify({ email: 'owner@e2e.test', password: 'correct-horse-battery-staple' }) });
+    await c.post('/api/auth/sign-up/email', { email: 'pending@e2e.test', password: 'correct-horse-battery-staple', name: 'pending' }, { expect: 200 });
+    const res = await fetch(`${base}/api/auth/sign-in/email`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3999' }, body: JSON.stringify({ email: 'pending@e2e.test', password: 'correct-horse-battery-staple' }) });
     expect(res.status).toBe(403);
   });
 
   it('signs in the verified owner and returns grants', async () => {
-    const sql = ADMIN_SQL();
-    await sql`update auth_user set email_verified = true where email = 'owner@e2e.test'`;
-    await sql.end();
-    owner = new Client(base);
-    await owner.post('/api/auth/sign-in/email', { email: 'owner@e2e.test', password: 'correct-horse-battery-staple' }, { expect: 200 });
+    owner = await signInOrUp(base, 'owner@e2e.test');
     const me = await owner.get('/api/me');
     expect(me.user.roles).toContain('owner');
     expect(me.grants['admin.users']).toBe('all');
@@ -51,8 +47,8 @@ describe('Phase 1 — login & platform', () => {
     const m = await owner.post('/api/users/invite', { email: 'mgr@e2e.test', nameAr: 'مدير', roleKeys: ['sales_manager'] });
     await owner.put(`/api/users/${r.id}`, { teamIds: [team.id] });
     await owner.put(`/api/users/${m.id}`, { teamIds: [team.id] });
-    rep = await signIn(base, 'rep@e2e.test');
-    manager = await signIn(base, 'mgr@e2e.test');
+    rep = await signInOrUp(base, 'rep@e2e.test');
+    manager = await signInOrUp(base, 'mgr@e2e.test');
     expect((await rep.get('/api/me')).maxDiscountPercent).toBe(10);
   });
 
