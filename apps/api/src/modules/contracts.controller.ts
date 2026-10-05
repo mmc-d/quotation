@@ -3,7 +3,7 @@ import { Body, Controller, Get, Param, Post, Put, Query, Res } from '@nestjs/com
 import type { Response } from 'express';
 import { z } from 'zod';
 import {
-  and, appUser, asc, billingMilestone, clauseTemplate, contact, contract, contractClause, desc, emit, eq, esignRequest, ilike, inArray, issuedDocument, nextNumber, or, party, quote, quoteLine, site, sql, invoiceMirror, paymentRequest, type Tx,
+  and, appUser, asc, billingMilestone, clauseTemplate, contact, contract, contractClause, desc, emit, eq, esignRequest, ilike, inArray, issuedDocument, ne, nextNumber, or, party, quote, quoteLine, site, sql, invoiceMirror, paymentRequest, type Tx,
 } from '@mmc/db';
 import {
   buildSchedule, calculateQuote, canTransitionContract, DEFAULT_SCHEDULE, dec, formatNationalAddress, halalasToFixed, riyadhDate, toHalalas, type ContractStatus, type MilestoneSpec, type MilestoneTrigger,
@@ -41,6 +41,38 @@ const contractUpdateSchema = z.object({
 });
 type ContractUpdate = z.infer<typeof contractUpdateSchema>;
 
+/** Contract template sets: each has its own clause library (clause_template.template_set), title and payment schedule. */
+export const TEMPLATE_SETS = ['supply_install', 'supply_only', 'maintenance'] as const;
+export type TemplateSet = (typeof TEMPLATE_SETS)[number];
+const SET_DEFAULTS: Record<TemplateSet, { title: string; subtitle: string; schedule: MilestoneSpec[]; deliveryDays: [number, number] | null }> = {
+  supply_install: { title: 'عقد توريد وتركيب', subtitle: 'نظام الانتركوم والمنزل الذكي', schedule: DEFAULT_SCHEDULE, deliveryDays: [45, 60] },
+  supply_only: {
+    title: 'عقد توريد', subtitle: 'توريد أجهزة الانتركوم والمنزل الذكي', deliveryDays: [45, 60],
+    schedule: [
+      { name_ar: 'دفعة مقدمة عند توقيع العقد', name_en: 'Advance on signing', percent: 50, trigger: 'on_signing' },
+      { name_ar: 'دفعة قبل توريد المواد', name_en: 'Before supply of materials', percent: 50, trigger: 'before_delivery' },
+    ],
+  },
+  maintenance: {
+    title: 'عقد صيانة سنوي', subtitle: 'صيانة أنظمة الانتركوم والمنزل الذكي', deliveryDays: null,
+    schedule: [
+      { name_ar: 'القسط الأول — الربع الأول', name_en: 'Quarter 1', percent: 25, trigger: 'on_signing' },
+      { name_ar: 'القسط الثاني — الربع الثاني', name_en: 'Quarter 2', percent: 25, trigger: 'manual' },
+      { name_ar: 'القسط الثالث — الربع الثالث', name_en: 'Quarter 3', percent: 25, trigger: 'manual' },
+      { name_ar: 'القسط الرابع — الربع الرابع', name_en: 'Quarter 4', percent: 25, trigger: 'manual' },
+    ],
+  },
+};
+const templateSetSchema = z.object({ templateSet: z.enum(TEMPLATE_SETS).optional() }).nullish();
+
+/** Replace a contract's clauses with the active clauses of a template set (verbatim). */
+async function applyClauseSet(tx: Tx, contractId: string, set: TemplateSet) {
+  await tx.delete(contractClause).where(eq(contractClause.contractId, contractId));
+  const templates = await tx.select().from(clauseTemplate).where(and(eq(clauseTemplate.active, true), eq(clauseTemplate.templateSet, set))).orderBy(asc(clauseTemplate.sort));
+  if (templates.length) await tx.insert(contractClause).values(templates.map((t, i) => ({ contractId, templateId: t.id, sort: i, titleAr: t.key === 'preamble' ? 'تمهيد' : t.titleAr, bodyAr: t.bodyAr })));
+  return templates.length;
+}
+
 /** Totals and milestone amounts for contract lines (discount by amount, VAT per company mode). */
 function computeContract(lines: { code: string; description: string; qty: string; unitPrice: string }[], discountAmount: string, vatOn: boolean, vatRegistered: boolean, specs: MilestoneSpec[]) {
   const calc = calculateQuote({ lines: lines.map((l) => ({ ...l, listPrice: l.unitPrice })), discount: { type: 'amount', value: discountAmount }, vatRegistered, vatOn });
@@ -52,7 +84,8 @@ async function loadContract(tx: Tx, id: string) {
   const [c] = await tx.select().from(contract).where(eq(contract.id, id));
   if (!c) throw notFound('contract');
   const clauses = await tx.select().from(contractClause).where(eq(contractClause.contractId, id)).orderBy(asc(contractClause.sort));
-  const milestones = await tx.select().from(billingMilestone).where(eq(billingMilestone.contractId, id)).orderBy(asc(billingMilestone.sort));
+  // The contract's payment schedule only — change orders are billed through their own milestones.
+  const milestones = await tx.select().from(billingMilestone).where(and(eq(billingMilestone.contractId, id), ne(billingMilestone.trigger, 'change_order'))).orderBy(asc(billingMilestone.sort));
   return { ...c, clauses, milestones };
 }
 
@@ -101,7 +134,9 @@ export class ContractsController {
   /** Contract v2 from a quote: client block, lines, verbatim clause library, 50/40/10 schedule. */
   @Post('from-quote/:quoteId')
   @Perm('contract.write')
-  async fromQuote(@Actor() actor: RequestActor, @Param('quoteId') quoteId: string) {
+  async fromQuote(@Actor() actor: RequestActor, @Param('quoteId') quoteId: string, @Body(new ZodPipe(templateSetSchema)) body: z.infer<typeof templateSetSchema>) {
+    const set: TemplateSet = body?.templateSet ?? 'supply_install';
+    const defaults = SET_DEFAULTS[set];
     return tenantTx(actor.tenantId, async (tx) => {
       const [q] = await tx.select().from(quote).where(eq(quote.id, quoteId));
       if (!q) throw notFound('quote');
@@ -115,22 +150,21 @@ export class ContractsController {
       const [ct] = q.contactId ? await tx.select().from(contact).where(eq(contact.id, q.contactId)) : [];
       const [st] = q.siteId ? await tx.select().from(site).where(eq(site.id, q.siteId)) : [];
       const contractLines = lines.map((l) => ({ code: l.code, description: l.description, qty: dec(l.qty).toString(), unitPrice: dec(l.unitPrice).toString() }));
-      const { totals, schedule } = computeContract(contractLines, q.discountAmount, q.vatOn, co.vatRegistered, DEFAULT_SCHEDULE);
+      const { totals, schedule } = computeContract(contractLines, q.discountAmount, q.vatOn, co.vatRegistered, defaults.schedule);
       const { number } = await nextNumber(tx, 'contract');
       const [c] = await tx.insert(contract).values({
         number, quoteId, partyId: q.partyId, companyId: co.id, branchId: q.branchId, ownerId: q.ownerId ?? actor.userId, teamId: q.teamId,
-        title: 'عقد توريد وتركيب', subtitle: q.projectName || 'نظام الانتركوم والمنزل الذكي',
+        title: defaults.title, subtitle: q.projectName || defaults.subtitle, templateSet: set,
         clientBlock: {
           name: p?.nameAr ?? q.clientName ?? '', representative: ct?.name ?? '', crNumber: p?.unifiedNumber ?? p?.crNumber ?? '', vatNumber: p?.vatNumber ?? '',
           address: st ? formatNationalAddress(st) : q.projectLocation ?? '', mobile: ct?.mobile ?? q.clientPhone ?? '',
         },
-        contractDate: riyadhDate(), deliveryDaysMin: 45, deliveryDaysMax: 60, lines: contractLines, ...totals, createdBy: actor.userId,
+        contractDate: riyadhDate(), deliveryDaysMin: defaults.deliveryDays?.[0] ?? null, deliveryDaysMax: defaults.deliveryDays?.[1] ?? null, lines: contractLines, ...totals, createdBy: actor.userId,
       }).returning();
-      const templates = await tx.select().from(clauseTemplate).where(eq(clauseTemplate.active, true)).orderBy(asc(clauseTemplate.sort));
-      if (templates.length) await tx.insert(contractClause).values(templates.map((t, i) => ({ contractId: c!.id, templateId: t.id, sort: i, titleAr: t.key === 'preamble' ? 'تمهيد' : t.titleAr, bodyAr: t.bodyAr })));
+      await applyClauseSet(tx, c!.id, set);
       await writeMilestones(tx, c!.id, schedule);
       if (q.status !== 'accepted') await tx.update(quote).set({ status: 'accepted', acceptedAt: new Date() }).where(eq(quote.id, quoteId));
-      await audit(tx, actor, 'create', 'contract', c!.id, null, { number, quote: q.number, total: totals.total });
+      await audit(tx, actor, 'create', 'contract', c!.id, null, { number, quote: q.number, total: totals.total, templateSet: set });
       await emit(tx, 'contract', c!.id, 'contract.created', { number });
       return contractView(tx, actor, c!.id);
     }, actor.userId);
@@ -164,6 +198,34 @@ export class ContractsController {
       }
       await writeMilestones(tx, id, computed.schedule, b.milestones.map((m) => m.dueDate));
       if (before.total !== computed.totals.total) await audit(tx, actor, 'update', 'contract', id, { total: before.total }, { total: computed.totals.total });
+      return contractView(tx, actor, id);
+    }, actor.userId);
+  }
+
+  /**
+   * Switch a draft contract to another template set: its clauses are replaced by that set's active
+   * clauses; the title and payment schedule follow the set while they are still the previous set's defaults.
+   */
+  @Post(':id/template')
+  @Perm('contract.write')
+  async applyTemplate(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ templateSet: z.enum(TEMPLATE_SETS) }))) b: { templateSet: TemplateSet }) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      const before = await loadContract(tx, id);
+      assertCan(actor, 'contract.write', { ownerId: before.ownerId, teamId: before.teamId });
+      if (before.status !== 'draft') throw conflict('the template can only be changed on a draft contract');
+      const prev = SET_DEFAULTS[(before.templateSet as TemplateSet)] ?? SET_DEFAULTS.supply_install;
+      const next = SET_DEFAULTS[b.templateSet];
+      const count = await applyClauseSet(tx, id, b.templateSet);
+      const titleIsDefault = Object.values(SET_DEFAULTS).some((d) => d.title === before.title);
+      const scheduleIsDefault = before.milestones.length === prev.schedule.length && before.milestones.every((m, i) => m.nameAr === prev.schedule[i]!.name_ar && Number(m.percent) === prev.schedule[i]!.percent);
+      if (scheduleIsDefault && b.templateSet !== before.templateSet) await writeMilestones(tx, id, buildSchedule(toHalalas(before.total), next.schedule));
+      await tx.update(contract).set({
+        templateSet: b.templateSet, title: titleIsDefault ? next.title : before.title,
+        ...(next.deliveryDays ? {} : { deliveryDaysMin: null, deliveryDaysMax: null }),
+        ...(next.deliveryDays && before.deliveryDaysMin === null && before.deliveryDaysMax === null ? { deliveryDaysMin: next.deliveryDays[0], deliveryDaysMax: next.deliveryDays[1] } : {}),
+        updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1,
+      }).where(eq(contract.id, id));
+      await audit(tx, actor, 'apply_template', 'contract', id, { templateSet: before.templateSet }, { templateSet: b.templateSet, clauses: count });
       return contractView(tx, actor, id);
     }, actor.userId);
   }

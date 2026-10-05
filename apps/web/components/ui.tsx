@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { money } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 
 export { clsx };
 
@@ -84,10 +85,11 @@ export function Card({ title, actions, children, className, padded = true }: { t
 }
 
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: string }) {
+  const { t } = useI18n();
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        {back && <Link href={back} className="mb-1 inline-block text-xs font-bold text-gold-dark hover:underline">→ رجوع</Link>}
+        {back && <Link href={back} className="mb-1 inline-block text-xs font-bold text-gold-dark hover:underline">{t('common.back')}</Link>}
         <h1 className="text-2xl font-extrabold text-primary">{title}</h1>
         {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
       </div>
@@ -96,6 +98,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   );
 }
 
+/** Status → [Arabic fallback label, chip classes]. Labels are translated via `status.*` in lib/i18n.tsx. */
 const STATUS: Record<string, [string, string]> = {
   draft: ['مسودة', 'bg-gray-100 text-gray-700'],
   pending_approval: ['بانتظار الموافقة', 'bg-amber-100 text-amber-800'],
@@ -138,7 +141,10 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
-  const [label, cls] = STATUS[status ?? ''] ?? [status ?? '—', 'bg-gray-100 text-gray-700'];
+  const { tx } = useI18n();
+  const known = STATUS[status ?? ''];
+  const label = known ? tx(`status.${status}`, known[0]) : status ?? '—';
+  const cls = known?.[1] ?? 'bg-gray-100 text-gray-700';
   return <span className={clsx('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold', cls)}>{label}</span>;
 }
 
@@ -149,7 +155,8 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
 
 /** Saudi Riyal amount. Accepts halalas (number) or the API's NUMERIC string. */
 export function Money({ value, fixed, className }: { value: number | string | null | undefined; fixed?: boolean; className?: string }) {
-  return <span className={clsx('num whitespace-nowrap', className)}>{money(value, { fixed })}<span className="ms-1 text-[0.8em] text-muted">ر.س</span></span>;
+  const { t } = useI18n();
+  return <span className={clsx('num whitespace-nowrap', className)}>{money(value, { fixed })}<span className="ms-1 text-[0.8em] text-muted">{t('common.sar')}</span></span>;
 }
 
 export function Table({ children, className }: { children: ReactNode; className?: string }) {
@@ -174,7 +181,8 @@ export function Empty({ icon, title, hint, action }: { icon?: ReactNode; title: 
 }
 
 export function Spinner({ label }: { label?: string }) {
-  return <div className="flex items-center justify-center gap-2 py-10 text-muted"><Loader2 className="size-5 animate-spin" />{label ?? 'جارٍ التحميل…'}</div>;
+  const { t } = useI18n();
+  return <div className="flex items-center justify-center gap-2 py-10 text-muted"><Loader2 className="size-5 animate-spin" />{label ?? t('common.loading')}</div>;
 }
 
 export function ErrorBox({ error }: { error: unknown }) {
@@ -185,6 +193,7 @@ export function ErrorBox({ error }: { error: unknown }) {
 /** Native <dialog> modal (focus trap, Esc to close). */
 export function Dialog({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const { t, dir } = useI18n();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -194,10 +203,10 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
   return (
     <dialog ref={ref} onClose={onClose} onCancel={onClose} className={clsx('m-auto w-[calc(100%-2rem)] rounded-xl border border-line p-0 shadow-2xl backdrop:bg-black/40', wide ? 'max-w-3xl' : 'max-w-lg')}>
       {open && (
-        <div dir="rtl">
+        <div dir={dir}>
           <header className="flex items-center justify-between border-b border-line px-4 py-3">
             <h3 className="font-extrabold text-primary">{title}</h3>
-            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-black/5" aria-label="إغلاق"><X className="size-4" /></button>
+            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-black/5" aria-label={t('common.close')}><X className="size-4" /></button>
           </header>
           <div className="max-h-[70vh] overflow-y-auto p-4">{children}</div>
           {footer && <footer className="flex justify-end gap-2 border-t border-line bg-tint/40 px-4 py-3">{footer}</footer>}
@@ -230,5 +239,6 @@ export function Stat({ label, value, hint, tone }: { label: ReactNode; value: Re
 }
 
 export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <Input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? 'بحث…'} className="max-w-xs" />;
+  const { t } = useI18n();
+  return <Input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? t('common.search')} className="max-w-xs" />;
 }

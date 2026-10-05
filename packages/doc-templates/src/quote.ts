@@ -13,6 +13,16 @@ export interface QuoteDocLine {
   isOptional: boolean;
   isIns: boolean;
   imageUrl?: string | null;
+  /** section the line belongs to (CPQ-13); null/absent = no section */
+  sectionKey?: string | null;
+  sectionTitle?: string | null;
+}
+
+export interface QuoteDocSection {
+  key: string;
+  title: string;
+  /** Σ line amounts of the section, optional lines excluded */
+  subtotal: Halalas;
 }
 
 export interface QuoteDoc {
@@ -28,6 +38,8 @@ export interface QuoteDoc {
   projectLocation?: string | null;
   salesRep?: string | null;
   lines: QuoteDocLine[];
+  /** sections in print order; lines are grouped under them with a subtotal row each */
+  sections?: QuoteDocSection[];
   totals: { subtotal: Halalas; discount: Halalas; taxable: Halalas; vat: Halalas; total: Halalas; vatApplied: boolean; vatRate: number; optionalTotal: Halalas };
   notes?: string | null;
   terms?: string | null;
@@ -36,8 +48,39 @@ export interface QuoteDoc {
 
 const money = (h: Halalas) => `${formatSar(h)} ${riyal}`;
 
+/**
+ * Print order: lines without a section, then each section (header row → its lines → subtotal row),
+ * then the INS line last. Without sections the stored order is kept.
+ */
+type PrintRow = { kind: 'line'; line: QuoteDocLine } | { kind: 'head'; section: QuoteDocSection } | { kind: 'sub'; section: QuoteDocSection };
+
+function orderedRows(q: QuoteDoc): PrintRow[] {
+  const sections = (q.sections ?? []).filter((s) => q.lines.some((l) => !l.isIns && l.sectionKey === s.key));
+  if (!sections.length) return q.lines.map((line) => ({ kind: 'line' as const, line }));
+  const known = new Set(sections.map((s) => s.key));
+  const out: PrintRow[] = [];
+  for (const line of q.lines) if (!line.isIns && !(line.sectionKey && known.has(line.sectionKey))) out.push({ kind: 'line', line });
+  for (const section of sections) {
+    out.push({ kind: 'head', section });
+    for (const line of q.lines) if (!line.isIns && line.sectionKey === section.key) out.push({ kind: 'line', line });
+    out.push({ kind: 'sub', section });
+  }
+  for (const line of q.lines) if (line.isIns) out.push({ kind: 'line', line });
+  return out;
+}
+
 export function renderQuoteHtml(q: QuoteDoc): string {
-  const rows = q.lines.map((l, i) => {
+  const cols = q.showImages !== false ? 7 : 6;
+  let n = 0;
+  const rows = orderedRows(q).map((r) => {
+    if (r.kind === 'head') {
+      return `<tr class="section-head"><td colspan="${cols}" style="background:var(--tint);border-top:2px solid var(--primary);color:var(--primary);font-weight:800;padding:6px 8px">${esc(r.section.title)}</td></tr>`;
+    }
+    if (r.kind === 'sub') {
+      return `<tr class="section-sub"><td colspan="${cols - 1}" style="text-align:left;font-weight:700;color:var(--gold-dk);background:#fbfaf6">المجموع الفرعي — ${esc(r.section.title)} / Subtotal</td><td class="money" style="background:#fbfaf6;border-top:1px solid var(--gold)">${money(r.section.subtotal)}</td></tr>`;
+    }
+    const l = r.line;
+    const i = n++;
     const total = l.isFree ? `${l.struck ? `<span class="strike">${formatSar(l.listAmount)}</span>` : ''}<span class="free">FREE</span>` : `${l.struck ? `<span class="strike">${formatSar(l.listAmount)}</span>` : ''}${money(l.amount)}`;
     return `<tr class="${l.isIns ? 'ins' : ''}${l.isOptional ? ' optional' : ''}">
       <td class="num">${i + 1}</td>

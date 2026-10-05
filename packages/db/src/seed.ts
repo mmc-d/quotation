@@ -6,7 +6,7 @@ import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { DEFAULT_LOST_REASONS, DEFAULT_PIPELINE, DEFAULT_SERIES, ROLE_TEMPLATES } from '@mmc/domain';
+import { DEFAULT_LOST_REASONS, DEFAULT_PIPELINE, DEFAULT_SERIES, fixedSaudiHolidays, ROLE_TEMPLATES } from '@mmc/domain';
 import * as s from './schema/index.js';
 import { withTenant, type Db } from './index.js';
 import { DEFAULT_MESSAGE_TEMPLATES, DEFAULT_TECH_NOTES, DEFAULT_TERMS } from './seed-data/defaults.js';
@@ -59,9 +59,20 @@ export async function seed(db: Db, opts: { ownerEmail: string; tenantSlug?: stri
     const lr = await tx.select().from(s.lostReason).limit(1);
     if (!lr.length) await tx.insert(s.lostReason).values(DEFAULT_LOST_REASONS.map((r) => ({ key: r.key, nameAr: r.name_ar, nameEn: r.name_en })));
 
-    const clauses = JSON.parse(readFileSync(path.resolve(here, 'seed-data/clauses.json'), 'utf8')) as { key: string; category: string; titleAr: string; bodyAr: string }[];
-    for (const [i, c] of clauses.entries()) {
-      await tx.insert(s.clauseTemplate).values({ key: c.key, category: c.category, titleAr: c.titleAr, bodyAr: c.bodyAr, sort: i }).onConflictDoNothing();
+    // Clause libraries per contract template set (supply_install | supply_only | maintenance); sort is the order within the set.
+    const clauses = JSON.parse(readFileSync(path.resolve(here, 'seed-data/clauses.json'), 'utf8')) as { templateSet?: string; key: string; category: string; titleAr: string; bodyAr: string }[];
+    const perSet = new Map<string, number>();
+    for (const c of clauses) {
+      const templateSet = c.templateSet ?? 'supply_install';
+      const sort = perSet.get(templateSet) ?? 0;
+      perSet.set(templateSet, sort + 1);
+      await tx.insert(s.clauseTemplate).values({ templateSet, key: c.key, category: c.category, titleAr: c.titleAr, bodyAr: c.bodyAr, sort }).onConflictDoNothing();
+    }
+
+    // Fixed-date Saudi public holidays for this year and next (Eid dates follow Umm al-Qura and are entered per year).
+    const year = new Date().getUTCFullYear();
+    for (const h of [...fixedSaudiHolidays(year), ...fixedSaudiHolidays(year + 1)]) {
+      await tx.insert(s.businessHoliday).values({ date: h.date, nameAr: h.name_ar, nameEn: h.name_en }).onConflictDoNothing();
     }
 
     for (const m of DEFAULT_MESSAGE_TEMPLATES) {

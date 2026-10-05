@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Package, Plus, Upload } from 'lucide-react';
+import { Package, Plus, Tags, Upload } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { Badge, Button, Card, Checkbox, Empty, ErrorBox, LinkButton, Money, PageHeader, SearchBox, Spinner, Table, Td, Th } from '@/components/ui';
@@ -30,6 +30,7 @@ export default function ProductsPage() {
         subtitle={list.data ? `${total} صنف` : 'Products catalog'}
         actions={can('product.write') && <>
           <Button variant="outline" icon={<Upload className="size-4" />} onClick={() => setImportOpen(true)}>استيراد من الشيت</Button>
+          <LinkButton href="/products/price-lists" icon={<Tags className="size-4" />}>قوائم الأسعار</LinkButton>
           <LinkButton href="/products/new" variant="primary" icon={<Plus className="size-4" />}>منتج جديد</LinkButton>
         </>}
       />
@@ -65,7 +66,7 @@ export default function ProductsPage() {
                   </Td>
                   <Td><Link href={`/products/${p.id}`} className="num font-bold text-primary hover:underline" dir="ltr">{p.code}</Link></Td>
                   <Td>
-                    <div className="font-bold">{p.nameAr}</div>
+                    <div className="font-bold">{p.nameAr}{p.type === 'kit' && <span className="ms-1.5 align-middle"><Badge tone="gold">باقة</Badge></span>}</div>
                     {p.nameEn && <div className="text-xs text-muted" dir="ltr">{p.nameEn}</div>}
                   </Td>
                   <Td><Money value={p.listPrice} /></Td>

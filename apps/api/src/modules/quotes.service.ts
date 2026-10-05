@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
-  and, appUser, approvalRequest, asc, company, desc, emit, eq, inArray, issuedDocument, nextNumber, notification, opportunity, pipelineStage, product, quote, quoteLine, quoteSection, role, userRole, activity, type Tx,
+  and, appUser, approvalRequest, asc, company, desc, emit, eq, inArray, issuedDocument, nextNumber, notification, opportunity, pipelineStage, priceList, product, quote, quoteLine, quoteSection, role, userRole, activity, type Tx,
 } from '@mmc/db';
 import {
   approvalReasons, calculateQuote, canTransitionQuote, dec, fromHalalas, halalasToFixed, INS_CODE, isQuoteEditable, riyadhDate, syncInstallationLine, type QuoteLineInput, type QuoteStatus,
@@ -13,13 +13,15 @@ import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
 import { storeFile } from '../common/files.js';
 import { assertCan } from '../common/scope.js';
 import { config } from '../config.js';
+import { resolvePrices } from './pricelists.controller.js';
 
 export interface LineInput {
   productId?: string | null;
   code: string;
   description: string;
   listPrice?: string | null;
-  unitPrice: string;
+  /** omitted → the customer's price-list price (else the catalog list price) */
+  unitPrice?: string | null;
   qty: string;
   installCost?: string | null;
   unitCost?: string | null;
@@ -58,25 +60,36 @@ function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Product snapshot for new lines: list price, install cost, SAR unit cost from USD × rate. */
-async function hydrateLines(tx: Tx, lines: LineInput[]): Promise<LineInput[]> {
+type HydratedLine = LineInput & { unitPrice: string };
+
+/**
+ * Product snapshot for new lines: list price, install cost, SAR unit cost from USD × rate.
+ * A line sent without a unit price takes the customer's price-list price (CPQ-05); its list price
+ * stays the catalog price, so the struck-through list price and "discount from list" still work.
+ */
+async function hydrateLines(tx: Tx, lines: LineInput[], partyId?: string | null): Promise<{ lines: HydratedLine[]; priceListId: string | null }> {
   const ids = lines.map((l) => l.productId).filter((x): x is string => !!x);
   const products = ids.length ? await tx.select().from(product).where(inArray(product.id, ids)) : [];
-  return lines.map((l) => {
-    const p = products.find((x) => x.id === l.productId);
-    if (!p) return l;
-    const unitCostSar = p.costPrice ? dec(p.costPrice).times(p.costCurrency === 'SAR' ? 1 : dec(p.costRateToSar)).toDecimalPlaces(4).toString() : null;
-    return {
-      ...l,
-      listPrice: l.listPrice ?? p.listPrice,
-      installCost: l.installCost ?? p.installCost,
-      unitCost: l.unitCost ?? unitCostSar,
-      imageUrl: l.imageUrl ?? p.imageUrl,
-    };
-  });
+  const resolved = await resolvePrices(tx, partyId, ids);
+  return {
+    priceListId: resolved.priceList?.id ?? null,
+    lines: lines.map((l) => {
+      const p = products.find((x) => x.id === l.productId);
+      if (!p) return { ...l, unitPrice: l.unitPrice ?? l.listPrice ?? '0' };
+      const unitCostSar = p.costPrice ? dec(p.costPrice).times(p.costCurrency === 'SAR' ? 1 : dec(p.costRateToSar)).toDecimalPlaces(4).toString() : null;
+      return {
+        ...l,
+        listPrice: l.listPrice ?? p.listPrice,
+        unitPrice: l.unitPrice ?? resolved.prices[p.id]?.price ?? l.listPrice ?? p.listPrice,
+        installCost: l.installCost ?? p.installCost,
+        unitCost: l.unitCost ?? unitCostSar,
+        imageUrl: l.imageUrl ?? p.imageUrl,
+      };
+    }),
+  };
 }
 
-function toDomain(lines: LineInput[]): QuoteLineInput[] {
+function toDomain(lines: HydratedLine[]): QuoteLineInput[] {
   return lines.map((l) => ({
     code: l.code,
     description: l.description,
@@ -87,7 +100,8 @@ function toDomain(lines: LineInput[]): QuoteLineInput[] {
     unitCost: l.unitCost ?? '0',
     isOptional: !!l.isOptional,
     manualPrice: !!l.manualPrice,
-    sectionKey: l.sectionKey ?? null,
+    // the INS line always stays last and outside sections
+    sectionKey: l.code === INS_CODE ? null : l.sectionKey ?? null,
   }));
 }
 
@@ -101,14 +115,15 @@ export async function loadQuote(tx: Tx, id: string) {
 
 /** Recompute, then persist header totals and line totals (INS kept last, legacy rules). */
 async function writeLines(tx: Tx, quoteId: string, input: QuoteInput, vatRegistered: boolean) {
-  const hydrated = await hydrateLines(tx, input.lines);
+  const { lines: hydrated, priceListId } = await hydrateLines(tx, input.lines, input.partyId);
   const synced = syncInstallationLine(toDomain(hydrated), { insDeleted: input.insDeleted });
   const calc = calculateQuote({ lines: synced, discount: { type: input.discountType, value: input.discountValue }, vatRegistered, vatOn: input.vatOn });
   await tx.delete(quoteLine).where(eq(quoteLine.quoteId, quoteId));
   await tx.delete(quoteSection).where(eq(quoteSection.quoteId, quoteId));
   const sectionIds = new Map<string, string>();
   for (const [i, s] of (input.sections ?? []).entries()) {
-    const [row] = await tx.insert(quoteSection).values({ quoteId, title: s.title, sort: i }).returning();
+    if (sectionIds.has(s.key)) throw badRequest(`section key "${s.key}" appears twice`);
+    const [row] = await tx.insert(quoteSection).values({ quoteId, title: s.title.trim() || `${i + 1}`, sort: i }).returning();
     sectionIds.set(s.key, row!.id);
   }
   if (synced.length) {
@@ -141,6 +156,7 @@ async function writeLines(tx: Tx, quoteId: string, input: QuoteInput, vatRegiste
   const t = calc.totals;
   return {
     calc,
+    priceListId,
     totals: {
       subtotal: halalasToFixed(t.subtotal), discountAmount: halalasToFixed(t.discount), taxable: halalasToFixed(t.taxable), vatAmount: halalasToFixed(t.vat), total: halalasToFixed(t.total),
       costTotal: halalasToFixed(t.cost), marginTotal: halalasToFixed(t.margin), vatOn: t.vatApplied,
@@ -158,11 +174,13 @@ export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {
   assertCan(actor, 'quote.read', { ownerId: q.ownerId, teamId: q.teamId, branchId: q.branchId });
   const co = await loadCompany(tx);
   const calc = calculateQuote({
-    lines: q.lines.map((l) => ({ code: l.code, description: l.description, listPrice: l.listPrice, unitPrice: l.unitPrice, qty: l.qty, unitCost: l.unitCost ?? '0', isOptional: l.isOptional })),
+    // section keys are the quote_section row ids (the editor uses them as its keys too)
+    lines: q.lines.map((l) => ({ code: l.code, description: l.description, listPrice: l.listPrice, unitPrice: l.unitPrice, qty: l.qty, unitCost: l.unitCost ?? '0', isOptional: l.isOptional, sectionKey: l.sectionId })),
     discount: { type: q.discountType as 'percent' | 'amount', value: q.discountValue },
     vatRegistered: co.vatRegistered,
     vatOn: q.vatOn,
   });
+  const [pl] = q.priceListId ? await tx.select({ id: priceList.id, name: priceList.name }).from(priceList).where(eq(priceList.id, q.priceListId)) : [];
   const reasons = approvalReasons(calc.totals, co.approvalPolicy, q.lines.some((l) => l.unitCost !== null));
   const approvals = await tx.select().from(approvalRequest).where(and(eq(approvalRequest.documentType, 'quote'), eq(approvalRequest.entityId, id))).orderBy(desc(approvalRequest.createdAt));
   const documents = await tx.select().from(issuedDocument).where(and(eq(issuedDocument.documentType, 'quote'), eq(issuedDocument.entityId, id))).orderBy(desc(issuedDocument.issuedAt));
@@ -173,6 +191,7 @@ export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {
   return stripCost(actor, {
     ...q,
     owner: owner ?? null,
+    priceList: pl ?? null,
     computed: { lines: calc.lines, totals: calc.totals },
     approvalReasons: reasons,
     needsApproval,
@@ -216,8 +235,8 @@ export async function createQuote(tx: Tx, actor: RequestActor, input: QuoteInput
     createdBy: actor.userId,
   }).returning();
   await tx.update(quote).set({ rootQuoteId: q!.id }).where(eq(quote.id, q!.id));
-  const { totals } = await writeLines(tx, q!.id, input, co.vatRegistered);
-  await tx.update(quote).set(totals).where(eq(quote.id, q!.id));
+  const { totals, priceListId } = await writeLines(tx, q!.id, input, co.vatRegistered);
+  await tx.update(quote).set({ ...totals, priceListId }).where(eq(quote.id, q!.id));
   await audit(tx, actor, 'create', 'quote', q!.id, null, { number, total: totals.total });
   await emit(tx, 'quote', q!.id, 'quote.created', { number });
   return q!.id;
@@ -229,7 +248,7 @@ export async function updateQuote(tx: Tx, actor: RequestActor, id: string, input
   if (!isQuoteEditable(before.status as QuoteStatus)) throw conflict('this quote was sent — create a revision to change it');
   if (expectedVersion !== undefined && expectedVersion !== before.version) throw conflict('the quote was changed by someone else — reload');
   const co = await loadCompany(tx);
-  const { totals } = await writeLines(tx, id, input, co.vatRegistered);
+  const { totals, priceListId } = await writeLines(tx, id, input, co.vatRegistered);
   // Any change invalidates an approval.
   const status = before.status === 'approved' || before.status === 'pending_approval' ? 'draft' : before.status;
   await tx.update(quote).set({
@@ -239,7 +258,7 @@ export async function updateQuote(tx: Tx, actor: RequestActor, id: string, input
     quoteDate: input.quoteDate ?? before.quoteDate, validUntil: input.validUntil ?? before.validUntil,
     discountType: input.discountType, discountValue: input.discountValue, insDeleted: !!input.insDeleted,
     notes: input.notes ?? null, terms: input.terms ?? null, language: input.language ?? before.language,
-    ...totals, status, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1,
+    ...totals, priceListId, status, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1,
   }).where(eq(quote.id, id));
   if (before.total !== totals.total || before.discountValue !== input.discountValue || before.status !== status) {
     await audit(tx, actor, 'update', 'quote', id, { total: before.total, discount: `${before.discountType}:${before.discountValue}`, status: before.status }, { total: totals.total, discount: `${input.discountType}:${input.discountValue}`, status });
@@ -336,6 +355,12 @@ export async function moveOpportunityStage(tx: Tx, opportunityId: string, stageK
 }
 
 export function quoteDocFrom(q: Awaited<ReturnType<typeof getQuoteView>>, ownerName?: string | null) {
+  // Section subtotals from the line amounts (optional lines excluded, as in the totals).
+  const sections = (q.sections ?? []).map((s) => ({
+    key: s.id,
+    title: s.title,
+    subtotal: q.lines.reduce((sum, l, i) => (l.sectionId === s.id && !l.isOptional && l.code !== INS_CODE ? sum + q.computed.lines[i]!.amount : sum), 0),
+  }));
   return {
     number: q.number,
     revision: q.revision,
@@ -349,8 +374,10 @@ export function quoteDocFrom(q: Awaited<ReturnType<typeof getQuoteView>>, ownerN
     salesRep: ownerName ?? null,
     lines: q.lines.map((l, i) => {
       const c = q.computed.lines[i]!;
-      return { code: l.code, description: l.description, qty: dec(l.qty).toString(), unitPrice: Math.round(Number(l.unitPrice) * 100), amount: c.amount, listAmount: c.listAmount, isFree: c.isFree, struck: c.struck, isOptional: l.isOptional, isIns: l.code === INS_CODE, imageUrl: l.imageUrl };
+      const section = l.code === INS_CODE ? undefined : sections.find((s) => s.key === l.sectionId);
+      return { code: l.code, description: l.description, qty: dec(l.qty).toString(), unitPrice: Math.round(Number(l.unitPrice) * 100), amount: c.amount, listAmount: c.listAmount, isFree: c.isFree, struck: c.struck, isOptional: l.isOptional, isIns: l.code === INS_CODE, imageUrl: l.imageUrl, sectionKey: section?.key ?? null, sectionTitle: section?.title ?? null };
     }),
+    sections,
     totals: q.computed.totals,
     notes: q.notes,
     terms: q.terms,

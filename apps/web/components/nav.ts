@@ -1,11 +1,11 @@
 /** Every staff route, grouped. `perm` hides entries the API would refuse anyway. */
 export interface NavItem { href: string; label: string; en: string; perm?: string; icon: string }
-export interface NavGroup { label: string; items: NavItem[] }
+export interface NavGroup { label: string; en: string; items: NavItem[] }
 
 export const NAV: NavGroup[] = [
-  { label: 'الرئيسية', items: [{ href: '/', label: 'لوحة القيادة', en: 'Cockpit', icon: 'LayoutDashboard', perm: 'quote.read' }] },
+  { label: 'الرئيسية', en: 'Home', items: [{ href: '/', label: 'لوحة القيادة', en: 'Cockpit', icon: 'LayoutDashboard', perm: 'quote.read' }] },
   {
-    label: 'المبيعات', items: [
+    label: 'المبيعات', en: 'Sales', items: [
       { href: '/quotes', label: 'عروض الأسعار', en: 'Quotes', icon: 'FileText', perm: 'quote.read' },
       { href: '/contracts', label: 'العقود', en: 'Contracts', icon: 'FileSignature', perm: 'contract.read' },
       { href: '/customers', label: 'العملاء', en: 'Customers', icon: 'Building2', perm: 'party.read' },
@@ -14,7 +14,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'إدارة العملاء', items: [
+    label: 'إدارة العملاء', en: 'CRM', items: [
       { href: '/crm/leads', label: 'العملاء المحتملون', en: 'Leads', icon: 'UserPlus', perm: 'lead.read' },
       { href: '/crm/pipeline', label: 'مسار الفرص', en: 'Pipeline', icon: 'KanbanSquare', perm: 'opportunity.read' },
       { href: '/crm/tasks', label: 'مهامي', en: 'My tasks', icon: 'ListChecks', perm: 'activity.read' },
@@ -23,15 +23,15 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'المالية', items: [
+    label: 'المالية', en: 'Finance', items: [
       { href: '/finance/requests', label: 'طلبات الدفع', en: 'Payment requests', icon: 'HandCoins', perm: 'billing.read' },
       { href: '/finance/invoices', label: 'الفواتير', en: 'Invoices', icon: 'Receipt', perm: 'invoice.read' },
       { href: '/finance/aging', label: 'أعمار الذمم', en: 'AR aging', icon: 'Hourglass', perm: 'invoice.read' },
     ],
   },
-  { label: 'التقارير', items: [{ href: '/reports', label: 'تقارير المبيعات', en: 'Sales reports', icon: 'BarChart3', perm: 'report.sales' }] },
+  { label: 'التقارير', en: 'Reports', items: [{ href: '/reports', label: 'تقارير المبيعات', en: 'Sales reports', icon: 'BarChart3', perm: 'report.sales' }] },
   {
-    label: 'الإعدادات', items: [
+    label: 'الإعدادات', en: 'Settings', items: [
       { href: '/settings/company', label: 'بيانات المنشأة', en: 'Company', icon: 'Landmark', perm: 'admin.settings' },
       { href: '/settings/users', label: 'المستخدمون والصلاحيات', en: 'Users & roles', icon: 'Users', perm: 'admin.users' },
       { href: '/settings/documents', label: 'المستندات والترقيم', en: 'Documents', icon: 'Files', perm: 'admin.settings' },

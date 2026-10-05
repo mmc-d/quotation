@@ -4,19 +4,27 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Badge, Button, clsx, Dialog, ErrorBox, Input, Spinner } from '@/components/ui';
-import type { ClauseTemplate } from './types';
+import { TEMPLATE_SETS, type ClauseTemplate, type TemplateSet } from './types';
 
 /** Clause library (GET /settings/clauses): pick verbatim clauses to append to the contract. */
-export function ClauseLibrary({ open, onClose, usedIds, onAdd }: { open: boolean; onClose: () => void; usedIds: Set<string>; onAdd: (t: ClauseTemplate) => void }) {
+export function ClauseLibrary({ open, onClose, usedIds, onAdd, templateSet }: { open: boolean; onClose: () => void; usedIds: Set<string>; onAdd: (t: ClauseTemplate) => void; templateSet?: TemplateSet }) {
   const [q, setQ] = useState('');
+  const [set, setSet] = useState<TemplateSet | 'all'>(templateSet ?? 'all');
   const res = useQuery({ queryKey: ['clause-templates'], queryFn: () => api.get<ClauseTemplate[]>('/settings/clauses'), enabled: open, staleTime: 300_000 });
   const rows = useMemo(() => {
     const term = q.trim();
-    return (res.data ?? []).filter((t) => t.active && (!term || t.titleAr.includes(term) || t.bodyAr.includes(term) || t.category.includes(term)));
-  }, [res.data, q]);
+    return (res.data ?? []).filter((t) => t.active && (set === 'all' || t.templateSet === set) && (!term || t.titleAr.includes(term) || t.bodyAr.includes(term) || t.category.includes(term)));
+  }, [res.data, q, set]);
   return (
     <Dialog open={open} onClose={onClose} wide title="مكتبة البنود القانونية" footer={<Button onClick={onClose}>تم</Button>}>
-      <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث في البنود…" className="mb-3" />
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث في البنود…" className="min-w-[12rem] flex-1" />
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="قالب العقد">
+          {[{ value: 'all' as const, label: 'كل القوالب' }, ...TEMPLATE_SETS].map((t) => (
+            <button key={t.value} type="button" role="tab" aria-selected={set === t.value} onClick={() => setSet(t.value)} className={clsx('rounded-full border px-3 py-1 text-xs font-bold', set === t.value ? 'border-primary bg-primary text-white' : 'border-line bg-white hover:bg-tint')}>{t.label}</button>
+          ))}
+        </div>
+      </div>
       <ErrorBox error={res.error} />
       {res.isLoading ? <Spinner /> : rows.length === 0 ? <p className="py-6 text-center text-sm text-muted">لا توجد بنود</p> : (
         <ul className="space-y-2">

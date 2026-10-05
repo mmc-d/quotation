@@ -19,7 +19,8 @@ const lineSchema = z.object({
   code: z.string().min(1),
   description: z.string().min(1),
   listPrice: zMoney.nullish(),
-  unitPrice: zMoney,
+  /** omitted → the customer's price-list price, else the catalog list price */
+  unitPrice: zMoney.nullish(),
   qty: zQty,
   installCost: zMoney.nullish(),
   unitCost: zMoney.nullish(),
@@ -48,7 +49,7 @@ export const quoteSchema = z.object({
   notes: z.string().nullish(),
   terms: z.string().nullish(),
   language: z.enum(['ar', 'en']).optional(),
-  sections: z.array(z.object({ key: z.string(), title: z.string() })).optional(),
+  sections: z.array(z.object({ key: z.string().min(1), title: z.string().max(200) })).max(100).optional(),
   lines: z.array(lineSchema).max(500),
   version: z.number().int().optional(),
 }).refine((q) => q.discountType !== 'percent' || (Number(q.discountValue) >= 0 && Number(q.discountValue) <= 100), { message: 'discount % must be 0–100', path: ['discountValue'] });
@@ -121,8 +122,10 @@ export class QuotesController {
       const newId = await createQuote(tx, actor, {
         partyId: src.partyId, contactId: src.contactId, siteId: src.siteId, opportunityId: src.opportunityId, clientName: src.clientName, clientPhone: src.clientPhone, clientEmail: src.clientEmail,
         projectName: src.projectName, projectLocation: src.projectLocation, discountType: src.discountType as 'percent' | 'amount', discountValue: src.discountValue, vatOn: src.vatOn,
-        insDeleted: src.insDeleted, notes: src.notes, terms: src.terms,
-        lines: src.lines.filter((l) => !l.isAutoLabor).map((l) => ({ productId: l.productId, code: l.code, description: l.description, listPrice: l.listPrice, unitPrice: l.unitPrice, qty: l.qty, installCost: l.installCost, unitCost: l.unitCost, isOptional: l.isOptional, manualPrice: l.manualPrice, imageUrl: l.imageUrl })),
+        insDeleted: src.insDeleted, notes: src.notes, terms: src.terms, language: src.language as 'ar' | 'en',
+        // keep the sections: the old section row ids serve as the keys of the copy
+        sections: src.sections.map((s) => ({ key: s.id, title: s.title })),
+        lines: src.lines.filter((l) => !l.isAutoLabor).map((l) => ({ productId: l.productId, code: l.code, description: l.description, listPrice: l.listPrice, unitPrice: l.unitPrice, qty: l.qty, installCost: l.installCost, unitCost: l.unitCost, isOptional: l.isOptional, manualPrice: l.manualPrice, imageUrl: l.imageUrl, sectionKey: l.sectionId })),
       });
       return getQuoteView(tx, actor, newId);
     }, actor.userId);

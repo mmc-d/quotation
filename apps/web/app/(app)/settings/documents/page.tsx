@@ -119,16 +119,35 @@ function NumberingDialog({ series, onClose }: { series: Series; onClose: () => v
 
 /* ───────────── Contract clauses ───────────── */
 
-interface Clause { id: string; key: string; category: string; titleAr: string; bodyAr: string; titleEn: string | null; bodyEn: string | null; sort: number; active: boolean; clauseVersion: number }
+interface Clause { id: string; key: string; category: string; titleAr: string; bodyAr: string; titleEn: string | null; bodyEn: string | null; sort: number; active: boolean; clauseVersion: number; templateSet: TemplateSet }
+
+type TemplateSet = 'supply_install' | 'supply_only' | 'maintenance';
+const TEMPLATE_SETS: { value: TemplateSet; label: string; hint: string }[] = [
+  { value: 'supply_install', label: 'توريد وتركيب', hint: 'العقد الافتراضي: توريد المواد وتركيبها وبرمجتها.' },
+  { value: 'supply_only', label: 'توريد فقط', hint: 'توريد دون تركيب أو برمجة؛ الضمان على المواد فقط.' },
+  { value: 'maintenance', label: 'عقد صيانة سنوي', hint: 'زيارات وقائية، أوقات استجابة، استثناءات، مدة 12 شهرًا وتجديد.' },
+];
 
 const CATEGORY_AR: Record<string, string> = { general: 'عام', scope: 'نطاق العمل', payment: 'الدفع', warranty: 'الضمان', delivery: 'التوريد والتنفيذ', obligations: 'الالتزامات', termination: 'الإنهاء', disputes: 'النزاعات', other: 'أخرى' };
 
 function Clauses() {
   const q = useQuery({ queryKey: ['clauses'], queryFn: () => api.get<Clause[]>('/settings/clauses') });
   const [edit, setEdit] = useState<Clause | 'new' | null>(null);
-  const rows = [...(q.data ?? [])].sort((a, b) => a.sort - b.sort);
+  const [set, setSet] = useState<TemplateSet>('supply_install');
+  const all = q.data ?? [];
+  const rows = all.filter((c) => (c.templateSet ?? 'supply_install') === set).sort((a, b) => a.sort - b.sort);
   return (
-    <Card padded={false} title="بنود العقود" actions={<Button size="sm" icon={<Plus className="size-4" />} onClick={() => setEdit('new')}>بند جديد</Button>}>
+    <div className="space-y-3">
+    <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="قالب العقد">
+      {TEMPLATE_SETS.map((t) => (
+        <button key={t.value} type="button" role="tab" aria-selected={set === t.value} onClick={() => setSet(t.value)}
+          className={`rounded-full border px-3 py-1.5 text-sm font-bold ${set === t.value ? 'border-primary bg-primary text-white' : 'border-line bg-white hover:bg-tint'}`}>
+          {t.label} <span className="num text-xs opacity-75">({all.filter((c) => (c.templateSet ?? 'supply_install') === t.value).length})</span>
+        </button>
+      ))}
+    </div>
+    <InfoNote>{TEMPLATE_SETS.find((t) => t.value === set)?.hint} تُنسخ البنود المفعّلة من القالب إلى العقد عند إنشائه من العرض أو عند تغيير قالب العقد وهو مسودة. البند الذي عنوانه يحتوي «المواصفات» يُطبع معه جدول البنود، وبعد البند الذي عنوانه يحتوي «نطاق» تُطبع مادة الدفعات تلقائيًا.</InfoNote>
+    <Card padded={false} title={`بنود العقود — ${TEMPLATE_SETS.find((t) => t.value === set)?.label}`} actions={<Button size="sm" icon={<Plus className="size-4" />} onClick={() => setEdit('new')}>بند جديد</Button>}>
       <ErrorBox error={q.error} />
       {q.isLoading ? <Spinner /> : rows.length === 0 ? <Empty icon={<ScrollText className="size-8" />} title="لا توجد بنود" /> : (
         <ul className="divide-y divide-line">
@@ -149,14 +168,15 @@ function Clauses() {
           ))}
         </ul>
       )}
-      {edit && <ClauseDialog clause={edit === 'new' ? null : edit} nextSort={(rows.at(-1)?.sort ?? 0) + 10} onClose={() => setEdit(null)} />}
+      {edit && <ClauseDialog clause={edit === 'new' ? null : edit} defaultSet={set} nextSort={(rows.at(-1)?.sort ?? 0) + 10} onClose={() => setEdit(null)} />}
     </Card>
+    </div>
   );
 }
 
-function ClauseDialog({ clause, nextSort, onClose }: { clause: Clause | null; nextSort: number; onClose: () => void }) {
+function ClauseDialog({ clause, nextSort, defaultSet, onClose }: { clause: Clause | null; nextSort: number; defaultSet: TemplateSet; onClose: () => void }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ key: clause?.key ?? '', category: clause?.category ?? 'general', titleAr: clause?.titleAr ?? '', bodyAr: clause?.bodyAr ?? '', titleEn: clause?.titleEn ?? '', bodyEn: clause?.bodyEn ?? '', sort: String(clause?.sort ?? nextSort), active: clause?.active ?? true });
+  const [f, setF] = useState({ templateSet: clause?.templateSet ?? defaultSet, key: clause?.key ?? '', category: clause?.category ?? 'general', titleAr: clause?.titleAr ?? '', bodyAr: clause?.bodyAr ?? '', titleEn: clause?.titleEn ?? '', bodyEn: clause?.bodyEn ?? '', sort: String(clause?.sort ?? nextSort), active: clause?.active ?? true });
   const [showEn, setShowEn] = useState(!!(clause?.titleEn || clause?.bodyEn));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -164,9 +184,10 @@ function ClauseDialog({ clause, nextSort, onClose }: { clause: Clause | null; ne
   const save = async () => {
     setBusy(true); setError(null);
     try {
-      await api.put(`/settings/clauses/${clause?.id ?? 'new'}`, { key: f.key.trim(), category: f.category, titleAr: f.titleAr.trim(), bodyAr: f.bodyAr, titleEn: f.titleEn.trim() || null, bodyEn: f.bodyEn.trim() || null, sort: Number(f.sort), active: f.active });
+      await api.put(`/settings/clauses/${clause?.id ?? 'new'}`, { templateSet: f.templateSet, key: f.key.trim(), category: f.category, titleAr: f.titleAr.trim(), bodyAr: f.bodyAr, titleEn: f.titleEn.trim() || null, bodyEn: f.bodyEn.trim() || null, sort: Number(f.sort), active: f.active });
       toast.success('تم حفظ البند');
       qc.invalidateQueries({ queryKey: ['clauses'] });
+      qc.invalidateQueries({ queryKey: ['clause-templates'] });
       onClose();
     } catch (e) { setError(e); } finally { setBusy(false); }
   };
@@ -181,7 +202,12 @@ function ClauseDialog({ clause, nextSort, onClose }: { clause: Clause | null; ne
           </Select>
         </Field>
         <Field label="الترتيب"><Input type="number" value={f.sort} onChange={(e) => setF({ ...f, sort: e.target.value })} /></Field>
-        <Field label="المفتاح *" hint="معرّف ثابت بالإنجليزية" className="sm:col-span-2"><Input dir="ltr" value={f.key} disabled={!!clause} onChange={(e) => setF({ ...f, key: e.target.value.replace(/\s+/g, '_').toLowerCase() })} placeholder="payment_terms" /></Field>
+        <Field label="قالب العقد" className="sm:col-span-2">
+          <Select value={f.templateSet} onChange={(e) => setF({ ...f, templateSet: e.target.value as TemplateSet })}>
+            {TEMPLATE_SETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="المفتاح *" hint="معرّف ثابت بالإنجليزية (فريد داخل القالب)" className="sm:col-span-2"><Input dir="ltr" value={f.key} disabled={!!clause} onChange={(e) => setF({ ...f, key: e.target.value.replace(/\s+/g, '_').toLowerCase() })} placeholder="payment_terms" /></Field>
         <div className="flex items-end pb-2 sm:col-span-2"><Checkbox label="مفعّل (يظهر في العقود الجديدة)" checked={f.active} onChange={(v) => setF({ ...f, active: v })} /></div>
       </div>
       <Field label="نص البند *" className="mt-3"><Textarea rows={14} value={f.bodyAr} onChange={(e) => setF({ ...f, bodyAr: e.target.value })} /></Field>

@@ -7,6 +7,7 @@ import { Archive, ExternalLink, Package, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { Button, Card, Checkbox, Dialog, ErrorBox, Field, Input, PageHeader, Select, Spinner, Textarea } from '@/components/ui';
+import { KitComponentsCard } from '../_components/kit-components';
 import { CURRENCY_AR, PRODUCT_TYPES, type Product } from '../_components/types';
 
 interface Form {
@@ -189,6 +190,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           {canWrite && <Button className="w-full" loading={busy === 'save'} disabled={invalid} icon={<Save className="size-4" />}>{isNew ? 'إضافة المنتج' : 'حفظ التغييرات'}</Button>}
         </fieldset>
       </form>
+      {!isNew && q.data && <div className="mt-4"><KitComponentsCard product={q.data} canWrite={canWrite} /></div>}
       <Dialog open={confirmArchive} onClose={() => setConfirmArchive(false)} title="أرشفة المنتج" footer={<>
         <Button variant="outline" onClick={() => setConfirmArchive(false)}>إلغاء</Button>
         <Button variant="danger" loading={busy === 'archive'} onClick={archive}>أرشفة</Button>

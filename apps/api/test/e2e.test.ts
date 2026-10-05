@@ -96,7 +96,7 @@ describe('Phase 1 — catalog, customers, quotes v2, contracts v2', () => {
 
   it('builds a quote with the auto INS line, FREE line, optional line and legacy numbering', async () => {
     const q = await rep.post('/api/quotes', { partyId: S.party.id, contactId: S.party.contacts[0].id, siteId: S.party.sites[0].id, clientName: S.party.nameAr, clientPhone: '0551112233', projectName: 'برج النخبة', discountType: 'percent', discountValue: '5', vatOn: true, lines: lines() });
-    expect(q.number).toMatch(/^MMC-\d{6}1$/);
+    expect(q.number).toMatch(/^MMC-\d{6}\d+$/); // legacy daily format (sequence depends on which test file ran first)
     const ins = q.lines.at(-1);
     expect(ins.code).toBe('INS');
     expect(ins.unitPrice).toBe('300.0000'); // 4×50 + 1×100

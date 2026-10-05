@@ -16,6 +16,7 @@ export interface ContractView {
   ownerId: string | null;
   title: string;
   subtitle: string | null;
+  templateSet: TemplateSet;
   clientBlock: ClientBlock;
   status: string;
   contractDate: string;
@@ -42,7 +43,40 @@ export interface ContractView {
   esignRequests: EsignRow[];
 }
 
-export interface ClauseTemplate { id: string; key: string; category: string; titleAr: string; bodyAr: string; sort: number; active: boolean; clauseVersion: number }
+export interface ClauseTemplate { id: string; key: string; category: string; titleAr: string; bodyAr: string; sort: number; active: boolean; clauseVersion: number; templateSet: TemplateSet }
+
+/** Contract template sets (each has its own clause library in Settings → Documents). */
+export type TemplateSet = 'supply_install' | 'supply_only' | 'maintenance';
+export const TEMPLATE_SETS: { value: TemplateSet; label: string; hint: string }[] = [
+  { value: 'supply_install', label: 'توريد وتركيب', hint: 'توريد المواد وتركيبها وبرمجتها — دفعات 50/40/10' },
+  { value: 'supply_only', label: 'توريد فقط', hint: 'توريد المواد دون تركيب — ضمان على المواد، دفعات 50/50' },
+  { value: 'maintenance', label: 'عقد صيانة سنوي', hint: 'زيارات وقائية وأوقات استجابة لمدة 12 شهرًا — أربعة أقساط ربع سنوية' },
+];
+export const templateSetLabel = (v: string | null | undefined) => TEMPLATE_SETS.find((t) => t.value === v)?.label ?? v ?? '—';
+
+/** Change orders (GET /change-orders). Money fields are NUMERIC strings (SAR); qty may be negative (removal). */
+export interface ChangeOrderLine { code: string; description: string; qty: string; unitPrice: string }
+export interface ChangeOrderRow {
+  id: string; contractId: string; number: string; description: string; reason: string | null; lines: ChangeOrderLine[];
+  subtotalDelta: string; vatDelta: string; amountDelta: string; status: string;
+  approvedBy: string | null; approvedAt: string | null; signedAt: string | null; milestoneId: string | null;
+  createdBy: string | null; createdAt: string; version: number;
+}
+export interface ChangeOrderView extends ChangeOrderRow {
+  createdByName: string | null; approvedByName: string | null;
+  milestone: ContractMilestone | null;
+  paymentRequests: { id: string; number: string; amount: string; paidAmount: string; status: string; dueDate: string; publicToken: string | null }[];
+  invoices: { id: string; number: string; typeCode: string; total: string; balanceDue: string; issueDate: string }[];
+}
+export const CO_STATUS: Record<string, { label: string; cls: string }> = {
+  draft: { label: 'مسودة', cls: 'bg-gray-100 text-gray-700' },
+  pending_approval: { label: 'بانتظار الموافقة', cls: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'معتمد', cls: 'bg-sky-100 text-sky-800' },
+  signed: { label: 'وافق العميل', cls: 'bg-emerald-100 text-emerald-800' },
+  billed: { label: 'مفوتر', cls: 'bg-primary-50 text-primary' },
+  rejected: { label: 'مرفوض', cls: 'bg-rose-100 text-rose-800' },
+  cancelled: { label: 'ملغى', cls: 'bg-gray-200 text-gray-600' },
+};
 
 export interface DraftLine extends ContractLine { key: string }
 export interface DraftClause { key: string; templateId: string | null; titleAr: string; bodyAr: string }

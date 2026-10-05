@@ -1,5 +1,9 @@
 'use client';
-/** Contract billing cockpit: milestones → payment requests → 386 prepayment / 388 final invoices → payments. */
+/**
+ * Contract billing cockpit: milestones → payment requests → 386 prepayment / 388 final invoices → payments.
+ * Change orders are billed on their own milestones (labelled «أمر تغيير MMC-CO-…»): a separate 388 per paid
+ * change order, or a 381 credit note for a reduction — never part of the contract's 50/40/10 or its final 388.
+ */
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -14,13 +18,16 @@ import {
 } from '@/app/(app)/finance/_components/finance-kit';
 
 interface Milestone { id: string; sort: number; nameAr: string; nameEn: string | null; percent: string; amount: string; paidAmount: string; dueDate: string | null; status: string; trigger: string }
+interface CoMilestone extends Milestone { changeOrder: string | null }
 interface Billing {
   contract: { id: string; number: string; status: string; total: string; partyId: string | null };
   milestones: Milestone[];
+  changeOrderMilestones?: CoMilestone[];
+  changeOrders?: { rows: { id: string; number: string; description: string; status: string; amountDelta: string; milestoneId: string | null }[]; approvedTotal: string; paid: string; adjustedTotal: string };
   requests: PaymentRequestRow[];
   invoices: InvoiceRow[];
   payments: PaymentRow[];
-  summary: { total: string; paid: string; remaining: string };
+  summary: { total: string; paid: string; remaining: string; adjustedTotal?: string };
   nextMilestoneId: string | null;
 }
 
@@ -46,7 +53,10 @@ export function BillingPanel({ contractId }: { contractId: string }) {
   const pct = totalH > 0 ? Math.min(100, Math.round((paidH / totalH) * 100)) : 0;
   const signed = ['signed', 'active', 'completed'].includes(d.contract.status);
   const lastId = d.milestones[d.milestones.length - 1]?.id;
+  const coMs = d.changeOrderMilestones ?? [];
+  const coLabel = new Map(coMs.map((m) => [m.id, m.changeOrder ? `أمر تغيير ${m.changeOrder}` : m.nameAr]));
   const msName = new Map(d.milestones.map((m) => [m.id, m.nameAr]));
+  const hasCo = !!d.changeOrders && h(d.changeOrders.approvedTotal) !== 0;
   const reqNumber = new Map(d.requests.map((r) => [r.id, r.number]));
   const canWrite = can('billing.write');
   const todayStr = today();
@@ -55,8 +65,14 @@ export function BillingPanel({ contractId }: { contractId: string }) {
     <div className="space-y-4">
       <Card title="الفوترة والمدفوعات">
         <p className="mb-4 rounded-lg bg-tint/60 px-3 py-2 text-xs leading-relaxed text-gold-dark">
-          اطلب كل دفعة حسب الجدول ← كل دفعة مقدمة تُستلم تُصدر فاتورة دفعة مقدمة (386) شاملة الضريبة ← الدفعة الأخيرة تُصدر الفاتورة الضريبية النهائية (388) للعقد كاملًا مخصومًا منها الدفعات المقدمة ويُطلب رصيدها — والتصحيح بإشعار دائن (381) فقط.
+          اطلب كل دفعة حسب الجدول ← كل دفعة مقدمة تُستلم تُصدر فاتورة دفعة مقدمة (386) شاملة الضريبة ← الدفعة الأخيرة تُصدر الفاتورة الضريبية النهائية (388) للعقد كاملًا مخصومًا منها الدفعات المقدمة ويُطلب رصيدها — والتصحيح بإشعار دائن (381) فقط. أوامر التغيير تُفوتر منفصلة: فاتورة 388 مستقلة لكل أمر تغيير مدفوع، أو إشعار دائن للتخفيض.
         </p>
+        {hasCo && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/40 bg-white px-3 py-2 text-sm">
+            <span>قيمة العقد شاملة أوامر التغيير: <b className="text-gold-dark"><Money value={d.changeOrders!.adjustedTotal} fixed /></b></span>
+            <span className="text-xs text-muted">أوامر التغيير المعتمدة <span className={clsx('num font-bold', h(d.changeOrders!.approvedTotal) < 0 ? 'text-danger' : 'text-ok')}>{h(d.changeOrders!.approvedTotal) < 0 ? '−' : '+'}{money(Math.abs(h(d.changeOrders!.approvedTotal)), { fixed: true })}</span> · المحصّل منها <Money value={d.changeOrders!.paid} fixed /></span>
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <div><div className="text-xs font-bold text-muted">قيمة العقد</div><div className="mt-0.5 text-xl font-extrabold text-primary"><Money value={d.summary.total} fixed /></div></div>
           <div><div className="text-xs font-bold text-muted">المحصّل</div><div className="mt-0.5 text-xl font-extrabold text-ok"><Money value={d.summary.paid} fixed /></div></div>
@@ -100,6 +116,37 @@ export function BillingPanel({ contractId }: { contractId: string }) {
         )}
       </Card>
 
+      {coMs.length > 0 && (
+        <Card title="فوترة أوامر التغيير" padded={false}>
+          <Table>
+            <thead><tr><Th>أمر التغيير</Th><Th>المبلغ</Th><Th>المدفوع</Th><Th>الاستحقاق</Th><Th>الحالة</Th><Th /></tr></thead>
+            <tbody>
+              {coMs.map((m) => {
+                const open = d.requests.find((r) => r.milestoneId === m.id && OPEN.includes(r.status));
+                const negative = h(m.amount) < 0;
+                const canRequest = canWrite && signed && !open && !negative && m.status === 'pending';
+                const inv = d.invoices.find((i) => i.milestoneId === m.id);
+                return (
+                  <tr key={m.id}>
+                    <Td className="font-bold"><span className="rounded bg-tint px-1.5 py-0.5 text-xs text-gold-dark">{coLabel.get(m.id)}</span>
+                      <div className="text-[11px] font-normal text-muted">{negative ? 'تخفيض — إشعار دائن (381)' : 'فاتورة ضريبية مستقلة (388) عند الدفع'}</div></Td>
+                    <Td><Money value={m.amount} fixed className={negative ? 'text-danger' : undefined} /></Td>
+                    <Td>{negative ? <span className="text-muted">—</span> : <Money value={m.paidAmount} fixed className={h(m.paidAmount) > 0 ? 'text-ok' : 'text-muted'} />}</Td>
+                    <Td className="num text-xs">{date(m.dueDate)}</Td>
+                    <Td><StatusBadge status={m.status} /></Td>
+                    <Td className="text-end">
+                      {canRequest && <Button size="sm" variant="outline" icon={<HandCoins className="size-3.5" />} onClick={() => setRequestFor(m)}>طلب الدفعة</Button>}
+                      {open && <span className="text-xs text-muted">طلب <span className="num">{open.number}</span></span>}
+                      {inv && <Button size="sm" variant="ghost" icon={<FileText className="size-3.5" />} onClick={() => openFile(`/finance/invoices/${inv.id}/pdf`)}><span className="num">{inv.number}</span></Button>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        </Card>
+      )}
+
       <Card title="طلبات الدفع" padded={false}>
         {!d.requests.length ? <Empty icon={<Receipt className="size-7" />} title="لم تُطلب أي دفعة بعد" hint="ابدأ بطلب الدفعة الأولى من جدول الدفعات." /> : (
           <Table>
@@ -111,7 +158,7 @@ export function BillingPanel({ contractId }: { contractId: string }) {
                 return (
                   <tr key={r.id}>
                     <Td className="num font-bold">{r.number}</Td>
-                    <Td>{(r.milestoneId && msName.get(r.milestoneId)) ?? '—'}</Td>
+                    <Td>{r.milestoneId && coLabel.has(r.milestoneId) ? <span className="rounded bg-tint px-1.5 py-0.5 text-xs font-bold text-gold-dark">{coLabel.get(r.milestoneId)}</span> : (r.milestoneId && msName.get(r.milestoneId)) ?? '—'}</Td>
                     <Td><Money value={r.amount} fixed /></Td>
                     <Td><Money value={r.paidAmount} fixed className={h(r.paidAmount) > 0 ? 'text-ok' : 'text-muted'} /></Td>
                     <Td className={clsx('num text-xs', overdue && 'font-bold text-danger')}>{date(r.dueDate)}{overdue && <span className="ms-1">(متأخر)</span>}</Td>
@@ -140,7 +187,7 @@ export function BillingPanel({ contractId }: { contractId: string }) {
               {d.invoices.map((i) => (
                 <tr key={i.id} className={clsx(i.status === 'cancelled' && 'opacity-50')}>
                   <Td className="num font-bold">{i.number}</Td>
-                  <Td><InvoiceTypeBadge code={i.typeCode} /></Td>
+                  <Td><InvoiceTypeBadge code={i.typeCode} />{i.milestoneId && coLabel.has(i.milestoneId) && <div className="mt-0.5 text-[11px] font-bold text-gold-dark">{coLabel.get(i.milestoneId)}</div>}</Td>
                   <Td className="num text-xs">{date(i.issueDate)}</Td>
                   <Td><Money value={i.taxable} fixed /></Td>
                   <Td><Money value={i.vatAmount} fixed /></Td>
@@ -221,7 +268,7 @@ function RequestForm({ milestone, isFinal, onClose, onDone }: { milestone: Miles
           المبلغ المطلوب: <b><Money value={h(milestone.amount) - h(milestone.paidAmount)} fixed /></b>
           {isFinal && <div className="mt-1 text-xs text-gold-dark">هذه الدفعة الأخيرة: ستُصدر الفاتورة الضريبية النهائية (388) أولًا، ويُطلب رصيدها بعد خصم الدفعات المقدمة.</div>}
         </div>
-        <Field label="تاريخ الاستحقاق" hint="اتركه فارغًا لاستخدام تاريخ اليوم.">
+        <Field label="تاريخ الاستحقاق" hint="اتركه فارغًا: اليوم + مدة السداد للعميل، مُرحّلًا إلى أول يوم عمل حسب تقويم المنشأة.">
           <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
         <Field label="إرسال للعميل">
@@ -244,9 +291,10 @@ function RecordPaymentForm({ pr, onClose, onDone }: { pr: PaymentRequestRow; onC
   const [method, setMethod] = useState('bank_transfer');
   const [reference, setReference] = useState('');
   const m = useMutation({
-    mutationFn: () => api.post<{ invoice: { number: string } | null; duplicate?: boolean }>(`/finance/payment-requests/${pr.id}/payments`, { amount: amount.trim(), paidOn, method, reference: reference.trim() || null }),
+    mutationFn: () => api.post<{ invoice: { number: string } | null; changeOrderInvoice?: { number: string } | null; duplicate?: boolean }>(`/finance/payment-requests/${pr.id}/payments`, { amount: amount.trim(), paidOn, method, reference: reference.trim() || null }),
     onSuccess: (r) => {
       if (r.duplicate) toast.info('هذه الدفعة مسجلة مسبقًا');
+      else if (r.changeOrderInvoice) toast.success(`سُجلت الدفعة وخُصصت على فاتورة أمر التغيير ${r.changeOrderInvoice.number} (388)`);
       else toast.success(r.invoice ? `سُجلت الدفعة وأُصدرت فاتورة الدفعة المقدمة ${r.invoice.number}` : 'سُجلت الدفعة وخُصصت على الفاتورة النهائية');
       onClose();
       onDone();

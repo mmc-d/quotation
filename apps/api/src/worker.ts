@@ -2,11 +2,12 @@ import { PgBoss } from 'pg-boss';
 import {
   activity, and, eq, inArray, isNull, lead, lt, notification, outboxEvent, paymentRequest, quote, sql, tenant, withTenant,
 } from '@mmc/db';
-import { followUpsDue, remindersDue, riyadhDate } from '@mmc/domain';
+import { followUpsDue, isBusinessDay, remindersDue, riyadhDate } from '@mmc/domain';
 import { getDb } from './common/db.js';
 import { config } from './config.js';
 import { sendPaymentRequest } from './modules/finance.service.js';
 import { reconcile } from './modules/finance.controller.js';
+import { loadCalendar } from './modules/calendar.controller.js';
 
 /**
  * Background jobs on pg-boss (Postgres-backed, no extra infrastructure). pg-boss manages its own
@@ -53,7 +54,10 @@ export async function runFollowUps() {
 
 export async function runReminders() {
   let sent = 0;
+  let skipped = 0;
   await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => {
+    // Customers are only chased on the company's business days (working weekdays, not holidays).
+    if (!isBusinessDay(riyadhDate(), await loadCalendar(tx))) { skipped++; return; }
     const open = await tx.select().from(paymentRequest).where(inArray(paymentRequest.status, ['sent', 'partially_paid']));
     for (const pr of open) {
       const offsets = remindersDue(pr.dueDate, riyadhDate(), pr.remindersSent);
@@ -67,7 +71,7 @@ export async function runReminders() {
       }
     }
   }));
-  return { sent };
+  return { sent, skippedNonBusinessDay: skipped > 0 };
 }
 
 export async function runExpire() {

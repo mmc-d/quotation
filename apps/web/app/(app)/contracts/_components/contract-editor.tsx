@@ -15,10 +15,11 @@ import { Badge, Button, Card, clsx, Field, Input, Money, PageHeader, Select, Sta
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from '../../quotes/_components/common';
 import { Menu } from '../../quotes/_components/menu';
 import { newKey } from '../../quotes/_components/types';
+import { ChangeOrdersCard } from './change-orders';
 import { ClauseLibrary } from './clause-library';
 import { EsignDialog } from './esign-dialog';
 import {
-  blankLine, blankMilestone, calcContract, contractBody, contractDraft, contractProblems, percentSum, TRIGGERS, type ClauseTemplate, type ContractDraft, type ContractView, type DraftClause, type DraftLine, type DraftMilestone,
+  blankLine, blankMilestone, calcContract, contractBody, contractDraft, contractProblems, percentSum, TEMPLATE_SETS, templateSetLabel, TRIGGERS, type ClauseTemplate, type ContractDraft, type ContractView, type DraftClause, type DraftLine, type DraftMilestone, type TemplateSet,
 } from './types';
 
 type Transition = 'sent_for_signature' | 'signed' | 'active' | 'completed' | 'terminated' | 'cancelled' | 'draft';
@@ -72,6 +73,7 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
 
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | 'esign' | 'clauses' | Transition>(null);
+  const [switchTo, setSwitchTo] = useState<TemplateSet | null>(null);
   const [openClauses, setOpenClauses] = useState<Set<string>>(new Set());
 
   const { calc, schedule } = useMemo(() => calcContract(draft, contract.vatOn, vatRegistered), [draft, contract.vatOn, vatRegistered]);
@@ -120,6 +122,22 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
     }
   };
   const ensureSaved = async (): Promise<ContractView | null> => (dirty ? save() : contract);
+
+  /** Re-apply a template set: replaces the clauses (and the title / schedule while they are still defaults). */
+  const applyTemplate = async (set: TemplateSet) => {
+    setBusy('template');
+    try {
+      const c = await api.post<ContractView>(`/contracts/${contract.id}/template`, { templateSet: set });
+      loaded.current = '';
+      applyView(c);
+      setSwitchTo(null);
+      toast.success(`طُبّق قالب «${templateSetLabel(set)}» — ${c.clauses.length} بندًا`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const transition = async (to: Transition, reason?: string) => {
     if (to !== 'draft' && to !== 'cancelled' && dirty && !(await save())) return;
@@ -190,6 +208,18 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
           <Card title="بيانات العقد">
+            <div className="mb-3 rounded-xl border border-gold/40 bg-tint/40 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <Field label="قالب العقد" className="min-w-[14rem] flex-1">
+                  {editable ? (
+                    <Select value={contract.templateSet} disabled={busy === 'template'} onChange={(e) => { const v = e.target.value as TemplateSet; if (v !== contract.templateSet) setSwitchTo(v); }}>
+                      {TEMPLATE_SETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </Select>
+                  ) : <ReadValue>{templateSetLabel(contract.templateSet)}</ReadValue>}
+                </Field>
+                <p className="flex-[2] pb-2 text-xs leading-relaxed text-muted">{TEMPLATE_SETS.find((t) => t.value === contract.templateSet)?.hint}{editable && ' — تغيير القالب يستبدل البنود القانونية ببنود القالب الجديد.'}</p>
+              </div>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="عنوان العقد *">{editable ? <Input value={draft.title} onChange={(e) => set({ title: e.target.value })} /> : <ReadValue>{draft.title}</ReadValue>}</Field>
               <Field label="العنوان الفرعي">{editable ? <Input value={draft.subtitle} onChange={(e) => set({ subtitle: e.target.value })} /> : <ReadValue>{draft.subtitle}</ReadValue>}</Field>
@@ -327,6 +357,8 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
             </Table>
           </Card>
 
+          {contract.status !== 'draft' && <ChangeOrdersCard contract={contract} />}
+
           {contract.status !== 'draft' && can('billing.read') && (
             <Card title="الفوترة والتحصيل">
               <BillingPanel contractId={contract.id} />
@@ -382,7 +414,10 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
         </aside>
       </div>
 
-      <ClauseLibrary open={dialog === 'clauses'} onClose={() => setDialog(null)} usedIds={new Set(draft.clauses.map((c) => c.templateId).filter((x): x is string => !!x))} onAdd={addClause} />
+      <ConfirmDialog open={!!switchTo} title={`تطبيق قالب «${templateSetLabel(switchTo)}»`} confirmLabel="تطبيق القالب" loading={busy === 'template'}
+        message={<>ستُستبدل جميع البنود القانونية الحالية ({draft.clauses.length}) ببنود قالب «{templateSetLabel(switchTo)}» المفعّلة من مكتبة البنود، ويتغير العنوان وجدول الدفعات إذا كانا على الإعدادات الافتراضية.{dirty && <b className="mt-2 block text-danger">التعديلات غير المحفوظة ستُفقد.</b>}</>}
+        onConfirm={() => switchTo && void applyTemplate(switchTo)} onClose={() => setSwitchTo(null)} />
+      <ClauseLibrary templateSet={contract.templateSet} open={dialog === 'clauses'} onClose={() => setDialog(null)} usedIds={new Set(draft.clauses.map((c) => c.templateId).filter((x): x is string => !!x))} onAdd={addClause} />
       {dialog === 'esign' && <EsignDialog open onClose={() => setDialog(null)} contract={contract} beforeSend={ensureSaved} onDone={applyView} />}
       {(Object.keys(T_META) as Transition[]).map((x) => T_META[x].reason ? (
         <ReasonDialog key={x} open={dialog === x} title={T_META[x].label} hint={T_META[x].confirm} label="السبب (اختياري)" danger confirmLabel={T_META[x].label} loading={busy === 'status'} onConfirm={(r) => void transition(x, r)} onClose={() => setDialog(null)} />

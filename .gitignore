@@ -13,3 +13,4 @@ dist/
 *.tsbuildinfo
 coverage/
 .data/
+LOCAL-TEST-LOGIN.md

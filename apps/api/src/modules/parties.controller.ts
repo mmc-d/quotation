@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
-  activity, and, asc, brand, consent, contact, contract, desc, eq, exchangeRate, ilike, invoiceMirror, isNull, kitComponent, or, party, product, productCategory, quote, site, sql, opportunity,
+  activity, and, asc, brand, consent, contact, contract, desc, eq, exchangeRate, ilike, inArray, invoiceMirror, isNull, kitComponent, or, party, priceList, product, productCategory, quote, site, sql, opportunity, type Tx,
 } from '@mmc/db';
 import { isValidUnifiedNumber, isValidVatNumber, normalizeArabic, normalizePhone, normalizeSaudiMobile, toHalalas } from '@mmc/domain';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
@@ -9,7 +9,7 @@ import { tenantTx } from '../common/db.js';
 import { audit, diff } from '../common/audit.js';
 import { badRequest, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
-import { ZodPipe, zMoney, zPage } from '../common/zod.js';
+import { ZodPipe, zMoney, zPage, zQty } from '../common/zod.js';
 
 const partySchema = z.object({
   kind: z.enum(['organization', 'individual']).default('organization'),
@@ -30,14 +30,24 @@ const partySchema = z.object({
   paymentTermsDays: z.number().int().min(0).max(365).default(0),
   notes: z.string().nullish(),
   ownerId: z.string().uuid().nullish(),
+  /** customer price list (CPQ-05); null = catalog list prices (or the segment's default list) */
+  priceListId: z.string().uuid().nullish(),
 });
 type PartyInput = z.infer<typeof partySchema>;
 
 const contactSchema = z.object({ name: z.string().min(1), jobTitle: z.string().nullish(), mobile: z.string().nullish(), whatsapp: z.string().nullish(), email: z.string().email().nullish().or(z.literal('')), preferredLanguage: z.enum(['ar', 'en']).default('ar'), preferredChannel: z.enum(['whatsapp', 'sms', 'email', 'phone']).default('whatsapp'), isPrimary: z.boolean().default(false) });
 const siteSchema = z.object({ type: z.enum(['billing', 'project', 'site']).default('project'), name: z.string().min(1), buildingNumber: z.string().nullish(), street: z.string().nullish(), district: z.string().nullish(), city: z.string().nullish(), postalCode: z.string().nullish(), additionalNumber: z.string().nullish(), lat: z.string().nullish(), lng: z.string().nullish(), mapLink: z.string().nullish(), accessNotes: z.string().nullish() });
 
-function partyValues(b: PartyInput) {
-  return { ...b, email: b.email || null, phone: b.phone ? normalizePhone(b.phone) ?? b.phone : null, searchText: normalizeArabic([b.nameAr, b.nameEn, b.unifiedNumber, b.crNumber, b.vatNumber, b.phone].filter(Boolean).join(' ')) };
+function partyValues(full: PartyInput) {
+  // leave the price list untouched when the caller does not send it
+  const { priceListId, ...b } = full;
+  return { ...b, ...(priceListId !== undefined ? { priceListId } : {}), email: b.email || null, phone: b.phone ? normalizePhone(b.phone) ?? b.phone : null, searchText: normalizeArabic([b.nameAr, b.nameEn, b.unifiedNumber, b.crNumber, b.vatNumber, b.phone].filter(Boolean).join(' ')) };
+}
+
+async function assertPriceList(tx: Tx, id: string | null | undefined) {
+  if (!id) return;
+  const [pl] = await tx.select({ id: priceList.id, archivedAt: priceList.archivedAt }).from(priceList).where(eq(priceList.id, id));
+  if (!pl || pl.archivedAt) throw badRequest('unknown or archived price list');
 }
 
 @Controller('parties')
@@ -86,6 +96,7 @@ export class PartiesController {
   async create(@Actor() actor: RequestActor, @Body(new ZodPipe(partySchema.extend({ contacts: z.array(contactSchema).default([]), sites: z.array(siteSchema).default([]) }))) body: PartyInput & { contacts: z.infer<typeof contactSchema>[]; sites: z.infer<typeof siteSchema>[] }) {
     return tenantTx(actor.tenantId, async (tx) => {
       const { contacts, sites, ...p } = body;
+      await assertPriceList(tx, p.priceListId);
       if (p.vatNumber) {
         const [dupe] = await tx.select({ id: party.id }).from(party).where(eq(party.vatNumber, p.vatNumber));
         if (dupe) throw badRequest('a party with this VAT number already exists', { id: dupe.id });
@@ -105,6 +116,7 @@ export class PartiesController {
       const [before] = await tx.select().from(party).where(eq(party.id, id));
       if (!before) throw notFound('party');
       assertCan(actor, 'party.write', { ownerId: before.ownerId });
+      await assertPriceList(tx, body.priceListId);
       const values = partyValues(body);
       const [row] = await tx.update(party).set({ ...values, ownerId: body.ownerId ?? before.ownerId, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(party.id, id)).returning();
       const d = diff(before as Record<string, unknown>, values as Record<string, unknown>);
@@ -336,11 +348,22 @@ export class ProductsController {
 
   @Put(':id/kit')
   @Perm('product.write')
-  async putKit(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ components: z.array(z.object({ componentId: z.string().uuid(), qty: zMoney, optional: z.boolean().default(false) })).max(100) }))) b: { components: { componentId: string; qty: string; optional: boolean }[] }) {
+  async putKit(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ components: z.array(z.object({ componentId: z.string().uuid(), qty: zQty, optional: z.boolean().default(false) })).max(100).refine((cs) => new Set(cs.map((c) => c.componentId)).size === cs.length, 'a component appears twice') }))) b: { components: { componentId: string; qty: string; optional: boolean }[] }) {
     return tenantTx(actor.tenantId, async (tx) => {
       const [kit] = await tx.select().from(product).where(eq(product.id, id));
       if (!kit) throw notFound('product');
       if (b.components.some((c) => c.componentId === id)) throw badRequest('a package cannot contain itself');
+      // nor a package that (directly or deeper) contains this one
+      let frontier = [...new Set(b.components.map((c) => c.componentId))];
+      const seen = new Set<string>(frontier);
+      for (let depth = 0; frontier.length && depth < 10; depth++) {
+        const sub = await tx.select({ componentId: kitComponent.componentId }).from(kitComponent).where(inArray(kitComponent.kitId, frontier));
+        if (sub.some((r) => r.componentId === id)) throw badRequest('a package cannot contain itself (through another package)');
+        frontier = sub.map((r) => r.componentId).filter((x) => !seen.has(x));
+        frontier.forEach((x) => seen.add(x));
+      }
+      const found = b.components.length ? await tx.select({ id: product.id }).from(product).where(inArray(product.id, [...new Set(b.components.map((c) => c.componentId))])) : [];
+      if (found.length !== new Set(b.components.map((c) => c.componentId)).size) throw badRequest('unknown component product');
       await tx.delete(kitComponent).where(eq(kitComponent.kitId, id));
       if (b.components.length) await tx.insert(kitComponent).values(b.components.map((c) => ({ kitId: id, componentId: c.componentId, qty: c.qty, optional: c.optional })));
       if (kit.type !== 'kit' && b.components.length) await tx.update(product).set({ type: 'kit' }).where(eq(product.id, id));

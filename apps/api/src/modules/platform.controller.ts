@@ -73,6 +73,9 @@ export class MeController {
   }
 }
 
+/** Contract template sets (clause libraries) — supply & install, supply only, annual maintenance. */
+const TEMPLATE_SETS = ['supply_install', 'supply_only', 'maintenance'] as const;
+
 @Controller('settings')
 export class SettingsController {
   @Get('company')
@@ -156,23 +159,28 @@ export class SettingsController {
 
   @Get('clauses')
   @Perm('contract.read')
-  async clauses(@Actor() actor: RequestActor) {
-    return tenantTx(actor.tenantId, (tx) => tx.select().from(clauseTemplate).orderBy(asc(clauseTemplate.sort)));
+  async clauses(@Actor() actor: RequestActor, @Query('templateSet') templateSet?: string) {
+    if (templateSet && !TEMPLATE_SETS.includes(templateSet as (typeof TEMPLATE_SETS)[number])) throw badRequest('unknown template set');
+    return tenantTx(actor.tenantId, (tx) => tx.select().from(clauseTemplate).where(templateSet ? eq(clauseTemplate.templateSet, templateSet) : undefined).orderBy(asc(clauseTemplate.templateSet), asc(clauseTemplate.sort)));
   }
 
   @Put('clauses/:id')
   @Perm('admin.settings')
-  async putClause(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ key: z.string().min(1), category: z.string().min(1), titleAr: z.string().min(1), bodyAr: z.string().min(1), titleEn: z.string().nullish(), bodyEn: z.string().nullish(), sort: z.number().int().default(0), active: z.boolean().default(true) }))) body: { key: string; category: string; titleAr: string; bodyAr: string; titleEn?: string | null; bodyEn?: string | null; sort: number; active: boolean }) {
+  async putClause(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ key: z.string().min(1), category: z.string().min(1), titleAr: z.string().min(1), bodyAr: z.string().min(1), titleEn: z.string().nullish(), bodyEn: z.string().nullish(), sort: z.number().int().default(0), active: z.boolean().default(true), templateSet: z.enum(TEMPLATE_SETS).optional() }))) b: { key: string; category: string; titleAr: string; bodyAr: string; titleEn?: string | null; bodyEn?: string | null; sort: number; active: boolean; templateSet?: (typeof TEMPLATE_SETS)[number] }) {
     return tenantTx(actor.tenantId, async (tx) => {
+      const [before] = id === 'new' ? [] : await tx.select().from(clauseTemplate).where(eq(clauseTemplate.id, id));
+      if (id !== 'new' && !before) throw notFound('clause');
+      const body = { ...b, templateSet: b.templateSet ?? before?.templateSet ?? 'supply_install' };
       if (id === 'new') {
+        const [dup] = await tx.select({ id: clauseTemplate.id }).from(clauseTemplate).where(and(eq(clauseTemplate.templateSet, body.templateSet), eq(clauseTemplate.key, body.key)));
+        if (dup) throw conflict(`clause key ${body.key} already exists in this template set`);
         const [c] = await tx.insert(clauseTemplate).values(body).returning();
         await audit(tx, actor, 'create', 'clause_template', c!.id, null, body);
         return c;
       }
-      const [before] = await tx.select().from(clauseTemplate).where(eq(clauseTemplate.id, id));
       if (!before) throw notFound('clause');
       const [c] = await tx.update(clauseTemplate).set({ ...body, clauseVersion: before.bodyAr !== body.bodyAr ? before.clauseVersion + 1 : before.clauseVersion, updatedAt: new Date() }).where(eq(clauseTemplate.id, id)).returning();
-      await audit(tx, actor, 'update', 'clause_template', id, { bodyAr: before.bodyAr, titleAr: before.titleAr }, { bodyAr: body.bodyAr, titleAr: body.titleAr });
+      await audit(tx, actor, 'update', 'clause_template', id, { bodyAr: before.bodyAr, titleAr: before.titleAr, templateSet: before.templateSet }, { bodyAr: body.bodyAr, titleAr: body.titleAr, templateSet: body.templateSet });
       return c;
     });
   }

@@ -3,7 +3,7 @@ import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req, Res 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
-  and, asc, billingMilestone, contract, desc, eq, inArray, inboxEvent, invoiceMirror, party, paymentMirror, paymentRequest, sql, withTenant,
+  and, asc, billingMilestone, changeOrder, contract, desc, eq, inArray, inboxEvent, invoiceMirror, party, paymentMirror, paymentRequest, sql, withTenant,
 } from '@mmc/db';
 import { agingBucket, riyadhDate, toHalalas, halalasToFixed, VAT_RATE } from '@mmc/domain';
 import { htmlToPdf, renderInvoiceHtml, renderPaymentRequestHtml } from '@mmc/doc-templates';
@@ -18,7 +18,7 @@ import { payments, signSandboxWebhook } from '../common/payments.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { ZodPipe, zDate, zMoney, zPage } from '../common/zod.js';
 import { config } from '../config.js';
-import { applyPayment, ensureCustomer, issueFinalInvoice, mirrorInvoice, requestMilestone, sendPaymentRequest } from './finance.service.js';
+import { applyPayment, CO_TRIGGER, ensureCustomer, issueFinalInvoice, mirrorInvoice, requestMilestone, sendPaymentRequest } from './finance.service.js';
 
 const METHODS = ['bank_transfer', 'mada', 'credit_card', 'apple_pay', 'stc_pay', 'cash', 'cheque', 'payment_link'] as const;
 
@@ -46,15 +46,29 @@ export class FinanceController {
       const [c] = await tx.select().from(contract).where(eq(contract.id, id));
       if (!c) throw notFound('contract');
       assertCan(actor, 'billing.read', { ownerId: c.ownerId, teamId: c.teamId });
-      const milestones = await tx.select().from(billingMilestone).where(eq(billingMilestone.contractId, id)).orderBy(asc(billingMilestone.sort));
+      const all = await tx.select().from(billingMilestone).where(eq(billingMilestone.contractId, id)).orderBy(asc(billingMilestone.sort));
+      // The contract's own schedule (50/40/10 …) and, separately, the milestones created to bill change orders.
+      const milestones = all.filter((m) => m.trigger !== CO_TRIGGER);
+      const coMilestones = all.filter((m) => m.trigger === CO_TRIGGER);
       const requests = await tx.select().from(paymentRequest).where(eq(paymentRequest.contractId, id)).orderBy(asc(paymentRequest.createdAt));
       const invoices = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.contractId, id)).orderBy(asc(invoiceMirror.issueDate), asc(invoiceMirror.number));
       const pays = requests.length ? await tx.select().from(paymentMirror).where(inArray(paymentMirror.paymentRequestId, requests.map((r) => r.id))).orderBy(asc(paymentMirror.paidOn)) : [];
       const paid = milestones.reduce((s, m) => s + toHalalas(m.paidAmount), 0);
+      const cos = await tx.select().from(changeOrder).where(eq(changeOrder.contractId, id)).orderBy(asc(changeOrder.createdAt));
+      const effective = cos.filter((x) => ['approved', 'signed', 'billed'].includes(x.status));
+      const coTotal = effective.reduce((s, x) => s + toHalalas(x.amountDelta), 0);
+      const coPaid = coMilestones.reduce((s, m) => s + toHalalas(m.paidAmount), 0);
       return {
         contract: { id: c.id, number: c.number, status: c.status, total: c.total, partyId: c.partyId },
         milestones, requests, invoices, payments: pays,
-        summary: { total: c.total, paid: halalasToFixed(paid), remaining: halalasToFixed(toHalalas(c.total) - paid) },
+        changeOrderMilestones: coMilestones.map((m) => ({ ...m, changeOrder: cos.find((x) => x.milestoneId === m.id)?.number ?? null })),
+        changeOrders: {
+          rows: cos.map((x) => ({ id: x.id, number: x.number, description: x.description, status: x.status, subtotalDelta: x.subtotalDelta, vatDelta: x.vatDelta, amountDelta: x.amountDelta, milestoneId: x.milestoneId })),
+          approvedTotal: halalasToFixed(coTotal),
+          paid: halalasToFixed(coPaid),
+          adjustedTotal: halalasToFixed(toHalalas(c.total) + coTotal),
+        },
+        summary: { total: c.total, paid: halalasToFixed(paid), remaining: halalasToFixed(toHalalas(c.total) - paid), adjustedTotal: halalasToFixed(toHalalas(c.total) + coTotal) },
         nextMilestoneId: milestones.find((m) => m.status === 'pending')?.id ?? null,
       };
     });
@@ -100,6 +114,13 @@ export class FinanceController {
       if (toHalalas(pr.paidAmount) > 0) throw badRequest('a partly paid request cannot be cancelled — issue a credit note instead');
       await tx.update(paymentRequest).set({ status: 'cancelled', updatedAt: new Date() }).where(eq(paymentRequest.id, id));
       if (pr.milestoneId) await tx.update(billingMilestone).set({ status: 'pending' }).where(eq(billingMilestone.id, pr.milestoneId));
+      // A cancelled change-order request puts the change order back to approved/signed so it can be billed again.
+      const [co] = pr.milestoneId ? await tx.select().from(changeOrder).where(and(eq(changeOrder.milestoneId, pr.milestoneId), eq(changeOrder.status, 'billed'))) : [];
+      if (co) {
+        const back = co.signedAt ? 'signed' : 'approved';
+        await tx.update(changeOrder).set({ status: back, updatedAt: new Date(), updatedBy: actor.userId }).where(eq(changeOrder.id, co.id));
+        await audit(tx, actor, `status_${back}`, 'change_order', co.id, { status: 'billed' }, { status: back, reason: `payment request ${pr.number} cancelled` });
+      }
       await audit(tx, actor, 'cancel', 'payment_request', id, null, { reason: b.reason });
       return { ok: true };
     });
@@ -364,6 +385,6 @@ async function handlePaymentWebhook(raw: Buffer, sig: string | undefined) {
     if (!pr) throw notFound('payment request');
     const r = await applyPayment(tx, null, tenantId, pr.id, { amount: evt.amount, paidOn: evt.paidAt.slice(0, 10), method: evt.method === 'mada' ? 'mada' : evt.method, reference: evt.id, idempotencyKey: `gw:${evt.id}` });
     await tx.update(inboxEvent).set({ processedAt: new Date() }).where(and(eq(inboxEvent.source, 'payments'), eq(inboxEvent.externalId, evt.id)));
-    return { ok: true, invoice: r.invoice?.number ?? null };
+    return { ok: true, invoice: r.invoice?.number ?? r.changeOrderInvoice?.number ?? null };
   });
 }

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BadgeCheck, CheckCircle2, Copy, Download, FileSignature, FileSpreadsheet, FileText, GitBranch, Info, Lock, MoreHorizontal, PackagePlus, Save, Send, ThumbsDown, ThumbsUp, Wrench, XCircle,
+  BadgeCheck, CheckCircle2, Copy, Download, FileSignature, FileSpreadsheet, FileText, GitBranch, Info, Layers, Lock, MoreHorizontal, PackagePlus, Save, Send, Tags, ThumbsDown, ThumbsUp, Wrench, XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatNationalAddress } from '@mmc/domain';
@@ -15,12 +15,13 @@ import { Badge, Button, Card, Checkbox, clsx, Dialog, Field, Input, Money, PageH
 import { PartyPicker, type PickedParty } from '@/components/party-picker';
 import { CatalogPanel } from './catalog-panel';
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from './common';
-import { LinesEditor } from './lines-editor';
+import { KitDialog, productLine } from './kit-dialog';
+import { LinesEditor, type SectionActions } from './lines-editor';
 import { Menu } from './menu';
 import { SendDialog, type PartyContact } from './send-dialog';
 import { TotalsPanel } from './totals';
 import {
-  calcDraft, cleanMoney, draftFromView, draftToBody, INS_CODE, INS_DESC, newKey, productUnitCost, quoteNo, syncLines, trimNum, type EditLine, type Product, type QuoteDraft, type QuoteView,
+  calcDraft, cleanMoney, cleanQty, draftFromView, draftToBody, groupLines, INS_CODE, INS_DESC, newKey, quoteNo, syncLines, trimNum, type EditLine, type Product, type QuoteDraft, type QuoteView,
 } from './types';
 
 interface PartySite { id: string; name: string; type: string; buildingNumber: string | null; street: string | null; district: string | null; city: string | null; postalCode: string | null; additionalNumber: string | null }
@@ -111,25 +112,70 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
   const addedIds = useMemo(() => new Set(draft.lines.map((l) => l.productId).filter((x): x is string => !!x)), [draft.lines]);
   const addedCodes = useMemo(() => new Set(draft.lines.map((l) => l.code)), [draft.lines]);
 
-  const addProduct = (p: Product) => {
+  // new lines go to this section (CPQ-13); '' = no section
+  const [addTo, setAddTo] = useState('');
+  const targetSection = addTo && draft.sections.some((s) => s.key === addTo) ? addTo : null;
+  const [kitPick, setKitPick] = useState<{ p: Product; price?: string } | null>(null);
+
+  /** customerPrice: the customer's price-list price (unit price); the list price stays the catalog price. */
+  const addProduct = (p: Product, customerPrice?: string) => {
+    if (p.type === 'kit') { setKitPick({ p, price: customerPrice }); return; }
     if (addedIds.has(p.id) || addedCodes.has(p.code)) { toast.info(`المنتج ${p.code} موجود في العرض`); return; }
-    const line: EditLine = {
-      key: newKey(), productId: p.id, code: p.code, description: p.description || p.nameAr,
-      listPrice: trimNum(p.listPrice), unitPrice: trimNum(p.listPrice), qty: '1', installCost: trimNum(p.installCost),
-      unitCost: productUnitCost(p), isOptional: false, manualPrice: false, imageUrl: p.imageUrl,
-    };
-    setLines((lines) => [...lines, line]);
+    setLines((lines) => [...lines, productLine(p, '1', { price: customerPrice, sectionKey: targetSection })]);
     toast.success(`تمت إضافة ${p.code}`);
   };
+  const addKitLines = (newLines: EditLine[], mode: 'expand' | 'single') => {
+    const kit = kitPick?.p;
+    setKitPick(null);
+    if (mode === 'single' && kit && (addedIds.has(kit.id) || addedCodes.has(kit.code))) { toast.info(`الباقة ${kit.code} موجودة في العرض`); return; }
+    setLines((lines) => {
+      const out = [...lines];
+      for (const nl of newLines) {
+        // a component already in the quote (same section, same optional flag) gets its qty raised instead of a duplicate line
+        const j = out.findIndex((l) => l.productId === nl.productId && l.isOptional === nl.isOptional && (l.sectionKey ?? null) === (nl.sectionKey ?? null));
+        if (j >= 0) out[j] = { ...out[j]!, qty: trimNum(Number(cleanQty(out[j]!.qty)) + Number(nl.qty)) };
+        else out.push(nl);
+      }
+      return out;
+    });
+    toast.success(mode === 'expand' ? `أُضيفت مكونات الباقة ${kit?.code ?? ''} (${newLines.length} بند)` : `تمت إضافة الباقة ${kit?.code ?? ''}`);
+  };
+
+  // ── sections (CPQ-13) ───────────────────────────────────────
+  const addSection = () => {
+    const key = newKey();
+    setDraft((d) => ({ ...d, sections: [...d.sections, { key, title: '' }] }));
+    setAddTo(key);
+  };
+  const sectionActions: SectionActions = {
+    rename: (key, title) => setDraft((d) => ({ ...d, sections: d.sections.map((s) => (s.key === key ? { ...s, title } : s)) })),
+    move: (key, dir) => setDraft((d) => {
+      const i = d.sections.findIndex((s) => s.key === key);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= d.sections.length) return d;
+      const sections = [...d.sections];
+      [sections[i], sections[j]] = [sections[j]!, sections[i]!];
+      return { ...d, sections };
+    }),
+    remove: (key) => {
+      setDraft((d) => ({ ...d, sections: d.sections.filter((s) => s.key !== key), lines: d.lines.map((l) => (l.sectionKey === key ? { ...l, sectionKey: null } : l)) }));
+      if (addTo === key) setAddTo('');
+    },
+  };
+  const sectionTotals = useMemo(() => new Map(t.sections.map((s) => [s.key, s.subtotal])), [t.sections]);
   const changeLine = (i: number, patch: Partial<EditLine>) => setLines((lines) => lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const removeLine = (i: number) => {
     const isIns = draft.lines[i]?.code === INS_CODE;
     setLines((lines) => lines.filter((_, j) => j !== i), isIns ? { insDeleted: true } : undefined);
     if (isIns) toast.info('حُذف صف التركيب — يمكنك إعادته من الكتالوج');
   };
-  const moveLine = (i: number, dir: -1 | 1) => setLines((lines) => {
-    const j = i + dir;
-    if (j < 0 || j >= lines.length || lines[j]!.code === INS_CODE) return lines;
+  // moves inside the line's group (its section, or "no section"); INS stays last
+  const moveLine = (i: number, dir: -1 | 1) => setLines((lines, d) => {
+    const g = groupLines(lines, d.sections).find((x) => !x.ins && x.items.some((it) => it.i === i));
+    if (!g) return lines;
+    const pos = g.items.findIndex((it) => it.i === i);
+    const j = g.items[pos + dir]?.i;
+    if (j === undefined) return lines;
     const copy = [...lines];
     [copy[i], copy[j]] = [copy[j]!, copy[i]!];
     return copy;
@@ -139,7 +185,7 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
     setDraft((d) => {
       let lines = syncLines(d.lines, false);
       if (!lines.some((l) => l.code === INS_CODE)) {
-        lines = [...lines, { key: newKey(), productId: null, code: INS_CODE, description: INS_DESC, listPrice: '0', unitPrice: '0', qty: '1', installCost: '0', unitCost: null, isOptional: false, manualPrice: true, imageUrl: null }];
+        lines = [...lines, { key: newKey(), productId: null, code: INS_CODE, description: INS_DESC, listPrice: '0', unitPrice: '0', qty: '1', installCost: '0', unitCost: null, isOptional: false, manualPrice: true, imageUrl: null, sectionKey: null }];
       }
       return { ...d, insDeleted: false, lines };
     });
@@ -258,7 +304,7 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
   const title = view ? <span className="flex flex-wrap items-center gap-2">عرض سعر <span className="num" dir="ltr">{quoteNo(view.number, view.revision)}</span><StatusBadge status={view.status} />{dirty && <Badge tone="gold">تعديلات غير محفوظة</Badge>}</span> : 'عرض سعر جديد';
 
   const catalog = (
-    <CatalogPanel addedIds={addedIds} addedCodes={addedCodes} onAdd={addProduct} onAddIns={restoreIns} insAvailable={!draft.lines.some((l) => l.code === INS_CODE)} className="h-full" />
+    <CatalogPanel addedIds={addedIds} addedCodes={addedCodes} onAdd={addProduct} onAddIns={restoreIns} insAvailable={!draft.lines.some((l) => l.code === INS_CODE)} partyId={draft.partyId} className="h-full" />
   );
 
   return (
@@ -347,15 +393,22 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
 
           <Card
             padded={false}
-            title={<span className="flex items-center gap-2">البنود <span className="rounded-full bg-tint px-2 text-[11px] text-gold-dark">{draft.lines.length}</span></span>}
+            title={<span className="flex flex-wrap items-center gap-2">البنود <span className="rounded-full bg-tint px-2 text-[11px] text-gold-dark">{draft.lines.length}</span>{view?.priceList && view.partyId === draft.partyId && <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 text-[11px] font-bold text-primary" title="قائمة الأسعار المطبّقة على هذا العرض"><Tags className="size-3" />{view.priceList.name}</span>}</span>}
             actions={!readOnly && (
               <>
+                {draft.sections.length > 0 && (
+                  <Select value={targetSection ?? ''} onChange={(e) => setAddTo(e.target.value)} aria-label="إضافة البنود الجديدة إلى" title="إضافة البنود الجديدة إلى" className="h-8 w-auto max-w-[11rem] py-0 text-xs">
+                    <option value="">الإضافة إلى: بدون قسم</option>
+                    {draft.sections.map((s, k) => <option key={s.key} value={s.key}>الإضافة إلى: {s.title.trim() || `قسم ${k + 1}`}</option>)}
+                  </Select>
+                )}
+                <Button size="sm" variant="outline" icon={<Layers className="size-3.5" />} onClick={addSection}>إضافة قسم</Button>
                 {draft.insDeleted && !draft.lines.some((l) => l.code === INS_CODE) && <Button size="sm" variant="ghost" icon={<Wrench className="size-3.5" />} onClick={restoreIns} className="hidden sm:inline-flex">إعادة صف التركيب</Button>}
                 <Button size="sm" icon={<PackagePlus className="size-3.5" />} onClick={() => setPending('catalog')} className="xl:hidden">إضافة من الكتالوج</Button>
               </>
             )}
           >
-            {draft.lines.length === 0 ? (
+            {draft.lines.length === 0 && draft.sections.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
                 <PackagePlus className="size-8 text-gold" />
                 <p className="font-bold">لا توجد بنود بعد</p>
@@ -363,7 +416,7 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
                 {!readOnly && <Button size="sm" onClick={() => setPending('catalog')} className="xl:hidden">فتح الكتالوج</Button>}
               </div>
             ) : (
-              <LinesEditor lines={draft.lines} results={calc.lines} readOnly={readOnly} onChange={changeLine} onRemove={removeLine} onMove={moveLine} onResetIns={resetIns} />
+              <LinesEditor lines={draft.lines} results={calc.lines} readOnly={readOnly} onChange={changeLine} onRemove={removeLine} onMove={moveLine} onResetIns={resetIns} sections={draft.sections} sectionTotals={sectionTotals} sectionActions={sectionActions} />
             )}
           </Card>
 
@@ -457,6 +510,7 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
       <Dialog open={pending === 'catalog'} onClose={() => setPending(null)} title="إضافة من الكتالوج" footer={<Button onClick={() => setPending(null)}>تم</Button>}>
         <div className="h-[60vh]">{pending === 'catalog' && catalog}</div>
       </Dialog>
+      {kitPick && <KitDialog kit={kitPick.p} kitPrice={kitPick.price} partyId={draft.partyId} sectionKey={targetSection} onClose={() => setKitPick(null)} onAdd={addKitLines} />}
       {view && pending === 'send' && <SendDialog open onClose={() => setPending(null)} quote={view} contacts={party?.contacts ?? []} onSent={applyView} />}
       <ReasonDialog open={pending === 'approve'} title="الموافقة على العرض" label="تعليق (اختياري)" confirmLabel="موافقة" loading={busy === 'approve'} onConfirm={(c) => void approve(c)} onClose={() => setPending(null)} hint={view && view.approvalReasons.length > 0 ? `أسباب طلب الموافقة: ${view.approvalReasons.map(arReason).join('، ')}` : undefined} />
       <ReasonDialog open={pending === 'reject-approval'} title="رفض طلب الموافقة" label="سبب الرفض" required danger confirmLabel="رفض" loading={busy === 'reject'} onConfirm={(c) => void rejectApproval(c)} onClose={() => setPending(null)} hint="سيعود العرض إلى مسودة ويُبلَّغ المندوب بالسبب." />
