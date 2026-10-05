@@ -1,0 +1,188 @@
+import { boolean, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { amount, audit, custom, id, qty, rate, tenantId, unitPrice } from './_common.js';
+import { appUser, branch, company } from './platform.js';
+import { contact, party, site } from './parties.js';
+import { product } from './catalog.js';
+
+export const quote = pgTable('quote', {
+  id: id(),
+  tenantId: tenantId(),
+  number: text('number').notNull(),
+  revision: integer('revision').notNull().default(0),
+  /** first revision of the chain (R0); revisions share it */
+  rootQuoteId: uuid('root_quote_id'),
+  parentQuoteId: uuid('parent_quote_id'),
+  opportunityId: uuid('opportunity_id'),
+  companyId: uuid('company_id').references(() => company.id),
+  branchId: uuid('branch_id').references(() => branch.id),
+  partyId: uuid('party_id').references(() => party.id),
+  contactId: uuid('contact_id').references(() => contact.id),
+  siteId: uuid('site_id').references(() => site.id),
+  /** snapshot of the client block as printed (legacy free-text fields) */
+  clientName: text('client_name'),
+  clientPhone: text('client_phone'),
+  clientEmail: text('client_email'),
+  projectName: text('project_name'),
+  projectLocation: text('project_location'),
+  ownerId: uuid('owner_id').references(() => appUser.id),
+  teamId: uuid('team_id'),
+  quoteDate: date('quote_date').notNull(),
+  validUntil: date('valid_until'),
+  currency: text('currency').notNull().default('SAR'),
+  status: text('status').notNull().default('draft'),
+  discountType: text('discount_type').notNull().default('percent'),
+  discountValue: unitPrice('discount_value').notNull().default('0'),
+  vatOn: boolean('vat_on').notNull().default(true),
+  vatRate: rate('vat_rate').notNull().default('15'),
+  subtotal: amount('subtotal').notNull().default('0'),
+  discountAmount: amount('discount_amount').notNull().default('0'),
+  taxable: amount('taxable').notNull().default('0'),
+  vatAmount: amount('vat_amount').notNull().default('0'),
+  total: amount('total').notNull().default('0'),
+  costTotal: amount('cost_total').notNull().default('0'),
+  marginTotal: amount('margin_total').notNull().default('0'),
+  insDeleted: boolean('ins_deleted').notNull().default(false),
+  notes: text('notes'),
+  terms: text('terms'),
+  language: text('language').notNull().default('ar'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  viewedAt: timestamp('viewed_at', { withTimezone: true }),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+  lostReason: text('lost_reason'),
+  /** public link token for the online view & OTP acceptance (Phase 2) */
+  publicToken: text('public_token'),
+  legacySource: text('legacy_source'),
+  custom: custom(),
+  ...audit,
+}, (t) => [
+  uniqueIndex('quote_number_rev_uq').on(t.tenantId, t.number, t.revision),
+  index('quote_owner_idx').on(t.tenantId, t.ownerId),
+  index('quote_party_idx').on(t.tenantId, t.partyId),
+  uniqueIndex('quote_token_uq').on(t.publicToken),
+]);
+
+export const quoteSection = pgTable('quote_section', {
+  id: id(),
+  tenantId: tenantId(),
+  quoteId: uuid('quote_id').notNull().references(() => quote.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  sort: integer('sort').notNull().default(0),
+});
+
+export const quoteLine = pgTable('quote_line', {
+  id: id(),
+  tenantId: tenantId(),
+  quoteId: uuid('quote_id').notNull().references(() => quote.id, { onDelete: 'cascade' }),
+  sectionId: uuid('section_id'),
+  sort: integer('sort').notNull().default(0),
+  productId: uuid('product_id').references(() => product.id),
+  code: text('code').notNull(),
+  description: text('description').notNull(),
+  isDescriptionModified: boolean('is_description_modified').notNull().default(false),
+  listPrice: unitPrice('list_price').notNull().default('0'),
+  unitPrice: unitPrice('unit_price').notNull().default('0'),
+  qty: qty('qty').notNull().default('1'),
+  installCost: unitPrice('install_cost').notNull().default('0'),
+  unitCost: unitPrice('unit_cost'),
+  lineTotal: amount('line_total').notNull().default('0'),
+  isOptional: boolean('is_optional').notNull().default(false),
+  isLabor: boolean('is_labor').notNull().default(false),
+  isAutoLabor: boolean('is_auto_labor').notNull().default(false),
+  manualPrice: boolean('manual_price').notNull().default(false),
+  imageUrl: text('image_url'),
+}, (t) => [index('quote_line_quote_idx').on(t.quoteId, t.sort)]);
+
+export const clauseTemplate = pgTable('clause_template', {
+  id: id(),
+  tenantId: tenantId(),
+  key: text('key').notNull(),
+  category: text('category').notNull(),
+  titleAr: text('title_ar').notNull(),
+  bodyAr: text('body_ar').notNull(),
+  titleEn: text('title_en'),
+  bodyEn: text('body_en'),
+  clauseVersion: integer('clause_version').notNull().default(1),
+  sort: integer('sort').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  ...audit,
+}, (t) => [uniqueIndex('clause_key_ver_uq').on(t.tenantId, t.key, t.clauseVersion)]);
+
+export const contract = pgTable('contract', {
+  id: id(),
+  tenantId: tenantId(),
+  number: text('number').notNull(),
+  quoteId: uuid('quote_id').references(() => quote.id),
+  partyId: uuid('party_id').references(() => party.id),
+  companyId: uuid('company_id').references(() => company.id),
+  branchId: uuid('branch_id').references(() => branch.id),
+  ownerId: uuid('owner_id').references(() => appUser.id),
+  teamId: uuid('team_id'),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  /** first party (client) block as printed */
+  clientBlock: jsonb('client_block').$type<{ name?: string; representative?: string; idNumber?: string; crNumber?: string; address?: string; mobile?: string }>().notNull().default({}),
+  status: text('status').notNull().default('draft'),
+  contractDate: date('contract_date').notNull(),
+  startDate: date('start_date'),
+  endDate: date('end_date'),
+  deliveryDaysMin: integer('delivery_days_min'),
+  deliveryDaysMax: integer('delivery_days_max'),
+  warrantyMonths: integer('warranty_months'),
+  partsWarrantyMonths: integer('parts_warranty_months'),
+  sparePartsYears: integer('spare_parts_years'),
+  vatOn: boolean('vat_on').notNull().default(true),
+  subtotal: amount('subtotal').notNull().default('0'),
+  discountAmount: amount('discount_amount').notNull().default('0'),
+  vatAmount: amount('vat_amount').notNull().default('0'),
+  total: amount('total').notNull().default('0'),
+  /** lines snapshot (code, description, qty, unitPrice) — editable while draft */
+  lines: jsonb('lines').$type<{ code: string; description: string; qty: string; unitPrice: string }[]>().notNull().default([]),
+  stampApplied: boolean('stamp_applied').notNull().default(false),
+  signedAt: timestamp('signed_at', { withTimezone: true }),
+  signedFileId: uuid('signed_file_id'),
+  esignRequestId: uuid('esign_request_id'),
+  legacySource: text('legacy_source'),
+  custom: custom(),
+  ...audit,
+}, (t) => [uniqueIndex('contract_number_uq').on(t.tenantId, t.number)]);
+
+export const contractClause = pgTable('contract_clause', {
+  id: id(),
+  tenantId: tenantId(),
+  contractId: uuid('contract_id').notNull().references(() => contract.id, { onDelete: 'cascade' }),
+  templateId: uuid('template_id'),
+  sort: integer('sort').notNull().default(0),
+  titleAr: text('title_ar').notNull(),
+  bodyAr: text('body_ar').notNull(),
+  modified: boolean('modified').notNull().default(false),
+});
+
+export const billingMilestone = pgTable('billing_milestone', {
+  id: id(),
+  tenantId: tenantId(),
+  contractId: uuid('contract_id').notNull().references(() => contract.id, { onDelete: 'cascade' }),
+  sort: integer('sort').notNull(),
+  nameAr: text('name_ar').notNull(),
+  nameEn: text('name_en'),
+  percent: rate('percent').notNull(),
+  amount: amount('amount').notNull(),
+  trigger: text('trigger').notNull().default('manual'),
+  dueDate: date('due_date'),
+  /** pending → requested → invoiced → partially_paid → paid */
+  status: text('status').notNull().default('pending'),
+  paidAmount: amount('paid_amount').notNull().default('0'),
+  ...audit,
+}, (t) => [index('milestone_contract_idx').on(t.contractId, t.sort)]);
+
+export const changeOrder = pgTable('change_order', {
+  id: id(),
+  tenantId: tenantId(),
+  contractId: uuid('contract_id').notNull().references(() => contract.id),
+  number: text('number').notNull(),
+  description: text('description').notNull(),
+  amountDelta: amount('amount_delta').notNull(),
+  status: text('status').notNull().default('draft'),
+  revisionQuoteId: uuid('revision_quote_id'),
+  ...audit,
+});

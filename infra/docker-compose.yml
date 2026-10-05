@@ -1,0 +1,20 @@
+# Local development stack for MMC Core. Production runs on Google Cloud Dammam (docs/erp-plan/03 §6).
+name: mmc
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mmc
+      POSTGRES_PASSWORD: mmc_dev_only
+      POSTGRES_DB: mmc
+    ports: ["5433:5432"]
+    volumes: ["mmc-pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmc"]
+      interval: 2s
+      retries: 30
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports: ["3300:3000"]
+volumes:
+  mmc-pg:
