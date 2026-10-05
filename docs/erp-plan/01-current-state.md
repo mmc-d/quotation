@@ -200,3 +200,21 @@ These keep the current tool safe while the new platform is being built:
 9. **Back up everything:** export all quote, contract and invoice JSON files, every browser's local data (quotes, invoice copies, settings), the product sheet and images to a dated archive — this becomes the input for migration.
 
 > Phase 0 is intentionally minimal: no new features, only risk reduction, one set of company settings and a clean data export for the migration.
+
+### Phase 0 status (as of 2026-10-05, branch `claude/new-session-l6y9qi`)
+
+Code-only; the owner actions below are listed in full in [`phase-0-owner-checklist.md`](phase-0-owner-checklist.md) and were not attempted here.
+
+| # | Item | Status | Commit |
+|---|------|--------|--------|
+| 1 | XSS — `escHtml()` everywhere, `data-*` instead of inline `onclick` with data, DOMPurify on loaded contracts (R6) | ✅ Done | `a8392e6` |
+| 2 | SRI on the three CDN scripts (`qrcode.js`, not the unpinnable `qrcode.min.js`) + a CSP `<meta>` (R13) | ✅ Done | `a994a4c` |
+| 3 | Stamp image, representative's name/mobile, default contracts-folder ID, hard-coded `ADMIN_USER_ID` taken out of `index.html`, replaced by shared settings + an admin allow-list (R2, part of D2) | ✅ Done in code. ⬜ Needs owner: the equivalent data in **git history** (every commit since the first upload) is unchanged — purging it is an owner action (history rewrite + force-push) | `174dceb` |
+| 4 | Shared `settings.json` in Drive, admin-publishable (R8, R10) | ✅ Done in code. ⬜ Needs owner: nobody has published one yet — every browser still runs on its own local settings until an admin does | `a9f2b9e` |
+| 5 | 💾 saves to the shared Drive archive too; server-reserved quote/contract numbers with a labelled offline fallback; invoice number + Asia/Riyadh time from the server, no fallback; browse by date/sales rep; "export all local data" (R7, R8, defects) | ✅ Done in code. ⬜ Needs owner: invoice issuance and server-side numbering need item 7 deployed first (until then they fall back to today's client-side behaviour, or — for invoices — simply refuse) | `374e49a` |
+| 6 | Google sign-in behind `googleClientId`; OAuth read instead of the API key when signed in (R3) | ✅ Done in code, opt-in. ⬜ Needs owner: create the OAuth client ID and decide the consent-screen path (Testing/External vs. Workspace) before turning it on | `361b342` |
+| 7 | Hardened Apps Script (`apps-script/Code.gs` + README) — folder allow-list, filename validation, create-only invoices, `_history` on overwrite, numbering lock, optional ID-token check, optional audit log (R4) | ✅ Written and unit-tested against the Playwright mock. ⬜ Needs owner: **deploy it** — items 4-6 above call actions (`nextNumber`, `saveSettings`) that do not exist in whatever Apps Script is live today | `9e5e919` |
+| — | Validation: Playwright suite (27 tests) mocking every Google/Apps Script endpoint, incl. a parity check of totals/tafqit/invoice lines against `main`'s original `index.html` | ✅ All 27 pass | `6efd6f4` |
+| — | Owner-only actions (repo private + history purge, Drive sharing, API key restriction, OAuth client, Apps Script deployment, settings.json publish, VAT/ZATCA confirmation, warranty wording, local-data export on every browser) | ⬜ Not attempted — out of scope for this session by design | see checklist |
+
+No finding above was removed from §3 — R2's git-history exposure and R4's "not yet deployed" state are **not** resolved by this branch alone; they need the owner actions above.
