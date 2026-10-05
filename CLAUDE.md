@@ -9,7 +9,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **`index.html`** (repo root, served by GitHub Pages) — A self-contained single-page HTML app (no build step) for building quotations and contracts, backed by Google Sheets/Drive. Supporting folders: `apps-script/` (the hardened Apps Script backend — `Code.gs` + deployment README), `vendor/` (pinned local copies of ExcelJS, DOMPurify, qrcode), `tests/` (Playwright suite that mocks every Google/Apps Script endpoint — `cd tests && npm install && npx playwright test`).
 2. **`quotation-api/`** — A Node.js/Express REST API that generates Arabic PDF quotations via Puppeteer/Chromium.
 
-**Roadmap:** `docs/erp-plan/` holds the plan to grow this into an ERP + CRM + accounting platform (start at its `README.md`; phases in `05-roadmap.md`). Phase 0 (hardening) is done in code; the owner-only steps are in `docs/erp-plan/phase-0-owner-checklist.md`.
+**Roadmap:** `docs/erp-plan/` holds the plan to grow this into an ERP + CRM + accounting platform (start at its `README.md`; phases in `05-roadmap.md`). Phase 0 (hardening) is done in code; the owner-only steps are in `docs/erp-plan/phase-0-owner-checklist.md`. Phases 1–3 are built as **MMC Core** (below); status in `docs/erp-plan/phase-1-3-status.md`.
+
+## MMC Core (apps/, packages/) — the new platform
+
+pnpm + Turborepo monorepo, TypeScript strict, ESM everywhere. See the root `README.md` for local setup (Postgres on :5433 and Gotenberg on :3300 via `pnpm db:up`).
+
+- **`packages/domain`** — pure business rules, the single source of truth for money (integer **halalas**, `decimal.js`), quote totals and the **INS** line (`syncInstallationLine`), VAT and the not-registered mode, `tafqit`, numbering (`MMC-{YY}{WW}{DD}{n}`, `MMCT-{n}`, `MMC-INV-{nnnnn}`), the 50/40/10 schedule, 386/388 billing, ZATCA Phase-1 QR, Saudi IDs, permissions and CRM rules. `test/parity.test.ts` runs the legacy functions extracted from `index.html` against the ports, so update both if a legacy rule changes.
+- **`packages/db`** — Drizzle schema per module (`src/schema/*`), SQL migrations in `migrations/` (generate with `pnpm --filter @mmc/db generate`; custom SQL for RLS lives in `0002_rls.sql`). Every tenant table has `tenant_id` + **FORCE ROW LEVEL SECURITY**. The runtime role `mmc_app` is not the owner, so always go through `withTenant(db, tenantId, fn)`. Numbers come from `nextNumber(tx, type)`, which locks a row and never reuses a number. Audit with `writeAudit` (hash-chained, append-only). `import-legacy.ts` migrates old JSON.
+- **`packages/erp-connector`** — `BackOfficePort` is the **only** path to the ledger/ZATCA (ERPNext + KSA compliance app). `FakeBackOffice` is for dev/tests and must never be described as ZATCA-compliant.
+- **`packages/doc-templates`** — RTL HTML for quote, contract, payment request and invoice, run through `esc()` everywhere. `htmlToPdf` posts to Gotenberg.
+- **`apps/api`** — NestJS 12 (ESM, built with `tsc`; dev = `pnpm --filter @mmc/api dev`). Better Auth is mounted at `/api/auth` before the JSON parser. **Invitation-only + verified e-mail** is enforced in `auth/auth.ts`; don't loosen it. Controllers in `src/modules/*` use `@Perm(...)` and then `scopeFilter`/`assertCan` for record scope. Inject Nest providers with explicit `@Inject(...)` (vitest/esbuild emits no decorator metadata). Background jobs: `src/worker.ts` (pg-boss). E2E tests: `pnpm --filter @mmc/api test` (fresh `mmc_e2e` DB, real HTTP).
+- **`apps/web`** — Next.js 16 App Router, Arabic-first RTL, Tailwind 4 tokens (`primary`, `gold`, `tint`…), shared kit in `components/ui.tsx`. `/api/*` is rewritten to the API so the session cookie stays same-site. Staff pages live under `app/(app)/`. Public customer pages (`/q/[token]`, `/p/[token]`, `/sign/[id]`, `/lead`) sit outside it and must never show cost or margin.
+- Sandboxes: without the integration env vars (see `.env.example`), WhatsApp, e-mail, payments and e-signature are logged or simulated, and the back office is the fake.
 
 ## quotation-api — Commands
 

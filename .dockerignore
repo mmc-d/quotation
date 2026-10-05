@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/.data
+.git
+.env
+contract.txt
+mada-quotations
+tests
