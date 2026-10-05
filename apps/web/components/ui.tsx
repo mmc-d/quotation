@@ -131,6 +131,10 @@ const STATUS: Record<string, [string, string]> = {
   not_applicable: ['غير خاضعة', 'bg-gray-100 text-gray-600'],
   open: ['مفتوحة', 'bg-sky-100 text-sky-800'],
   closed: ['مغلقة', 'bg-gray-200 text-gray-600'],
+  legacy: ['مستورد من النظام القديم', 'bg-gray-100 text-gray-600'],
+  legacy_phase1: ['المرحلة الأولى (النظام القديم)', 'bg-gray-100 text-gray-600'],
+  warning: ['معتمدة مع تحذير', 'bg-amber-100 text-amber-800'],
+  error: ['خطأ', 'bg-rose-100 text-rose-800'],
 };
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
