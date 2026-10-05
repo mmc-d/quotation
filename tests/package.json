@@ -1,0 +1,11 @@
+{
+  "name": "mmc-quotation-tests",
+  "private": true,
+  "description": "Playwright validation suite for the Phase 0 hardening of ../index.html — not part of the deployed page.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
