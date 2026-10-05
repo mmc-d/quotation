@@ -12,3 +12,4 @@ dist/
 .env.local
 *.tsbuildinfo
 coverage/
+.data/
