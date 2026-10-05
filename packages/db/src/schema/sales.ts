@@ -121,7 +121,7 @@ export const contract = pgTable('contract', {
   title: text('title').notNull(),
   subtitle: text('subtitle'),
   /** first party (client) block as printed */
-  clientBlock: jsonb('client_block').$type<{ name?: string; representative?: string; idNumber?: string; crNumber?: string; address?: string; mobile?: string }>().notNull().default({}),
+  clientBlock: jsonb('client_block').$type<{ name?: string; representative?: string; idNumber?: string; crNumber?: string; vatNumber?: string; address?: string; mobile?: string }>().notNull().default({}),
   status: text('status').notNull().default('draft'),
   contractDate: date('contract_date').notNull(),
   startDate: date('start_date'),

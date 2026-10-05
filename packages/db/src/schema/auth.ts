@@ -57,6 +57,9 @@ export const authTwoFactor = pgTable('auth_two_factor', {
   secret: text('secret').notNull(),
   backupCodes: text('backup_codes').notNull(),
   userId: text('user_id').notNull().references(() => authUser.id, { onDelete: 'cascade' }),
+  verified: boolean('verified').default(false),
+  failedVerificationCount: integer('failed_verification_count').default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
 });
 
 export const authPasskey = pgTable('auth_passkey', {
