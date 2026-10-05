@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
-  activity, and, asc, brand, consent, contact, contract, desc, eq, exchangeRate, ilike, invoiceMirror, isNull, or, party, product, productCategory, quote, site, sql, opportunity,
+  activity, and, asc, brand, consent, contact, contract, desc, eq, exchangeRate, ilike, invoiceMirror, isNull, kitComponent, or, party, product, productCategory, quote, site, sql, opportunity,
 } from '@mmc/db';
 import { isValidUnifiedNumber, isValidVatNumber, normalizeArabic, normalizePhone, normalizeSaudiMobile, toHalalas } from '@mmc/domain';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
@@ -321,6 +321,32 @@ export class ProductsController {
       await audit(tx, actor, 'import', 'product', null, null, { created, updated, total: parsed.length });
       return { created, updated, errors };
     }, actor.userId);
+  }
+
+  /** Package (kit) components, e.g. "Villa intercom package" → its products and quantities. */
+  @Get(':id/kit')
+  @Perm('product.read')
+  async kit(@Actor() actor: RequestActor, @Param('id') id: string) {
+    const showCost = !!actor.grants['product.cost.read'];
+    return tenantTx(actor.tenantId, async (tx) => {
+      const rows = await tx.select({ k: kitComponent, p: product }).from(kitComponent).innerJoin(product, eq(product.id, kitComponent.componentId)).where(eq(kitComponent.kitId, id));
+      return rows.map((r) => ({ id: r.k.id, qty: r.k.qty, optional: r.k.optional, product: showCost ? r.p : { ...r.p, costPrice: null } }));
+    });
+  }
+
+  @Put(':id/kit')
+  @Perm('product.write')
+  async putKit(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ components: z.array(z.object({ componentId: z.string().uuid(), qty: zMoney, optional: z.boolean().default(false) })).max(100) }))) b: { components: { componentId: string; qty: string; optional: boolean }[] }) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      const [kit] = await tx.select().from(product).where(eq(product.id, id));
+      if (!kit) throw notFound('product');
+      if (b.components.some((c) => c.componentId === id)) throw badRequest('a package cannot contain itself');
+      await tx.delete(kitComponent).where(eq(kitComponent.kitId, id));
+      if (b.components.length) await tx.insert(kitComponent).values(b.components.map((c) => ({ kitId: id, componentId: c.componentId, qty: c.qty, optional: c.optional })));
+      if (kit.type !== 'kit' && b.components.length) await tx.update(product).set({ type: 'kit' }).where(eq(product.id, id));
+      await audit(tx, actor, 'kit', 'product', id, null, { components: b.components.length });
+      return { ok: true, count: b.components.length };
+    });
   }
 
   @Put('meta/categories/:id')

@@ -62,6 +62,11 @@ describe('Phase 1 — login & platform', () => {
     await owner.put(`/api/users/${me.id}`, { roleKeys: ['sales_rep'] }, { expect: 400 });
   });
 
+  it('refuses cross-site state-changing requests (Origin check)', async () => {
+    const res = await fetch(`${base}/api/parties`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example', Cookie: owner.cookie }, body: JSON.stringify({ nameAr: 'x' }) });
+    expect(res.status).toBe(403);
+  });
+
   it('forbids admin endpoints to a sales rep', async () => {
     await rep.get('/api/users', { expect: 403 });
     await rep.put('/api/settings/company', {}, { expect: 403 });
@@ -183,6 +188,16 @@ describe('Phase 2 — online acceptance, CRM, inbox, e-signature', () => {
     const conv = await rep.post(`/api/crm/leads/${lead.id}/convert`, { amount: '25000' });
     expect(conv.opportunityId).toBeTruthy();
     S.opp = conv.opportunityId;
+  });
+
+  it('takes signed lead-ads webhooks idempotently and rejects unsigned ones', async () => {
+    const body = JSON.stringify({ externalId: 'snap-1', name: 'منى', mobile: '0544443322', interest: 'smart_home', campaign: 'فلل جدة' });
+    const sig = createHmac('sha256', 'leads-e2e').update(body).digest('hex');
+    await new Client(base).post('/api/webhooks/leads/snapchat', body, { expect: 403 });
+    const r1 = await new Client(base).post('/api/webhooks/leads/snapchat', body, { expect: 200, headers: { 'X-MMC-Signature': sig } });
+    expect(r1.lead).toMatch(/^L-/);
+    const r2 = await new Client(base).post('/api/webhooks/leads/snapchat', body, { expect: 200, headers: { 'X-MMC-Signature': sig } });
+    expect(r2.duplicate).toBe(true);
   });
 
   it('moves the opportunity through the pipeline (lost requires a reason)', async () => {

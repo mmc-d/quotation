@@ -8,7 +8,7 @@ import { QuotesController } from './modules/quotes.controller.js';
 import { ContractsController } from './modules/contracts.controller.js';
 import { DashboardController } from './modules/dashboard.controller.js';
 import { CrmController } from './modules/crm.controller.js';
-import { PublicController, WhatsAppWebhookController } from './modules/public.controller.js';
+import { LeadsWebhookController, PublicController, WhatsAppWebhookController } from './modules/public.controller.js';
 import { FinanceController, FinancePublicController } from './modules/finance.controller.js';
 import { JobsController } from './modules/jobs.controller.js';
 
@@ -16,7 +16,7 @@ import { JobsController } from './modules/jobs.controller.js';
   controllers: [
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
-    CrmController, PublicController, WhatsAppWebhookController, FinanceController, FinancePublicController, JobsController,
+    CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })

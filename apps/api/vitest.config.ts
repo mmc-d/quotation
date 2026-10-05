@@ -19,6 +19,7 @@ export default defineConfig({
       WORKER_IN_PROCESS: 'false',
       GOTENBERG_URL: 'http://localhost:3300',
       ERPNEXT_WEBHOOK_SECRET: 'erp-e2e',
+      LEADS_WEBHOOK_SECRET: 'leads-e2e',
     },
   },
 });

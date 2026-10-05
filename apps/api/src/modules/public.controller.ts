@@ -1,4 +1,4 @@
-import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -205,6 +205,38 @@ export class PublicController {
         if (c.ownerId) await tx.insert(notification).values({ userId: c.ownerId, kind: 'contract', titleAr: b.approve ? `✍️ وُقّع العقد ${c.number}` : `رُفض توقيع العقد ${c.number}`, link: `/contracts/${c.id}` });
       }
       return { status };
+    });
+  }
+}
+
+/**
+ * Lead-ads intake (Meta / Snapchat / TikTok lead forms via their webhooks or a connector):
+ * POST /api/webhooks/leads/:source with X-MMC-Signature = hex HMAC-SHA256(raw body, LEADS_WEBHOOK_SECRET).
+ * Idempotent per external lead id; duplicates by mobile are merged into the open lead.
+ */
+@Controller('webhooks/leads')
+@Public()
+export class LeadsWebhookController {
+  @Post(':source')
+  @HttpCode(200)
+  async intake(@Param('source') source: string, @Req() req: Request & { rawBody?: Buffer }, @Headers('x-mmc-signature') sig: string | undefined) {
+    if (!config.leadsWebhookSecret) throw forbidden('lead intake is not configured');
+    const raw = req.rawBody ?? Buffer.alloc(0);
+    const expected = createHmac('sha256', config.leadsWebhookSecret).update(raw).digest('hex');
+    if (!sig || sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) throw forbidden('bad signature');
+    const src = ['snapchat', 'instagram', 'tiktok', 'google', 'website', 'other'].includes(source) ? source : source === 'meta' || source === 'facebook' ? 'instagram' : 'other';
+    const b = z.object({ externalId: z.string().min(1).max(200), name: z.string().min(1).max(120), mobile: z.string().max(30).nullish(), email: z.string().email().nullish().or(z.literal('')), city: z.string().max(60).nullish(), interest: z.enum(INTERESTS).nullish(), message: z.string().max(2000).nullish(), campaign: z.string().max(120).nullish(), utm: z.record(z.string(), z.string()).nullish() }).parse(JSON.parse(raw.toString('utf8') || '{}'));
+    const tenantId = await defaultTenant();
+    return withTenant(getDb(), tenantId, async (tx) => {
+      const [seen] = await tx.insert(inboxEvent).values({ tenantId, source: `leads:${src}`, externalId: b.externalId, payload: b as never }).onConflictDoNothing().returning();
+      if (!seen) return { ok: true, duplicate: true };
+      const mobile = b.mobile ? normalizeSaudiMobile(b.mobile) ?? b.mobile : null;
+      if (mobile) {
+        const [open] = await tx.select({ id: lead.id }).from(lead).where(and(eq(lead.mobile, mobile), sql`${lead.status} in ('new','contacted','qualified')`));
+        if (open) return { ok: true, merged: open.id };
+      }
+      const l = await createLead(tx, { source: src as never, name: b.name, mobile, email: b.email || null, city: b.city ?? null, interest: b.interest ?? null, message: [b.campaign && `حملة: ${b.campaign}`, b.message].filter(Boolean).join('\n') || null, utm: b.utm ?? null } as Parameters<typeof createLead>[1], null);
+      return { ok: true, lead: l.number };
     });
   }
 }

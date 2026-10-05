@@ -32,6 +32,7 @@ export const config = {
     webhookSecret: process.env.ERPNEXT_WEBHOOK_SECRET ?? '',
   },
   payments: { provider: process.env.PAYMENTS_PROVIDER ?? 'sandbox', secretKey: process.env.PAYMENTS_SECRET_KEY ?? '', webhookSecret: process.env.PAYMENTS_WEBHOOK_SECRET ?? 'dev-payments-secret' },
+  leadsWebhookSecret: process.env.LEADS_WEBHOOK_SECRET ?? '',
   runWorkerInProcess: process.env.WORKER_IN_PROCESS !== 'false',
 };
 export type Config = typeof config;
