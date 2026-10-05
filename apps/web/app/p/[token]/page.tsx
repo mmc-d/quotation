@@ -17,6 +17,8 @@ interface PayView {
 }
 
 const INVOICE_LABEL: Record<string, string> = { '386': 'فاتورة دفعة مقدمة', '388': 'فاتورة ضريبية نهائية', '381': 'إشعار دائن' };
+// Seller not registered for VAT: plain invoices, never called "tax" invoices.
+const PLAIN_LABEL: Record<string, string> = { '386': 'فاتورة دفعة مقدمة', '388': 'فاتورة نهائية', '381': 'إشعار دائن' };
 
 async function copy(text: string, label: string) {
   try {
@@ -63,7 +65,7 @@ export default function PaymentPage({ params }: { params: Promise<{ token: strin
         {paid && (
           <PublicState icon={<CheckCircle2 className="size-8" />} title="شكرًا لك — تم استلام الدفعة">
             استلمنا مبلغ <b className="text-ink"><Money value={d.paidAmount} fixed /></b> لطلب الدفع <span className="num">{d.number}</span>.
-            {d.invoices.length > 0 && <> وأُصدرت الفاتورة الضريبية وستصلك نسختها.</>}
+            {d.invoices.length > 0 && <> وأُصدرت {d.company.vatRegistered ? "الفاتورة الضريبية" : "الفاتورة"} وستصلك نسختها.</>}
           </PublicState>
         )}
         {cancelled && <PublicState icon={<Ban className="size-8" />} tone="muted" title="تم إلغاء طلب الدفع">هذا الطلب لم يعد ساريًا. إن كان لديك استفسار تواصل معنا.</PublicState>}
@@ -97,7 +99,7 @@ export default function PaymentPage({ params }: { params: Promise<{ token: strin
             <ul className="divide-y divide-line text-sm">
               {d.invoices.map((i) => (
                 <li key={i.id} className="flex items-center justify-between py-2">
-                  <span><span className="num font-bold">{i.number}</span> <span className="text-xs text-muted">· {INVOICE_LABEL[i.typeCode] ?? i.typeCode}</span></span>
+                  <span><span className="num font-bold">{i.number}</span> <span className="text-xs text-muted">· {(d.company.vatRegistered ? INVOICE_LABEL[i.typeCode] : PLAIN_LABEL[i.typeCode]) ?? i.typeCode}</span></span>
                   <Money value={i.total} fixed />
                 </li>
               ))}
