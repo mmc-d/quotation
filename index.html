@@ -631,7 +631,6 @@ table.qt tbody tr.dragging{opacity:.4;}
 .inv-kv td.k .en,.inv-totals td.k .en{display:block;font-size:.6rem;font-weight:500;color:var(--muted);text-align:right;}
 .inv-kv td.v{font-weight:700;text-align:center;word-break:break-word;}
 .inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.65rem;}
-.inv-parties.single{grid-template-columns:1fr;}
 .inv-sec{display:flex;justify-content:space-between;background:var(--primary);color:white;font-weight:800;font-size:.72rem;padding:.28rem .55rem;}
 .inv-items-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:.65rem;}
 .inv-items{width:100%;border-collapse:collapse;font-size:.66rem;}
@@ -3172,7 +3171,8 @@ function renderOptionsMenu(){
     <button class="opt-item" onclick="closeOptions();openInvoiceDialog()"><span>🧾</span><span>${invLabel}</span></button>
     <button class="opt-item" onclick="closeOptions();openInvoiceList()"><span>📂</span><span>الفواتير الصادرة<small>Issued invoices</small></span></button>
     ${isAdminUser() ? `<div class="opt-sep"></div>
-    <button class="opt-item" onclick="closeOptions();calculateCost()"><span>💰</span><span>حساب التكلفة<small>Calculate cost (CSV)${rate}</small></span></button>` : ''}`;
+    <button class="opt-item" onclick="closeOptions();calculateCost()"><span>💰</span><span>حساب التكلفة<small>Calculate cost (CSV)${rate}</small></span></button>
+    <button class="opt-item" onclick="closeOptions();resetInvoiceSequence()"><span>🔄</span><span>تصفير ترقيم الفواتير<small>Reset invoice numbering (this browser)</small></span></button>` : ''}`;
 }
 function toggleOptions(){
   const menu = document.getElementById('optMenu');
@@ -3779,6 +3779,21 @@ async function refreshInvoiceSeqInfo(){
     el.textContent = '❌ تعذّر قراءة آخر فاتورة من مجلد الفواتير: ' + e.message;
   }
 }
+// Admin-only, for testing: forgets this browser's own reference (ginv_last) and its cached
+// invoice copies (zinv_*), so numbering falls back to the Drive folder alone (or to the Settings
+// start number, if that folder is empty too). Doesn't touch Drive and doesn't reach other PCs —
+// each browser that has issued invoices keeps its own ginv_last/zinv_* until reset from it too.
+async function resetInvoiceSequence(){
+  if(!isAdminUser()) return;
+  const ok = await appConfirm('تصفير ترقيم الفواتير في هذا المتصفح؟',
+    'سيُنسى آخر رقم فاتورة سجّله هذا المتصفح، فتُحسب الفاتورة القادمة من مجلد الفواتير على Drive وحده (أو من رقم البداية في الإعدادات إذا كان فاضياً). أي متصفح آخر أصدر فواتير سيحتفظ برقمه الخاص حتى تُصفَّر منه أيضاً. متابعة؟',
+    '🔄 تصفير');
+  if(!ok) return;
+  localStorage.removeItem(INV_LAST_KEY);
+  localInvoiceNumbers().forEach(no => localStorage.removeItem(INV_LOCAL_PREFIX + no));
+  toast('✅ تم التصفير في هذا المتصفح');
+  if(document.getElementById('invSeqInfo')) refreshInvoiceSeqInfo().catch(()=>{});
+}
 
 // ── Issued invoices list ─────────────────────────────────────────────────
 let _invListRows = [];
@@ -3858,17 +3873,17 @@ function renderInvoiceHtml(inv){
   const tot = (ar, v, en, cls = '') => `<tr${cls ? ` class="${cls}"` : ''}><td class="k">${ar}<span class="en">${en}</span></td><td class="a">${v}</td></tr>`;
   const country = c => c === 'SA' ? 'المملكة العربية السعودية (SA)' : c;
   const hasDisc = T.discount > 0;
+  // No buyer (B2C / individual): the seller/buyer parties block is skipped entirely — the header
+  // above already carries the seller's full identity (name AR/EN, VAT, CR, phone/email), and for
+  // this case (no separate Seller table below) its address line expands to the full one — building,
+  // street, district, city, postal/additional, country — folded into one line so nothing that used
+  // to be in that table is lost, without spending a whole row per field.
   const hasBuyer = filled(B.name) || filled(B.vat);
+  const addrLine = p => {
+    const cityPc = [p.city, [p.postal, p.additional].filter(filled).join('-')].filter(filled).join(' ');
+    return [p.building, p.street, p.district, cityPc, country(p.country || 'SA')].filter(filled).join('، ');
+  };
   const logo = document.querySelector('.company-logo')?.src || '';
-  const address = p => [
-    kv('رقم المبنى', V(p.building), 'Building No.'),
-    kv('الشارع', V(p.street), 'Street'),
-    kv('الحي', V(p.district), 'District'),
-    kv('المدينة', V(p.city), 'City'),
-    kv('الرمز البريدي', V(p.postal), 'Postal code'),
-    kv('الرقم الإضافي', V(p.additional), 'Additional No.'),
-    kv('الدولة', V(country(p.country || 'SA')), 'Country'),
-  ].join('');
   const qrBlock = !tax ? '' : issued
     ? `<div class="inv-qr">${qrSvg(inv.qr) || '<div class="inv-qr-ph">تعذر رسم رمز QR — تحقق من الاتصال</div>'}
          <div class="inv-qr-note">رمز الاستجابة السريعة<br>هيئة الزكاة والضريبة والجمارك</div></div>`
@@ -3894,7 +3909,7 @@ function renderInvoiceHtml(inv){
       <div class="inv-seller-name">${escHtml(S.nameAr)}</div>
       ${tax ? `<div>الرقم الضريبي: ${V(S.vat)}</div>` : ''}
       <div>السجل التجاري: ${V(S.crn)}</div>
-      <div>${escHtml([S.district, S.city].filter(filled).join('، '))}</div>
+      <div>${escHtml(hasBuyer ? [S.district, S.city].filter(filled).join('، ') : addrLine(S))}</div>
     </div>
     ${logo ? `<img class="inv-logo" src="${logo}" alt="">` : '<div></div>'}
     <div class="en">
@@ -3918,27 +3933,28 @@ function renderInvoiceHtml(inv){
       ${kv('العملة', 'ريال سعودي (SAR)', 'Currency')}
     </table>
   </div>
-  <div class="inv-parties${hasBuyer ? '' : ' single'}">
+  ${hasBuyer ? `<div class="inv-parties">
     <div>
       <div class="inv-sec"><span>البائع</span><span class="en">Seller</span></div>
       <table class="inv-kv">
         ${kv('الاسم', V(S.nameAr), 'Name')}
         ${tax ? kv('الرقم الضريبي', V(S.vat), 'VAT No.') : ''}
         ${kv('السجل التجاري', V(S.crn), 'CR No.')}
-        ${address(S)}
+        ${kv('العنوان', V(addrLine(S)), 'Address')}
+        ${kv('الجوال', V(S.phone), 'Mobile')}
       </table>
     </div>
-    ${hasBuyer ? `<div>
+    <div>
       <div class="inv-sec"><span>المشتري</span><span class="en">Buyer</span></div>
       <table class="inv-kv">
         ${kv('الاسم', V(B.name), 'Name')}
-        ${kv('الرقم الضريبي', V(B.vat), 'VAT No.')}
+        ${tax ? kv('الرقم الضريبي', V(B.vat), 'VAT No.') : ''}
         ${kv('السجل التجاري', V(B.crn), 'CR No.')}
-        ${address(B)}
-        ${filled(B.phone) ? kv('الجوال', V(B.phone), 'Mobile') : ''}
+        ${kv('العنوان', V(addrLine(B)), 'Address')}
+        ${kv('الجوال', V(B.phone), 'Mobile')}
       </table>
-    </div>` : ''}
-  </div>
+    </div>
+  </div>` : ''}
   <div class="inv-items-wrap"><table class="inv-items">
     <thead><tr>
       <th>#</th><th>الصنف والوصف<br>Item &amp; description</th><th>الكمية<br>Qty</th><th>سعر الوحدة<br>Unit price</th>
