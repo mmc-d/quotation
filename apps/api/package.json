@@ -1,0 +1,43 @@
+{
+  "name": "@mmc/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MMC Core REST API (NestJS) + Better Auth + background worker.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput & node --env-file-if-exists=../../.env --watch-path=dist --enable-source-maps dist/main.js",
+    "start": "node --env-file-if-exists=../../.env --enable-source-maps dist/main.js",
+    "worker": "node --env-file-if-exists=../../.env --enable-source-maps dist/worker.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "^1.7.7",
+    "@mmc/db": "workspace:*",
+    "@mmc/domain": "workspace:*",
+    "@mmc/erp-connector": "workspace:*",
+    "@mmc/doc-templates": "workspace:*",
+    "@nestjs/common": "^12.1.2",
+    "@nestjs/core": "^12.1.2",
+    "@nestjs/platform-express": "^12.1.2",
+    "better-auth": "^1.7.7",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "helmet": "^8.3.0",
+    "nodemailer": "^7.0.10",
+    "pg-boss": "^12.36.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "@types/nodemailer": "^7.0.2",
+    "supertest": "^7.1.4",
+    "@types/supertest": "^6.0.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
