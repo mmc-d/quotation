@@ -72,11 +72,22 @@ export interface QuoteTotals {
   listTotal: Halalas;
   /** everything given away vs list prices — header discount + below-list unit prices + FREE lines — in % of listTotal, 2 dp */
   discountFromListPercent: number;
+  /** subtotal per section (lines without a section are under key ''), in first-appearance order; optional lines excluded */
+  sections: { key: string; subtotal: Halalas; lines: number }[];
 }
 
 export interface QuoteCalcResult {
   lines: QuoteLineResult[];
   totals: QuoteTotals;
+}
+
+function sectionTotals(rows: { key: string; amount: Halalas }[]) {
+  const out: { key: string; subtotal: Halalas; lines: number }[] = [];
+  for (const r of rows) {
+    const s = out.find((x) => x.key === r.key);
+    if (s) { s.subtotal += r.amount; s.lines++; } else out.push({ key: r.key, subtotal: r.amount, lines: 1 });
+  }
+  return out;
 }
 
 /** The legacy rule: discount by amount is capped at the subtotal; by percent is subtotal×pct/100. */
@@ -153,6 +164,7 @@ export function calculateQuote(input: QuoteCalcInput): QuoteCalcResult {
       marginPercent: taxable > 0 ? Math.round((margin / taxable) * 10000) / 100 : null,
       discountPercent: subtotal > 0 ? Math.round((discount / subtotal) * 10000) / 100 : 0,
       listTotal,
+      sections: sectionTotals(counted.map((b) => ({ key: b.l.sectionKey ?? '', amount: b.amount }))),
       discountFromListPercent: listBase > 0 ? Math.max(0, Math.round(((listBase - netNonIns) / listBase) * 10000) / 100) : 0,
     },
   };

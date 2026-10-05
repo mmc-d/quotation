@@ -10,6 +10,7 @@ export const NAV: NavGroup[] = [
       { href: '/contracts', label: 'العقود', en: 'Contracts', icon: 'FileSignature', perm: 'contract.read' },
       { href: '/customers', label: 'العملاء', en: 'Customers', icon: 'Building2', perm: 'party.read' },
       { href: '/products', label: 'المنتجات', en: 'Products', icon: 'Package', perm: 'product.read' },
+      { href: '/products/price-lists', label: 'قوائم الأسعار', en: 'Price lists', icon: 'Tags', perm: 'product.read' },
     ],
   },
   {
@@ -34,6 +35,7 @@ export const NAV: NavGroup[] = [
       { href: '/settings/company', label: 'بيانات المنشأة', en: 'Company', icon: 'Landmark', perm: 'admin.settings' },
       { href: '/settings/users', label: 'المستخدمون والصلاحيات', en: 'Users & roles', icon: 'Users', perm: 'admin.users' },
       { href: '/settings/documents', label: 'المستندات والترقيم', en: 'Documents', icon: 'Files', perm: 'admin.settings' },
+      { href: '/settings/calendar', label: 'تقويم العمل', en: 'Work calendar', icon: 'CalendarDays', perm: 'admin.settings' },
       { href: '/settings/audit', label: 'سجل التدقيق', en: 'Audit log', icon: 'ShieldCheck', perm: 'admin.audit' },
       { href: '/settings/security', label: 'أمان حسابي', en: 'My security', icon: 'KeyRound' },
     ],

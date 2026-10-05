@@ -35,6 +35,8 @@ export const company = pgTable('company', {
   baseCurrency: text('base_currency').notNull().default('SAR'),
   /** quote defaults carried over from the legacy tool (notes/terms text, validity days) */
   quoteDefaults: jsonb('quote_defaults').$type<{ validityDays?: number; notesAr?: string; termsAr?: string; termsEn?: string; warrantyText?: string }>().notNull().default({}),
+  /** company calendar: working weekdays (0 = Sunday … 6 = Saturday); KSA default Sun–Thu */
+  workingDays: jsonb('working_days').$type<number[]>().notNull().default([0, 1, 2, 3, 4]),
   approvalPolicy: jsonb('approval_policy').$type<{ maxDiscountPercent: number; minMarginPercent: number }>().notNull().default({ maxDiscountPercent: 10, minMarginPercent: 20 }),
   ...audit,
 });
@@ -263,3 +265,13 @@ export const customFieldDef = pgTable('custom_field_def', {
   ...audit,
 });
 
+
+/** Public holidays and company closures (Eid al-Fitr, Eid al-Adha, Founding Day, National Day…). */
+export const businessHoliday = pgTable('business_holiday', {
+  id: id(),
+  tenantId: tenantId(),
+  date: date('date').notNull(),
+  nameAr: text('name_ar').notNull(),
+  nameEn: text('name_en'),
+  ...audit,
+}, (t) => [uniqueIndex('business_holiday_date_uq').on(t.tenantId, t.date)]);

@@ -65,3 +65,14 @@ export async function signIn(base: string, email: string, password = 'correct-ho
 export async function gotenbergUp() {
   try { return (await fetch('http://localhost:3300/health')).ok; } catch { return false; }
 }
+
+/** Sign in an invited user, creating and verifying the identity on first use (order-independent test files). */
+export async function signInOrUp(base: string, email: string, password = 'correct-horse-battery-staple') {
+  const c = new Client(base);
+  const res = await fetch(`${base}/api/auth/sign-in/email`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3999' }, body: JSON.stringify({ email, password }) });
+  if (res.ok) {
+    for (const ck of res.headers.getSetCookie?.() ?? []) { const [kv] = ck.split(';'); if (kv?.startsWith('mmc.session_token=')) c.cookie = kv; }
+    if (c.cookie) return c;
+  }
+  return signIn(base, email, password);
+}

@@ -42,6 +42,7 @@ export const quote = pgTable('quote', {
   costTotal: amount('cost_total').notNull().default('0'),
   marginTotal: amount('margin_total').notNull().default('0'),
   insDeleted: boolean('ins_deleted').notNull().default(false),
+  priceListId: uuid('price_list_id'),
   notes: text('notes'),
   terms: text('terms'),
   language: text('language').notNull().default('ar'),
@@ -105,8 +106,10 @@ export const clauseTemplate = pgTable('clause_template', {
   clauseVersion: integer('clause_version').notNull().default(1),
   sort: integer('sort').notNull().default(0),
   active: boolean('active').notNull().default(true),
+  /** contract template the clause belongs to: supply_install | supply_only | maintenance */
+  templateSet: text('template_set').notNull().default('supply_install'),
   ...audit,
-}, (t) => [uniqueIndex('clause_key_ver_uq').on(t.tenantId, t.key, t.clauseVersion)]);
+}, (t) => [uniqueIndex('clause_key_ver_uq').on(t.tenantId, t.templateSet, t.key, t.clauseVersion)]);
 
 export const contract = pgTable('contract', {
   id: id(),
@@ -120,6 +123,7 @@ export const contract = pgTable('contract', {
   teamId: uuid('team_id'),
   title: text('title').notNull(),
   subtitle: text('subtitle'),
+  templateSet: text('template_set').notNull().default('supply_install'),
   /** first party (client) block as printed */
   clientBlock: jsonb('client_block').$type<{ name?: string; representative?: string; idNumber?: string; crNumber?: string; vatNumber?: string; address?: string; mobile?: string }>().notNull().default({}),
   status: text('status').notNull().default('draft'),
@@ -181,8 +185,18 @@ export const changeOrder = pgTable('change_order', {
   contractId: uuid('contract_id').notNull().references(() => contract.id),
   number: text('number').notNull(),
   description: text('description').notNull(),
+  reason: text('reason'),
+  /** added (+qty) or removed (−qty) lines, priced at the contract's terms */
+  lines: jsonb('lines').$type<{ code: string; description: string; qty: string; unitPrice: string }[]>().notNull().default([]),
+  subtotalDelta: amount('subtotal_delta').notNull().default('0'),
+  vatDelta: amount('vat_delta').notNull().default('0'),
   amountDelta: amount('amount_delta').notNull(),
+  /** draft → pending_approval → approved → signed (client) → billed; or rejected / cancelled */
   status: text('status').notNull().default('draft'),
+  approvedBy: uuid('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  signedAt: timestamp('signed_at', { withTimezone: true }),
+  milestoneId: uuid('milestone_id'),
   revisionQuoteId: uuid('revision_quote_id'),
   ...audit,
-});
+}, (t) => [uniqueIndex('change_order_number_uq').on(t.tenantId, t.number), index('change_order_contract_idx').on(t.contractId)]);

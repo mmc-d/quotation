@@ -5,7 +5,7 @@ import {
   formatSeries, quotePrefix, trailingSequence, quoteSequence, riyadhDate,
   isValidVatNumber, isValidUnifiedNumber, normalizeSaudiMobile, normalizeArabic, nationalAddressProblems,
   mergeGrants, can, ROLE_TEMPLATES, scoreLead, followUpsDue, formatSar, formatSar2, toHalalas, halalasToFixed,
-  type QuoteLineInput,
+  type QuoteLineInput, DEFAULT_WORKING_DAYS, isBusinessDay, nextBusinessDay, addBusinessDays, businessDaysBetween,
 } from '../src/index.js';
 
 const line = (code: string, unitPrice: number | string, qty: number, extra: Partial<QuoteLineInput> = {}): QuoteLineInput => ({
@@ -193,6 +193,21 @@ describe('crm', () => {
       leads: [{ id: 'l', name: 'X', ownerId: null, status: 'new', createdAt: new Date('2026-10-05T00:00:00Z'), firstContactAt: null }],
     });
     expect(out.map((o) => o.rule).sort()).toEqual(['new_lead_untouched', 'quote_expiring', 'quote_not_viewed', 'stale_opportunity']);
+  });
+});
+
+describe('sections and calendar', () => {
+  it('subtotals per section', () => {
+    const r = calculateQuote({ lines: [line('A', 100, 1, { sectionKey: 'v1' }), line('B', 50, 2, { sectionKey: 'v2' }), line('C', 10, 1, { sectionKey: 'v1' }), line('D', 999, 1, { sectionKey: 'v1', isOptional: true })], vatRegistered: true });
+    expect(r.totals.sections).toEqual([{ key: 'v1', subtotal: 11000, lines: 2 }, { key: 'v2', subtotal: 10000, lines: 1 }]);
+  });
+  it('counts Sunday–Thursday business days and skips holidays', () => {
+    const cal = { workingDays: DEFAULT_WORKING_DAYS, holidays: ['2026-09-23'] };
+    expect(isBusinessDay('2026-10-09', cal)).toBe(false); // Friday
+    expect(nextBusinessDay('2026-10-09', cal)).toBe('2026-10-11'); // Sunday
+    expect(nextBusinessDay('2026-09-23', cal)).toBe('2026-09-24');
+    expect(addBusinessDays('2026-10-08', 1, cal)).toBe('2026-10-11');
+    expect(businessDaysBetween('2026-10-04', '2026-10-11', cal)).toBe(5);
   });
 });
 

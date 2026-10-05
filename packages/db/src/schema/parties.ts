@@ -27,6 +27,8 @@ export const party = pgTable('party', {
   /** B2B (standard tax invoice) vs B2C (simplified) — drives ZATCA invoice subtype */
   b2b: boolean('b2b').notNull().default(true),
   paymentTermsDays: integer('payment_terms_days').notNull().default(0),
+  /** segment price list applied when quoting this customer (null = list prices) */
+  priceListId: uuid('price_list_id'),
   creditLimit: amount('credit_limit'),
   notes: text('notes'),
   /** link to the back office Customer (ERPNext name) */
