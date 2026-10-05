@@ -101,3 +101,31 @@ test('a plain invoice (seller not VAT-registered) carries no VAT and no QR', asy
   await expect(page.locator('#invoiceOverlay')).toContainText('البائع غير مسجل في ضريبة القيمة المضافة');
   await expect(page.locator('.inv-qr-ph, .inv-qr')).toHaveCount(0);
 });
+
+test('the nav "🧾 الفواتير الصادرة" button finds a previously issued invoice by its number', async ({ page }) => {
+  await openApp(page, { rows: rows(), seller: SELLER });
+  await addProduct(page, PRODUCTS.GATEWAY[0]);
+  await page.click('.topnav .opt-wrap button');
+  await page.locator('#optMenu .opt-item').first().click();
+  await page.fill('#byName', 'عميل تجريبي');
+  await page.fill('#byCrn', '9998887776');
+  await page.fill('#byBuilding', '1111');
+  await page.fill('#byStreet', 'شارع');
+  await page.fill('#byDistrict', 'حي');
+  await page.fill('#byCity', 'جدة');
+  await page.fill('#byPostal', '11111');
+  await page.fill('#invSupplyDate', '2026-10-01');
+  await page.click('button:has-text("👁️ معاينة الفاتورة")');
+  await page.click('#invIssueBtn');
+  await page.click('#confirmYes');
+  await expect(page.locator('#invoiceOverlay')).toContainText('MMC-INV-00001');
+  await page.click('.inv-toolbar button:has-text("✕ إغلاق")');
+
+  await page.click('.topnav button:has-text("🧾 الفواتير الصادرة")');
+  await expect(page.locator('#invListOverlay')).toBeVisible();
+  await page.fill('#invSearch', 'MMC-INV-00001');
+  await page.click('#invListOverlay button:has-text("🔍 بحث")');
+  await page.click('#invListResults .cat-row'); // inline onclick="openIssuedInvoice(i)" — numeric index, not data-*
+  await expect(page.locator('#invoiceOverlay')).toBeVisible();
+  await expect(page.locator('#invoiceOverlay')).toContainText('MMC-INV-00001');
+});
