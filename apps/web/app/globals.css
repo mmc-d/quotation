@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Emerald + gold — the palette of the legacy tool, the PDF templates and the brand poster. */
+@theme {
+  --color-primary: #0D4A2E;
+  --color-primary-600: #12603C;
+  --color-primary-50: #EAF3EE;
+  --color-gold: #C2A04A;
+  --color-gold-light: #D8BD72;
+  --color-gold-dark: #8A6F2C;
+  --color-tint: #F8F4EA;
+  --color-ink: #1d2722;
+  --color-muted: #6b7570;
+  --color-line: #e5e1d6;
+  --color-danger: #b42318;
+  --color-ok: #067647;
+  --font-sans: var(--font-tajawal), "Noto Sans Arabic", system-ui, sans-serif;
+  --radius-card: 0.75rem;
+}
+
+@layer base {
+  html { color-scheme: light; }
+  body { @apply bg-[#f6f5f1] text-ink antialiased; font-feature-settings: "tnum"; }
+  :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
+  input, select, textarea { font: inherit; }
+  [dir="rtl"] .ltr-nums { direction: ltr; unicode-bidi: embed; }
+  table { border-collapse: collapse; }
+}
+
+@utility num { font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
