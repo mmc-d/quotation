@@ -222,7 +222,7 @@ export class QuotesController {
     if (t.discount) add('الخصم', -t.discount);
     if (t.vatApplied) add(`ضريبة القيمة المضافة ${t.vatRate}%`, t.vat);
     add(`الإجمالي — ${formatSar(t.total)} ريال`, t.total);
-    ['price', 'total', 'cost'].forEach((k) => { const c = ws.getColumn(k); if (c) c.numFmt = '#,##0.00'; });
+    ['price', 'total', ...(withCost ? ['cost'] : [])].forEach((k) => { ws.getColumn(k).numFmt = '#,##0.00'; });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${q.number}.xlsx"`);
     res.send(Buffer.from(await wb.xlsx.writeBuffer()));

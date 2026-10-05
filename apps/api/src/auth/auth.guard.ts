@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { fromNodeHeaders } from 'better-auth/node';
 import { appUser, eq, inArray, role, sql, teamMember, userRole, withTenant, authPasskey } from '@mmc/db';
@@ -15,7 +15,7 @@ const PRIVILEGED = new Set(['owner', 'general_manager', 'accountant']);
 /** Resolves the Better Auth session → tenant → app user, roles, grants; enforces @Perm. */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(@Inject(Reflector) private readonly reflector: Reflector) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [ctx.getHandler(), ctx.getClass()]);

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { computeInvoiceLines, finalInvoiceWithPrepayments, halalasToFixed, phase1QrPayload, riyadhTime, toHalalas } from '@mmc/domain';
+import { computeInvoiceLines, dec, finalInvoiceWithPrepayments, halalasToFixed, phase1QrPayload, prepaymentInvoice, riyadhTime, toHalalas } from '@mmc/domain';
 import type { BackOfficePort, CreateInvoicePayload, CustomerPayload, InvoiceResult, ItemPayload, PaymentResult, RecordPaymentPayload } from './port.js';
 
 /**
@@ -57,11 +57,13 @@ export class FakeBackOffice implements BackOfficePort {
     }
     const seller = await this.opts.seller();
     const rate = seller.vatRegistered ? p.vatRate : 0;
-    const base = computeInvoiceLines(
-      p.lines.map((l) => ({ code: l.code, name: l.description, qty: l.qty, unitPrice: l.unitPrice })),
-      toHalalas(p.discount ?? '0'),
-      rate,
-    );
+    const base = p.taxInclusive
+      ? prepaymentInvoice(p.lines.reduce((s, l) => s + dec(l.unitPrice).times(l.qty).times(100).toDecimalPlaces(0).toNumber(), 0), p.lines[0]?.description ?? '', rate)
+      : computeInvoiceLines(
+        p.lines.map((l) => ({ code: l.code, name: l.description, qty: l.qty, unitPrice: l.unitPrice })),
+        toHalalas(p.discount ?? '0'),
+        rate,
+      );
     const priced = p.typeCode === '388' && p.prepayments?.length
       ? finalInvoiceWithPrepayments(base, p.prepayments.map((x) => ({ total: toHalalas(x.total), vat: toHalalas(x.vat) })))
       : base;

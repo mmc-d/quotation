@@ -80,8 +80,8 @@ export const auth = betterAuth({
   socialProviders: config.google.clientId ? { google: { clientId: config.google.clientId, clientSecret: config.google.clientSecret, prompt: 'select_account' } } : {},
   account: { accountLinking: { enabled: true, trustedProviders: ['google'] } },
   session: { expiresIn: 60 * 60 * 12, updateAge: 60 * 60, cookieCache: { enabled: false } },
-  rateLimit: { enabled: true, window: 60, max: 100, customRules: { '/sign-in/email': { window: 60, max: 5 }, '/two-factor/verify-totp': { window: 60, max: 5 } } },
-  advanced: { cookiePrefix: 'mmc', useSecureCookies: webUrl.protocol === 'https:' },
+  rateLimit: { enabled: config.env !== 'test', window: 60, max: 100, customRules: { '/sign-in/email': { window: 60, max: 5 }, '/two-factor/verify-totp': { window: 60, max: 5 } } },
+  advanced: { cookiePrefix: 'mmc', useSecureCookies: webUrl.protocol === 'https:', ipAddress: { ipAddressHeaders: ['x-forwarded-for', 'x-real-ip'] } },
   plugins: [
     twoFactor({ issuer: 'MMC Core' }),
     passkey({ rpID: webUrl.hostname, rpName: 'MMC Core', origin: config.webOrigin }),

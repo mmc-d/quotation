@@ -46,6 +46,8 @@ export interface CreateInvoicePayload {
   /** document-level discount (SAR, 2 dp), applied before VAT */
   discount?: string;
   vatRate: number;
+  /** unit prices include VAT (advances: the 386 must equal the cash received exactly) */
+  taxInclusive?: boolean;
   /** 388 only: 386 invoices whose amounts are deducted (PrepaidAmount) */
   prepayments?: { erpName: string; total: string; vat: string }[];
   /** 381/383: invoice being corrected and why */

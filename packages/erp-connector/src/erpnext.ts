@@ -118,6 +118,8 @@ export class ErpNextBackOffice implements BackOfficePort {
       apply_discount_on: 'Net Total',
       discount_amount: p.discount ? Number(p.discount) : 0,
       taxes_and_charges: this.o.taxTemplate,
+      // VAT-inclusive pricing (advances): the tax template's rows must use included_in_print_rate.
+      mmc_tax_inclusive: p.taxInclusive ? 1 : 0,
       items: p.lines.map((l) => ({
         item_code: l.code,
         description: l.description,
