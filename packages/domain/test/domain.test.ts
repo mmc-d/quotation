@@ -83,6 +83,12 @@ describe('approvals and status', () => {
     const r = calculateQuote({ lines: [line('A', 100, 10, { unitCost: 90 })], discount: { type: 'percent', value: 15 }, vatRegistered: true });
     expect(approvalReasons(r.totals)).toHaveLength(2);
   });
+  it('counts below-list prices and FREE lines as discount (no header discount needed)', () => {
+    const r = calculateQuote({ lines: [line('A', 50, 1, { listPrice: 100 }), line('B', 0, 1, { listPrice: 100 })], vatRegistered: true });
+    expect(r.totals.discountPercent).toBe(0);
+    expect(r.totals.discountFromListPercent).toBe(75);
+    expect(approvalReasons(r.totals)[0]).toContain('below list');
+  });
   it('guards transitions', () => {
     expect(canTransitionQuote('draft', 'sent')).toBe(true);
     expect(canTransitionQuote('accepted', 'draft')).toBe(false);

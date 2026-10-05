@@ -92,7 +92,7 @@ describe('Phase 1 — catalog, customers, quotes v2, contracts v2', () => {
   });
 
   const lines = () => [
-    { productId: S.products['IP-IN7'].id, code: 'IP-IN7', description: S.products['IP-IN7'].description, unitPrice: '780', qty: '4' },
+    { productId: S.products['IP-IN7'].id, code: 'IP-IN7', description: S.products['IP-IN7'].description, unitPrice: '850', qty: '4' },
     { productId: S.products['DOOR-CAM'].id, code: 'DOOR-CAM', description: S.products['DOOR-CAM'].description, unitPrice: '1200', qty: '1' },
     { productId: S.products['POE-8'].id, code: 'POE-8', description: S.products['POE-8'].description, unitPrice: '0', qty: '1' },
     { code: 'EXTRA', description: 'بند اختياري', unitPrice: '999', qty: '1', isOptional: true },
@@ -104,17 +104,19 @@ describe('Phase 1 — catalog, customers, quotes v2, contracts v2', () => {
     const ins = q.lines.at(-1);
     expect(ins.code).toBe('INS');
     expect(ins.unitPrice).toBe('300.0000'); // 4×50 + 1×100
-    expect(q.computed.totals.subtotal).toBe(462000); // optional 999 excluded
+    expect(q.computed.totals.subtotal).toBe(490000); // optional 999 excluded
     expect(q.computed.totals.optionalTotal).toBe(99900);
     expect(q.computed.totals.vat).toBe(0); // company seeded as not VAT-registered
     expect(q.costTotal).toBeUndefined(); // hidden from the rep
-    expect(q.needsApproval).toBe(false);
+    // The FREE switch (list 450) + 5% header discount ≈ 13% given away vs list → above the rep's 10%.
+    expect(q.computed.totals.discountFromListPercent).toBeGreaterThan(10);
+    expect(q.needsApproval).toBe(true);
     S.quote = q;
   });
 
   it('requires approval above the rep limit; the rep cannot approve; the manager can', async () => {
-    const q = await rep.put(`/api/quotes/${S.quote.id}`, { ...S.quote, discountType: 'percent', discountValue: '15', lines: lines(), version: S.quote.version });
-    expect(q.needsApproval).toBe(true);
+    const q = await rep.put(`/api/quotes/${S.quote.id}`, { ...S.quote, discountType: 'percent', discountValue: '3', lines: lines(), version: S.quote.version });
+    expect(q.needsApproval).toBe(true); // ≈ 11.6% vs list: rep (10%) needs the manager (15%)
     const sub = await rep.post(`/api/quotes/${S.quote.id}/submit`);
     expect(sub.status).toBe('pending_approval');
     await rep.post(`/api/quotes/${S.quote.id}/approve`, {}, { expect: 403 });

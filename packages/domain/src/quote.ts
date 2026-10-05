@@ -68,6 +68,10 @@ export interface QuoteTotals {
   marginPercent: number | null;
   /** effective document discount in % of subtotal, 2 dp */
   discountPercent: number;
+  /** total at catalog list prices (counted lines) */
+  listTotal: Halalas;
+  /** everything given away vs list prices — header discount + below-list unit prices + FREE lines — in % of listTotal, 2 dp */
+  discountFromListPercent: number;
 }
 
 export interface QuoteCalcResult {
@@ -129,6 +133,10 @@ export function calculateQuote(input: QuoteCalcInput): QuoteCalcResult {
     };
   });
   const optionalTotal = base.filter((b) => b.l.isOptional).reduce((s, b) => s + b.amount, 0);
+  // INS has no catalog list price of its own (its "list" is whatever was computed), so it is excluded.
+  const listTotal = counted.reduce((s, b) => s + Math.max(b.listAmount, b.amount), 0);
+  const listBase = counted.filter((b) => b.l.code !== INS_CODE).reduce((s, b) => s + Math.max(b.listAmount, b.amount), 0);
+  const netNonIns = counted.reduce((s, b, i) => (b.l.code === INS_CODE ? s : s + (nets[i] as number)), 0);
   return {
     lines,
     totals: {
@@ -144,6 +152,8 @@ export function calculateQuote(input: QuoteCalcInput): QuoteCalcResult {
       margin,
       marginPercent: taxable > 0 ? Math.round((margin / taxable) * 10000) / 100 : null,
       discountPercent: subtotal > 0 ? Math.round((discount / subtotal) * 10000) / 100 : 0,
+      listTotal,
+      discountFromListPercent: listBase > 0 ? Math.max(0, Math.round(((listBase - netNonIns) / listBase) * 10000) / 100) : 0,
     },
   };
 }
@@ -192,7 +202,8 @@ export const DEFAULT_APPROVAL_POLICY: ApprovalPolicy = { maxDiscountPercent: 10,
 
 export function approvalReasons(totals: QuoteTotals, policy: ApprovalPolicy = DEFAULT_APPROVAL_POLICY, costsKnown = true): string[] {
   const reasons: string[] = [];
-  if (totals.discountPercent > policy.maxDiscountPercent) reasons.push(`discount ${totals.discountPercent}% > ${policy.maxDiscountPercent}%`);
+  const given = Math.max(totals.discountPercent, totals.discountFromListPercent);
+  if (given > policy.maxDiscountPercent) reasons.push(totals.discountFromListPercent > totals.discountPercent ? `price below list ${totals.discountFromListPercent}% > ${policy.maxDiscountPercent}%` : `discount ${totals.discountPercent}% > ${policy.maxDiscountPercent}%`);
   if (costsKnown && totals.cost > 0 && totals.marginPercent !== null && totals.marginPercent < policy.minMarginPercent) {
     reasons.push(`margin ${totals.marginPercent}% < ${policy.minMarginPercent}%`);
   }

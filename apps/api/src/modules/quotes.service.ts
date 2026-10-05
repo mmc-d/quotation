@@ -168,7 +168,8 @@ export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {
   const documents = await tx.select().from(issuedDocument).where(and(eq(issuedDocument.documentType, 'quote'), eq(issuedDocument.entityId, id))).orderBy(desc(issuedDocument.issuedAt));
   const revisions = await tx.select({ id: quote.id, revision: quote.revision, status: quote.status, total: quote.total, createdAt: quote.createdAt }).from(quote).where(eq(quote.rootQuoteId, q.rootQuoteId ?? q.id)).orderBy(asc(quote.revision));
   const [owner] = q.ownerId ? await tx.select({ id: appUser.id, nameAr: appUser.nameAr, email: appUser.email }).from(appUser).where(eq(appUser.id, q.ownerId)) : [];
-  const needsApproval = reasons.length > 0 || calc.totals.discountPercent > actor.maxDiscountPercent;
+  const given = Math.max(calc.totals.discountPercent, calc.totals.discountFromListPercent);
+  const needsApproval = reasons.length > 0 || given > actor.maxDiscountPercent;
   return stripCost(actor, {
     ...q,
     owner: owner ?? null,
@@ -280,7 +281,8 @@ export async function submitQuote(tx: Tx, actor: RequestActor, id: string) {
     await audit(tx, actor, 'auto_approve', 'quote', id, null, { discountPercent: view.computed.totals.discountPercent });
     return { status: 'approved' as const };
   }
-  const reasons = view.approvalReasons.length ? view.approvalReasons : [`discount ${view.computed.totals.discountPercent}% above your limit ${actor.maxDiscountPercent}%`];
+  const given = Math.max(view.computed.totals.discountPercent, view.computed.totals.discountFromListPercent);
+  const reasons = view.approvalReasons.length ? view.approvalReasons : [`discount ${given}% above your limit ${actor.maxDiscountPercent}%`];
   await tx.insert(approvalRequest).values({ documentType: 'quote', entityId: id, reasons, requestedBy: actor.userId });
   await tx.update(quote).set({ status: 'pending_approval', updatedAt: new Date() }).where(eq(quote.id, id));
   for (const uid of await approverIds(tx)) {
@@ -298,7 +300,7 @@ export async function decideQuote(tx: Tx, actor: RequestActor, id: string, decis
   // Separation of duties: the requester cannot approve their own quote (owners excepted).
   if (q.ownerId === actor.userId && !actor.roleKeys.includes('owner')) throw forbidden('you cannot approve your own quote');
   const view = await getQuoteView(tx, actor, id);
-  if (decision === 'approve' && view.computed.totals.discountPercent > actor.maxDiscountPercent) throw forbidden(`discount above your approval limit (${actor.maxDiscountPercent}%) — escalate`);
+  if (decision === 'approve' && Math.max(view.computed.totals.discountPercent, view.computed.totals.discountFromListPercent) > actor.maxDiscountPercent) throw forbidden(`discount above your approval limit (${actor.maxDiscountPercent}%) — escalate`);
   const [req] = await tx.select().from(approvalRequest).where(and(eq(approvalRequest.documentType, 'quote'), eq(approvalRequest.entityId, id), eq(approvalRequest.status, 'pending'))).orderBy(desc(approvalRequest.createdAt)).limit(1);
   if (req) await tx.update(approvalRequest).set({ status: decision === 'approve' ? 'approved' : 'rejected', decidedBy: actor.userId, decidedAt: new Date(), comment: comment ?? null }).where(eq(approvalRequest.id, req.id));
   await tx.update(quote).set({ status: decision === 'approve' ? 'approved' : 'draft', updatedAt: new Date() }).where(eq(quote.id, id));
