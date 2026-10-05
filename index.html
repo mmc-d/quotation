@@ -742,7 +742,8 @@ table.qt tbody tr.dragging{opacity:.4;}
       <div class="hdr-meta">
         <div class="hdr-plain-field">
           <label>رقم العرض</label>
-          <input id="quoteNo" placeholder="MMC-2026-1">
+          <input id="quoteNo" placeholder="MMC-2626221">
+          <span id="quoteNoOfflineBadge" class="no-print" style="display:none;font-size:.6rem;font-weight:800;color:var(--red)" title="تعذّر الوصول للخادم — رقم محلي مؤقت قد يتكرر مع مستخدم آخر">⚠️ رقم محلي (غير مؤكد)</span>
           <div class="quote-nav-btns no-print" style="display:flex;gap:.25rem;margin-top:.2rem;">
             <button id="quotePrevBtn" class="btn btn-ghost btn-sm nav-arrow-btn" onclick="navigateQuote(-1)" title="السابق">&#8592;</button>
             <button id="quoteNextBtn" class="btn btn-ghost btn-sm nav-arrow-btn" onclick="navigateQuote(1)" title="التالي">&#8594;</button>
@@ -907,6 +908,9 @@ table.qt tbody tr.dragging{opacity:.4;}
     <div class="fld-hint">مطلوب لإصدار الفواتير — أرشيف مشترك لكل المستخدمين، يُقرأ منه آخر رقم فاتورة محفوظة فيكون الرقم الجديد أكبر منه دائماً. شاركه بصلاحية «أي شخص لديه الرابط».</div>
     <label>رقم بداية تسلسل العقود / Contract Serial (مثال: 90)</label>
     <input id="contractSerialIn" type="number" min="1" step="1" placeholder="90" style="direction:ltr;font-weight:800;letter-spacing:1px;">
+    <div class="set-sec">نسخة احتياطية</div>
+    <button class="btn btn-outline" style="margin-bottom:.5rem" onclick="exportAllLocalData()">📤 تصدير كل البيانات المحلية / Export all local data</button>
+    <div class="fld-hint" style="margin:-.3rem 0 .85rem">يُنزّل ملف JSON واحد بكل العروض والفواتير المحفوظة في هذا المتصفح فقط، وبآخر رقم تسلسلي وبيانات المنشأة المحلية — بلا مفتاح API. استخدمه كنسخة احتياطية قبل أي صيانة لهذا الجهاز.</div>
     </div>
     <div class="set-pane" data-tab="seller" oninput="updateSellerStatus()">
       <p class="sub">بيانات المدى المبارك (البائع) كما هي مسجّلة لدى هيئة الزكاة والضريبة والجمارك — تظهر في كل فاتورة وفي رمز QR.</p>
@@ -987,21 +991,24 @@ table.qt tbody tr.dragging{opacity:.4;}
     <!-- ── Section 1: Search by exact quote number ── -->
     <p class="sub">بحث برقم العرض / Search by Quote No.</p>
     <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
-      <input id="loadQuoteId" placeholder="MMC-2026-1" style="flex:1;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;direction:ltr;">
+      <input id="loadQuoteId" placeholder="MMC-2626221" style="flex:1;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;direction:ltr;">
       <button class="btn btn-orange" onclick="searchQuoteInDrive()">🔍 بحث</button>
     </div>
     <div id="loadResults" style="max-height:200px;overflow-y:auto;margin-bottom:.85rem;"></div>
 
     <!-- ── Section 2: Browse all quotes by user number ── -->
     <div style="border-top:1.5px solid var(--border);padding-top:.85rem;">
-      <p class="sub" style="margin-bottom:.5rem">استعراض عروض مستخدم / Browse by User No.</p>
+      <p class="sub" style="margin-bottom:.5rem">استعراض بالتاريخ أو المندوب / Browse by date or sales rep</p>
       <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center;">
-        <span style="font-size:.8rem;color:var(--muted);white-space:nowrap">رقم المستخدم (أول خانتين)</span>
-        <input id="browseUserId" placeholder="01" maxlength="2" title="أدخل رقم المستخدم (مثل 01) أو * لعرض الكل"
-          style="width:56px;padding:.48rem .6rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.9rem;direction:ltr;text-align:center;font-weight:700;"
-          onkeydown="if(event.key==='Enter')listUserQuotes()">
-        <button class="btn btn-orange" onclick="listUserQuotes()">📋 عرض الكل</button>
+        <input id="browseDate" type="date" style="flex:1;padding:.4rem .6rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.85rem;">
+        <button class="btn btn-orange btn-sm" onclick="listQuotesByDate()">📅 عروض هذا اليوم</button>
       </div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center;">
+        <input id="browseSalesRep" placeholder="اسم المندوب" style="flex:1;padding:.4rem .6rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.85rem;direction:rtl;"
+          onkeydown="if(event.key==='Enter')listQuotesBySalesRep()">
+        <button class="btn btn-orange btn-sm" onclick="listQuotesBySalesRep()">👤 بحث</button>
+      </div>
+      <div class="fld-hint" style="margin:-.3rem 0 .5rem">البحث بالمندوب يفتح كل عرض ضمن آخر 200 عرضاً محفوظاً للتحقق من اسمه، وقد يستغرق لحظات.</div>
       <div id="browseResults" style="max-height:220px;overflow-y:auto;"></div>
     </div>
 
@@ -1023,7 +1030,7 @@ table.qt tbody tr.dragging{opacity:.4;}
     <h2>📂 تحميل عقد محفوظ</h2>
     <p class="sub">بحث برقم العقد / Search by Contract No.</p>
     <div style="display:flex;gap:.5rem;margin-bottom:.5rem;">
-      <input id="loadContractId" placeholder="MMC-2026-1 أو *" style="flex:1;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;direction:ltr;"
+      <input id="loadContractId" placeholder="MMCT-12 أو *" style="flex:1;padding:.48rem .78rem;border:1.5px solid var(--border);border-radius:7px;font-family:'Tajawal',sans-serif;font-size:.86rem;direction:ltr;"
         onkeydown="if(event.key==='Enter')searchContractInDrive()">
       <button class="btn btn-orange" onclick="searchContractInDrive()">🔍 بحث</button>
     </div>
@@ -1784,9 +1791,9 @@ function removePrintElements() {
 
 async function doPrint(){
   if(!items.length){toast('⚠️ أضف منتجات أولاً');return;}
-  // Save first, then print
+  // Save first, then print — a failed Drive save must not block printing (it already didn't before)
   if(cfg.appsScriptUrl){
-    await saveQuoteToDrive();
+    try{ await saveQuoteToDrive(); }catch(e){ /* saveQuoteToDrive already showed the error toast */ }
   }
   syncPrintMirrors();
   markEmptyCells(true);
@@ -1824,14 +1831,47 @@ document.addEventListener('input', (e) => {
 let tt;
 function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2600);}
 
+// Every key this browser might hold that is NOT the API key or any other connection secret — an
+// explicit allow-list, so a new local key never leaks in by accident (Phase 0 §5, backup item).
+function exportAllLocalData(){
+  const patterns = [/^quote_/, /^zinv_/, /^ginv_last$/, /^gseller_info$/, /^gcontract_serial$/, /^qnum_/];
+  const data = {};
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(patterns.some(re=>re.test(k))) data[k] = localStorage.getItem(k);
+  }
+  const count = Object.keys(data).length;
+  if(!count){ toast('⚠️ لا توجد بيانات محلية لتصديرها'); return; }
+  const payload = { exportedAt: new Date().toISOString(), userId: cfg.userId||'', keyCount: count, data };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mmc-local-backup-' + (cfg.userId||'user').replace(/[^a-zA-Z0-9_-]/g,'_') + '-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`✅ تم تصدير ${count} عنصر محلي`);
+}
+
 // ── LOCAL SAVE / LOAD (localStorage) ───────────────────────────────────
-function saveQuoteLocally() {
+// 💾 saves to the shared Drive archive AND keeps the local copy (R7, R8). The local copy is the
+// offline fallback: if the Drive save fails or no Apps Script is configured, it is kept and clearly
+// marked "لم يُرفع" (not uploaded) in the local-quotes list until a later save succeeds.
+async function saveQuoteLocally() {
   if (!items.length) { toast('⚠️ أضف منتجات أولاً'); return; }
   const state = getQuoteState();
   const key = 'quote_' + (state.quoteNo || 'draft');
+  let uploaded = false, uploadErr = null;
+  if (cfg.appsScriptUrl) {
+    try { await saveQuoteToDrive(true); uploaded = true; }
+    catch(e) { uploadErr = e; }
+  }
+  state._notUploaded = !uploaded;
   try {
     localStorage.setItem(key, JSON.stringify(state));
-    toast('✅ تم الحفظ محلياً: ' + (state.quoteNo || 'draft'));
+    toast(uploaded
+      ? '✅ تم الحفظ (محلياً وفي الأرشيف المشترك): ' + (state.quoteNo || 'draft')
+      : '⚠️ تم الحفظ محلياً فقط — لم يُرفع للأرشيف المشترك' + (uploadErr ? (': ' + uploadErr.message) : ''));
   } catch(e) {
     toast('❌ خطأ في الحفظ المحلي: ' + e.message);
   }
@@ -1842,10 +1882,11 @@ function listLocalQuotes() {
   if (!keys.length) return '<div style="text-align:center;color:var(--muted);font-size:.8rem;padding:.75rem">لا توجد عروض محفوظة محلياً</div>';
   return keys.map(k => {
     const label = k.replace('quote_', '');
-    let savedAt = '';
-    try { const s = JSON.parse(localStorage.getItem(k)); savedAt = s.savedAt ? ' – ' + new Date(s.savedAt).toLocaleDateString('ar-SA') : ''; } catch(e){}
+    let savedAt = '', notUploaded = false;
+    try { const s = JSON.parse(localStorage.getItem(k)); savedAt = s.savedAt ? ' – ' + new Date(s.savedAt).toLocaleDateString('ar-SA') : ''; notUploaded = !!s._notUploaded; } catch(e){}
+    const badge = notUploaded ? ' <span class="count-badge" style="background:var(--red)" title="محفوظ في هذا المتصفح فقط — لم يُرفع للأرشيف المشترك">⚠️ لم يُرفع</span>' : '';
     return `<div class="cat-row" style="margin-bottom:.3rem;cursor:pointer;justify-content:space-between" data-key="${escHtml(k)}">
-      <span style="font-size:.8rem;font-weight:700">${escHtml(label)}${escHtml(savedAt)}</span>
+      <span style="font-size:.8rem;font-weight:700">${escHtml(label)}${escHtml(savedAt)}${badge}</span>
       <button class="btn btn-del btn-sm" data-action="delete-local-quote" data-key="${escHtml(k)}">حذف</button>
     </div>`;
   }).join('');
@@ -1901,6 +1942,7 @@ function getQuoteState() {
 
 // Restore a quotation from a state object
 function loadQuoteState(state) {
+  setQuoteNumberOffline(false);   // a loaded document's own number, not a freshly-guessed one
   document.getElementById('quoteNo').value = state.quoteNo || '';
   document.getElementById('quoteDate').value = state.quoteDate || '';
   document.getElementById('clientName').value = state.clientName || '';
@@ -1939,17 +1981,22 @@ function loadQuoteState(state) {
 }
 
 // ── SAVE to Google Drive ────────────────────────────────────────────────
-async function saveQuoteToDrive() {
-  if (!cfg.appsScriptUrl) { toast('⚠️ أدخل رابط Apps Script في الإعدادات'); openSettings(); return; }
-  if (!items.length) { toast('⚠️ أضف منتجات أولاً'); return; }
+// silent=true (used by saveQuoteLocally() and doPrint()) suppresses the toasts and throws on
+// failure instead, so the caller can react (mark the local copy "not uploaded", or print anyway).
+async function saveQuoteToDrive(silent) {
+  if (!cfg.appsScriptUrl) {
+    if(!silent){ toast('⚠️ أدخل رابط Apps Script في الإعدادات'); openSettings(); }
+    throw new Error('رابط Apps Script غير مُعد');
+  }
+  if (!items.length) { if(!silent) toast('⚠️ أضف منتجات أولاً'); throw new Error('لا توجد أصناف'); }
 
   const quoteNo = document.getElementById('quoteNo').value.trim();
-  if (!quoteNo) { toast('⚠️ أدخل رقم العرض'); return; }
+  if (!quoteNo) { if(!silent) toast('⚠️ أدخل رقم العرض'); throw new Error('رقم العرض مطلوب'); }
 
   const state = getQuoteState();
   const fileName = quoteNo + '.json';
 
-  toast('⏳ جاري الحفظ...');
+  if(!silent) toast('⏳ جاري الحفظ...');
 
   try {
     const res = await fetch(cfg.appsScriptUrl, {
@@ -1965,13 +2012,15 @@ async function saveQuoteToDrive() {
     const data = await res.json();
 
     if (data.success) {
-      toast('✅ تم حفظ العرض: ' + quoteNo + (data.action === 'updated' ? ' (تحديث)' : ' (جديد)'));
+      if(!silent) toast('✅ تم حفظ العرض: ' + quoteNo + (data.action === 'updated' ? ' (تحديث)' : ' (جديد)'));
+      return data;
     } else {
       throw new Error(data.error || 'Unknown error');
     }
   } catch (e) {
     console.error('Save error:', e);
-    toast('❌ خطأ في الحفظ: ' + e.message);
+    if(!silent) toast('❌ خطأ في الحفظ: ' + e.message);
+    throw e;
   }
 }
 
@@ -1979,7 +2028,8 @@ async function saveQuoteToDrive() {
 function openLoadQuote() {
   document.getElementById('loadQuoteId').value = '';
   document.getElementById('loadResults').innerHTML = '<div style="text-align:center;color:var(--muted);font-size:.8rem;padding:1rem">أدخل رقم العرض ثم اضغط بحث</div>';
-  document.getElementById('browseUserId').value = cfg.userId || '';
+  document.getElementById('browseDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('browseSalesRep').value = '';
   document.getElementById('browseResults').innerHTML = '';
   document.getElementById('localQuotesList').innerHTML = listLocalQuotes();
   document.getElementById('loadOverlay').classList.add('open');
@@ -1989,65 +2039,82 @@ function closeLoadQuote() {
   document.getElementById('loadOverlay').classList.remove('open');
 }
 
-// List all quotations for a given user (matched by first 2 digits of seq part)
-async function listUserQuotes() {
-  const userId = document.getElementById('browseUserId').value.trim();
-  const resultsEl = document.getElementById('browseResults');
-  if (!userId) { toast('⚠️ أدخل رقم المستخدم'); return; }
-  if (!cfg.apiKey) { toast('⚠️ أدخل مفتاح API أولاً'); return; }
-
-  resultsEl.innerHTML = '<div style="text-align:center;padding:1rem"><div class="spin"></div><p style="font-size:.78rem;color:var(--muted)">جاري البحث...</p></div>';
-
-  try {
-    // Fetch all JSON files in the quotes folder, newest first, across all Drive pages
-    let filesData=[];
-    let nextPageToken='';
-    do {
-      const pageUrl = `https://www.googleapis.com/drive/v3/files?q='${cfg.quotesFolderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,modifiedTime)&orderBy=modifiedTime+desc&pageSize=1000${nextPageToken?`&pageToken=${nextPageToken}`:''}&key=${cfg.apiKey}`;
-      const pageRes = await fetch(pageUrl);
-      const pageJson = await pageRes.json();
-      if (!pageRes.ok){
-        const msg=(pageJson.error&&pageJson.error.message)||('HTTP '+pageRes.status);
-        const hint=pageRes.status===403?'<br><small>تأكد أن المجلد مشارك بصلاحية "أي شخص لديه الرابط - قارئ"</small>':'';
-        resultsEl.innerHTML=`<div style="color:var(--red);font-size:.82rem;padding:.75rem;text-align:center">❌ ${escHtml(msg)}${hint}</div>`;
-        return;
-      }
-      filesData = filesData.concat(pageJson.files || []);
-      nextPageToken = pageJson.nextPageToken || '';
-    } while(nextPageToken);
-
-    const showAll = userId === '*';
-    // Filter: all .json files (if *) or those whose seq part starts with the userId digits
-    const files = filesData.filter(f => {
-      if (!f.name.endsWith('.json')) return false;
-      if (showAll) return true;
-      const base = f.name.replace('.json', '');   // e.g. Q-2026-028
-      const parts = base.split('-');
-      if (parts.length < 3) return false;
-      const seq = parts[parts.length - 1];         // e.g. "028"
-      return seq.startsWith(userId);
-    });
-
-    if (!files.length) {
-      resultsEl.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:.75rem">${showAll ? 'لا توجد عروض محفوظة' : 'لم يتم العثور على عروض للمستخدم ' + userId}</div>`;
-      return;
+// Fetch every JSON file in the quotes folder (newest first, across all Drive pages). Shared by both
+// browse modes below; `cap` bounds how many are returned (browsing by sales rep has to open each one).
+async function fetchAllQuoteFiles(cap){
+  let filesData = [], nextPageToken = '';
+  do {
+    const pageUrl = `https://www.googleapis.com/drive/v3/files?q='${cfg.quotesFolderId}'+in+parents+and+trashed=false&fields=nextPageToken,files(id,name,modifiedTime)&orderBy=modifiedTime+desc&pageSize=1000${nextPageToken?`&pageToken=${nextPageToken}`:''}&key=${cfg.apiKey}`;
+    const pageRes = await fetch(pageUrl);
+    const pageJson = await pageRes.json();
+    if (!pageRes.ok){
+      const msg=(pageJson.error&&pageJson.error.message)||('HTTP '+pageRes.status);
+      const err = new Error(msg); err.status = pageRes.status; throw err;
     }
-
+    filesData = filesData.concat(pageJson.files || []);
+    nextPageToken = pageJson.nextPageToken || '';
+  } while(nextPageToken && (!cap || filesData.length < cap));
+  return (filesData.filter(f => f.name.endsWith('.json'))).slice(0, cap || Infinity);
+}
+function renderBrowseRow(name, date, fileId, extra){
+  return `<div class="cat-row" style="margin-bottom:.3rem;cursor:pointer" data-file-id="${escHtml(fileId)}" data-name="${escHtml(name)}">
+    <div class="cat-ph" style="width:36px;height:36px;font-size:.85rem">📄</div>
+    <div class="cat-info">
+      <span class="cat-code">${escHtml(name)}</span>
+      <div class="cat-price">${escHtml(date)}${extra?' · '+escHtml(extra):''}</div>
+    </div>
+    <button class="add-btn2" style="background:var(--orange)" title="فتح">↓</button>
+  </div>`;
+}
+// Browse by date: the quote number prefix already encodes the date (MMC-YYWWDD...), so this is a
+// plain name-contains query — no need to open any file (fast, and works for any volume of quotes).
+async function listQuotesByDate() {
+  const resultsEl = document.getElementById('browseResults');
+  const dateVal = document.getElementById('browseDate').value;
+  if (!dateVal) { toast('⚠️ اختر تاريخاً'); return; }
+  if (!cfg.apiKey || !cfg.quotesFolderId) { toast('⚠️ أدخل مفتاح API ومجلد عروض الأسعار أولاً'); return; }
+  resultsEl.innerHTML = '<div style="text-align:center;padding:1rem"><div class="spin"></div><p style="font-size:.78rem;color:var(--muted)">جاري البحث...</p></div>';
+  try {
+    const prefix = getQuotePrefix(new Date(dateVal + 'T12:00:00'));
+    const url = `https://www.googleapis.com/drive/v3/files?q=name+contains+'${encodeURIComponent(prefix)}'+and+'${cfg.quotesFolderId}'+in+parents+and+trashed=false&fields=files(id,name,modifiedTime)&orderBy=name+desc&pageSize=1000&key=${cfg.apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+    const files = (data.files||[]).filter(f=>f.name.endsWith('.json') && f.name.startsWith(prefix));
+    if (!files.length) { resultsEl.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:.75rem">لا توجد عروض بتاريخ هذا اليوم (البادئة ${escHtml(prefix)})</div>`; return; }
     resultsEl.innerHTML = `<div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem;text-align:center">${files.length} عرض سعر</div>` +
-      files.map(f => {
-        const name = f.name.replace('.json', '');
-        const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('ar-SA') : '';
-        return `<div class="cat-row" style="margin-bottom:.3rem;cursor:pointer" data-file-id="${escHtml(f.id)}" data-name="${escHtml(name)}">
-          <div class="cat-ph" style="width:36px;height:36px;font-size:.85rem">📄</div>
-          <div class="cat-info">
-            <span class="cat-code">${escHtml(name)}</span>
-            <div class="cat-price">${escHtml(date)}</div>
-          </div>
-          <button class="add-btn2" style="background:var(--orange)" title="فتح">↓</button>
-        </div>`;
-      }).join('');
+      files.map(f => renderBrowseRow(f.name.replace('.json',''), f.modifiedTime?new Date(f.modifiedTime).toLocaleDateString('ar-SA'):'', f.id)).join('');
   } catch (e) {
-    console.error('Browse error:', e);
+    console.error('listQuotesByDate error:', e);
+    resultsEl.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:.75rem">❌ خطأ: ${escHtml(e.message)}</div>`;
+  }
+}
+// Browse by sales rep: salesRep is free text inside each quote's JSON, not in the file name, so this
+// has to open files to check — capped at the most recent 200 so it stays bounded on a large archive.
+const SALES_REP_BROWSE_CAP = 200;
+async function listQuotesBySalesRep() {
+  const resultsEl = document.getElementById('browseResults');
+  const q = document.getElementById('browseSalesRep').value.trim().toLowerCase();
+  if (!q) { toast('⚠️ أدخل اسم المندوب'); return; }
+  if (!cfg.apiKey || !cfg.quotesFolderId) { toast('⚠️ أدخل مفتاح API ومجلد عروض الأسعار أولاً'); return; }
+  resultsEl.innerHTML = '<div style="text-align:center;padding:1rem"><div class="spin"></div><p style="font-size:.78rem;color:var(--muted)">جاري فتح العروض الأخيرة للتحقق من المندوب...</p></div>';
+  try {
+    const files = await fetchAllQuoteFiles(SALES_REP_BROWSE_CAP);
+    const matches = [];
+    await Promise.all(files.map(async f => {
+      try{
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&key=${cfg.apiKey}`);
+        if(!res.ok) return;
+        const state = await res.json();
+        if(String(state.salesRep||'').toLowerCase().includes(q)) matches.push({ f, salesRep: state.salesRep });
+      }catch(e){ /* unreadable file — skip it */ }
+    }));
+    matches.sort((a,b) => (b.f.modifiedTime||'').localeCompare(a.f.modifiedTime||''));
+    if (!matches.length) { resultsEl.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:.75rem">لم يُعثر على مندوب يطابق "${escHtml(q)}" ضمن آخر ${files.length} عرضاً</div>`; return; }
+    resultsEl.innerHTML = `<div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem;text-align:center">${matches.length} عرض سعر</div>` +
+      matches.map(({f,salesRep}) => renderBrowseRow(f.name.replace('.json',''), f.modifiedTime?new Date(f.modifiedTime).toLocaleDateString('ar-SA'):'', f.id, salesRep)).join('');
+  } catch (e) {
+    console.error('listQuotesBySalesRep error:', e);
     resultsEl.innerHTML = `<div style="text-align:center;color:var(--red);font-size:.82rem;padding:.75rem">❌ خطأ: ${escHtml(e.message)}</div>`;
   }
 }
@@ -2132,8 +2199,8 @@ async function loadQuoteFromDrive(fileId, name) {
 // ── Generate next quote number ──────────────────────────────────────────
 // Format: MMC-YYWWDD + seq  e.g. MMC-2626221 (year26, week26, day22, #1)
 // Sequence resets each day automatically (prefix changes with the date).
-function getQuotePrefix() {
-  const now = new Date();
+function getQuotePrefix(forDate) {
+  const now = forDate || new Date();
   const yy = String(now.getFullYear()).slice(-2);
 
   // ISO week number
@@ -2147,11 +2214,39 @@ function getQuotePrefix() {
   return 'MMC-' + yy + ww + dd;
 }
 
+// Marks whether the quote number currently shown was reserved by the server (under a lock, so it
+// cannot collide with another user) or only guessed locally — the only case that keeps an offline
+// fallback (R7, item 5): contracts and invoices require the server.
+function setQuoteNumberOffline(offline){
+  const el = document.getElementById('quoteNoOfflineBadge');
+  if(el) el.style.display = offline ? '' : 'none';
+}
 async function fetchNextQuoteNumber() {
   const prefix = getQuotePrefix();
-  // localStorage key is per-prefix (resets automatically each new day)
+  // localStorage key is per-prefix (resets automatically each new day) — offline fallback only
   const lsKey = 'qnum_' + prefix;
 
+  if (cfg.appsScriptUrl) {
+    try {
+      const res = await fetch(cfg.appsScriptUrl, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'nextNumber', docType: 'quote', prefix }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'nextNumber failed');
+      document.getElementById('quoteNo').value = data.number;
+      // Keeps the local fallback counter (today's prefix has no delimiter before the sequence, so
+      // strip the known prefix rather than just taking trailing digits) from lagging behind the server.
+      const seq = parseInt(String(data.number).replace(prefix,''), 10) || 0;
+      if(seq > 0) localStorage.setItem(lsKey, seq);
+      setQuoteNumberOffline(false);
+      return;
+    } catch (e) {
+      console.warn('Server quote numbering unavailable — falling back to the local/Drive guess:', e);
+    }
+  }
+
+  setQuoteNumberOffline(true);
   try {
     if (!cfg.apiKey || !cfg.quotesFolderId) {
       // No API — fall back to localStorage
@@ -2281,7 +2376,19 @@ function toggleCatalog() {
 }
 
 // ── CONTRACT ─────────────────────────────────────────────────────────────────
-function openContract(){
+async function openContract(){
+  // Contract serials are now issued by the Apps Script under a lock (R7) — cfg.contractSerial is
+  // only the offline fallback (and the seed the owner set once for continuity with the old numbering).
+  let ctSerial = cfg.contractSerial || '1';
+  if(cfg.appsScriptUrl){
+    try{
+      const res = await fetch(cfg.appsScriptUrl, { method:'POST', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({ action:'nextNumber', docType:'contract' }) });
+      const data = await res.json();
+      if(data.success && data.number) ctSerial = String(data.number).replace(/^MMCT-/,'');
+      else throw new Error(data.error||'nextNumber failed');
+    }catch(e){ console.warn('Server contract numbering unavailable — using the local serial:', e); }
+  }
 
   // Financials
   const sub     = items.reduce((s,it)=>s+it.unitPrice*it.qty,0);
@@ -2301,7 +2408,7 @@ function openContract(){
   const project    = document.getElementById('project').value    || '';
   const quoteNo    = document.getElementById('quoteNo').value;
   const quoteDate  = document.getElementById('quoteDate').value;
-  const ctNo       = 'MMCT-' + (cfg.contractSerial||'1');
+  const ctNo       = 'MMCT-' + ctSerial;
 
   // Date display
   const dateStr = (d => `${String(d.getDate()).padStart(2,'0')} / ${String(d.getMonth()+1).padStart(2,'0')} / ${d.getFullYear()} م`)
@@ -2683,10 +2790,11 @@ async function saveContract(){
     });
     const data = await res.json();
     if(data.success){
-      // Advance the contract serial only when a brand-new contract was created
-      if(data.action!=='updated'){
-        const next = (parseInt(cfg.contractSerial,10)||0) + 1;
-        cfg.contractSerial = String(next);
+      // Keep the local fallback serial from lagging behind whatever the server just issued (the
+      // server — apps-script/Code.gs nextNumber — is the source of truth whenever it is reachable).
+      const usedSeq = parseInt(ctNo.replace(/^MMCT-/,''),10)||0;
+      if(usedSeq >= (parseInt(cfg.contractSerial,10)||0)){
+        cfg.contractSerial = String(usedSeq+1);
         localStorage.setItem('gcontract_serial', cfg.contractSerial);
       }
       toast('✅ تم حفظ العقد: ' + ctNo + (data.action==='updated'?' (تحديث)':' (جديد)'));
@@ -3311,7 +3419,7 @@ function openInvoiceDialog(){
   const sErr = sellerErrors(seller);
   if(sErr.length) warn.push(`⚠️ بيانات المنشأة (البائع) غير مكتملة: ${sErr.map(e => e.label).join('، ')} — <a href="#" onclick="closeInvoiceDialog();openSettings('seller');return false">أكملها من الإعدادات</a>`);
   if(tax && !document.getElementById('vatToggle').checked) warn.push('⚠️ ضريبة القيمة المضافة غير مفعّلة في عرض السعر — الفاتورة الضريبية تحتسب 15% على المبلغ الخاضع للضريبة.');
-  if(!invoiceArchiveOnDrive()) warn.push(`⚠️ لإصدار الفواتير حدّد مجلد الفواتير في الإعدادات (مع مفتاح API ورابط Apps Script) — منه يُقرأ آخر رقم فاتورة محفوظة ليكون الرقم الجديد أكبر منه دائماً. المعاينة متاحة الآن. <a href="#" onclick="closeInvoiceDialog();openSettings('conn');return false">فتح الإعدادات</a>`);
+  if(!invoiceArchiveOnDrive()) warn.push(`⚠️ لإصدار الفواتير حدّد مجلد الفواتير ومفتاح API ورابط Apps Script في الإعدادات — الرقم وتاريخ ووقت الإصدار يُصدرهما Apps Script نفسه (لا يوجد بديل محلي عند انقطاع الاتصال)، والمجلد يُستخدم لأرشفة الفاتورة واستعراضها لاحقاً. المعاينة متاحة الآن. <a href="#" onclick="closeInvoiceDialog();openSettings('conn');return false">فتح الإعدادات</a>`);
   document.getElementById('invDataWarn').innerHTML = warn.map(w => `<div class="form-warn">${w}</div>`).join('');
   hideFormErr('invDataErr');
   updateInvTypeHint();
@@ -3359,10 +3467,10 @@ async function previewInvoice(){
     ]);
     return;
   }
-  // The number this invoice will take (the latest saved + 1); fixed only when it is issued.
+  // The number this invoice would take right now (a non-reserving peek); fixed only when issued.
   let provisionalNumber = null;
   if(invoiceArchiveOnDrive()){
-    try{ provisionalNumber = (await nextInvoiceNumber()).number; }
+    try{ provisionalNumber = (await serverNextInvoiceNumber(true)).number; }
     catch(e){ console.warn('Next invoice number unavailable:', e); }
   }
   _invDraft = {
@@ -3503,48 +3611,35 @@ async function listInvoiceFiles(){
   return files.filter(f => f.name.endsWith('.json'));
 }
 // The latest saved invoice → { number, seq, date }, or null before the first one.
-async function lastSavedInvoice(){
-  let last = null;
-  const consider = (number, date) => {
-    const seq = invoiceSeq(number);
-    if(seq > (last ? last.seq : 0)) last = { number, seq, date: date || '' };
-  };
-  const ref = localLastInvoice();
-  if(ref) consider(ref.number, ref.date);
-  localInvoiceNumbers().forEach(no => consider(no));
-  if(invoiceArchiveOnDrive())
-    (await listInvoiceFiles()).forEach(f => consider(f.name.replace(/\.json$/,''), f.modifiedTime && riyadhDateTime(new Date(f.modifiedTime)).date));
-  return last;
+// Invoice numbers AND issue time now come from the Apps Script, under a lock, in Asia/Riyadh time
+// (R5, item 5/7) — never from this PC's clock, and with no offline fallback: an invoice that cannot
+// reach the server is simply not issued. peek=true only previews the number a draft would take,
+// without reserving it (so opening/cancelling the invoice dialog never burns a number); issuing calls
+// it without peek, which atomically reserves the number this draft will actually use.
+async function serverNextInvoiceNumber(peek){
+  if(!cfg.appsScriptUrl) throw new Error('إصدار الفواتير يحتاج رابط Apps Script مُعدًّا في الإعدادات');
+  const res = await fetch(cfg.appsScriptUrl, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'nextNumber', docType: 'invoice', peek: !!peek }),
+  });
+  const data = await res.json();
+  if(!data.success) throw new Error(data.error || 'تعذر الحصول على رقم الفاتورة من الخادم');
+  return data;   // { success, number, seq, prevNumber, serverTime:{date,time} }
 }
-async function nextInvoiceNumber(){
-  const last = await lastSavedInvoice();
-  // Same format as the latest saved invoice — every PC continues one series even if a browser's
-  // prefix setting differs; that setting only seeds the very first invoice.
-  const prefix = last ? last.number.replace(/\d+$/, '') : (seller.invPrefix || SELLER_DEFAULTS.invPrefix);
-  const width = last ? last.number.match(/\d+$/)[0].length : 5;
-  const seq = Math.max(Math.max(1, parseInt(seller.invStart, 10) || 1), (last ? last.seq : 0) + 1);
-  return { number: prefix + String(seq).padStart(width, '0'), seq, last };
-}
-// Number, stamp and archive a previewed draft. If another PC took the number in the meantime,
-// the next free one is used.
+// Stamp, number and archive a previewed draft — the number and Riyadh timestamp are the server's.
 async function finalizeInvoice(draft){
-  for(let attempt = 1; ; attempt++){
-    const { number, seq, last } = await nextInvoiceNumber();
-    const now = riyadhNow();
-    const { provisionalNumber, ...base } = draft;
-    const inv = { ...base, status: 'issued', number, icv: seq, prevNumber: last ? last.number : null,
-      uuid: newUuid(), issueDate: now.date, issueTime: now.time, issuedBy: cfg.userId, savedAt: new Date().toISOString() };
-    if(inv.taxInvoice !== false) inv.qr = invoiceQrBase64(inv);   // the ZATCA QR belongs on tax invoices only
-    try{ return { inv, overwrote: (await storeInvoice(inv)) === 'updated' }; }
-    catch(e){ if(e.code !== 'NUMBER_TAKEN' || attempt >= 3) throw e; }
-  }
+  const { number, seq, prevNumber, serverTime } = await serverNextInvoiceNumber(false);
+  const { provisionalNumber, ...base } = draft;
+  const actor = (typeof googleUser !== 'undefined' && googleUser && googleUser.email) ? googleUser.email : (cfg.userId || '');
+  const inv = { ...base, status: 'issued', number, icv: seq, prevNumber: prevNumber || null,
+    uuid: newUuid(), issueDate: serverTime.date, issueTime: serverTime.time, issuedBy: actor, savedAt: new Date().toISOString() };
+  if(inv.taxInvoice !== false) inv.qr = invoiceQrBase64(inv);   // the ZATCA QR belongs on tax invoices only
+  return { inv, overwrote: (await storeInvoice(inv)) === 'updated' };
 }
 async function storeInvoice(inv){
-  // The save endpoint overwrites same-name files, so re-check right before saving that no invoice
-  // holds this sequence number yet (whatever its prefix).
-  if((await listInvoiceFiles()).some(f => invoiceSeq(f.name.replace(/\.json$/,'')) === inv.icv)){
-    const err = new Error('الرقم ' + inv.number + ' مستخدم'); err.code = 'NUMBER_TAKEN'; throw err;
-  }
+  // Create-only is enforced by the Apps Script itself now (apps-script/Code.gs) — a number this
+  // session just reserved under a lock cannot already be taken, so there is nothing left to re-check
+  // client-side before saving.
   const res = await fetch(cfg.appsScriptUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' }, // Apps Script requires text/plain for CORS
@@ -3558,7 +3653,7 @@ async function storeInvoice(inv){
       localStorage.setItem(INV_LAST_KEY, JSON.stringify({ number: inv.number, seq: inv.icv, date: inv.issueDate }));
     localStorage.setItem(INV_LOCAL_PREFIX + inv.number, JSON.stringify(inv));
   }catch(e){ console.warn('Local invoice reference/copy not saved:', e); }
-  return data.action;   // 'updated' = a file with this number already existed (saved elsewhere in the same moment)
+  return data.action;
 }
 async function refreshInvoiceSeqInfo(){
   const el = document.getElementById('invSeqInfo');
@@ -3566,9 +3661,9 @@ async function refreshInvoiceSeqInfo(){
   el.className = 'form-ok'; el.style.display = 'block';
   el.textContent = '⏳ جاري قراءة آخر فاتورة محفوظة...';
   try{
-    const { number, last } = await nextInvoiceNumber();
-    el.innerHTML = (last
-      ? `🧾 آخر فاتورة محفوظة: <b><bdi>${escHtml(last.number)}</bdi></b>${last.date ? ` (<bdi>${dmy(last.date)}</bdi>)` : ''}`
+    const { number, prevNumber } = await serverNextInvoiceNumber(true);
+    el.innerHTML = (prevNumber
+      ? `🧾 آخر فاتورة محفوظة: <b><bdi>${escHtml(prevNumber)}</bdi></b>`
       : '🧾 لا توجد فواتير محفوظة بعد')
       + ` ← الفاتورة الجديدة ستأخذ الرقم: <b><bdi>${escHtml(number)}</bdi></b>`;
   }catch(e){
