@@ -1,0 +1,21 @@
+{
+  "name": "mmc-platform",
+  "private": true,
+  "description": "MMC Core — ERP + CRM + accounting platform for Al-Mada Al-Mubarak (see docs/erp-plan). The legacy quotation tool is ./index.html.",
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:migrate": "pnpm --filter @mmc/db migrate",
+    "db:seed": "pnpm --filter @mmc/db seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3"
+  }
+}

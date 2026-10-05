@@ -4,3 +4,11 @@ contract.txt
 invoices/
 # Leftover folder from the pre-merge layout (holds only local Claude preview config)
 mada-quotations/
+node_modules/
+dist/
+.next/
+.turbo/
+.env
+.env.local
+*.tsbuildinfo
+coverage/
