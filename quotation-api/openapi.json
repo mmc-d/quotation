@@ -1,0 +1,318 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Al-Mada Al-Mubarak Quotation API",
+    "version": "1.0.0",
+    "description": "Generate professional Arabic PDF quotations for Al-Mada Al-Mubarak. Send structured product and client data to receive a downloadable PDF quotation URL."
+  },
+  "servers": [
+    {
+      "url": "https://your-api.railway.app",
+      "description": "Production (Railway)"
+    }
+  ],
+  "paths": {
+    "/generate": {
+      "post": {
+        "operationId": "generateQuotation",
+        "summary": "Generate a PDF quotation",
+        "description": "Accepts quotation data (client info + line items) and returns a PDF download URL. Use this when the user wants to create a price quotation or sales offer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuotationRequest"
+              },
+              "example": {
+                "client": "أحمد الغامدي",
+                "company": "شركة الأفق",
+                "project": "فندق الرياض",
+                "salesRep": "محمد علي",
+                "quoteNo": "Q-2026-042",
+                "date": "2026-03-13",
+                "items": [
+                  {
+                    "code": "DL-701",
+                    "desc": "قفل فندقي إلكتروني يدعم بطاقات M1",
+                    "unitPrice": 450,
+                    "qty": 10,
+                    "imageUrl": ""
+                  },
+                  {
+                    "code": "DL-702",
+                    "desc": "قفل فندقي ستانلس ستيل",
+                    "unitPrice": 299,
+                    "qty": 5,
+                    "imageUrl": ""
+                  }
+                ],
+                "discount": 10,
+                "vat": true,
+                "techNotes": "يتطلب توصيل كهربائي 220V",
+                "terms": "50% مقدمة، 50% عند التسليم",
+                "validity": "هذا العرض صالح لمدة 30 يوماً"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PDF generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "PDF generation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Check API health",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/download/{id}": {
+      "get": {
+        "operationId": "downloadPDF",
+        "summary": "Download generated PDF",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "PDF ID returned by /generate"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PDF not found or expired"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "QuotationItem": {
+        "type": "object",
+        "required": [
+          "code",
+          "desc",
+          "unitPrice"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Product part number / code (e.g. DL-701)",
+            "example": "DL-701"
+          },
+          "desc": {
+            "type": "string",
+            "description": "Product description in Arabic or English",
+            "example": "قفل فندقي إلكتروني"
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Unit price in SAR",
+            "example": 450
+          },
+          "qty": {
+            "type": "number",
+            "description": "Quantity (default: 1)",
+            "default": 1,
+            "example": 10
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "Optional product image URL (leave empty if unavailable)",
+            "default": "",
+            "example": ""
+          }
+        }
+      },
+      "QuotationRequest": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "Client full name",
+            "example": "أحمد الغامدي"
+          },
+          "company": {
+            "type": "string",
+            "description": "Client company name",
+            "example": "شركة الأفق"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project name or description",
+            "example": "فندق الريياض"
+          },
+          "salesRep": {
+            "type": "string",
+            "description": "Sales representative name",
+            "example": "محمد علي"
+          },
+          "quoteNo": {
+            "type": "string",
+            "description": "Quote number (auto-generated if omitted)",
+            "example": "Q-2026-042"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Quote date (defaults to today)",
+            "example": "2026-03-13"
+          },
+          "items": {
+            "type": "array",
+            "description": "Line items in the quotation",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/QuotationItem"
+            }
+          },
+          "discount": {
+            "type": "number",
+            "description": "Discount percentage (0-100)",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 100,
+            "example": 10
+          },
+          "vat": {
+            "type": "boolean",
+            "description": "Include 15% VAT",
+            "default": true,
+            "example": true
+          },
+          "techNotes": {
+            "type": "string",
+            "description": "Technical notes / specifications",
+            "default": "",
+            "example": "يتطلب توصيل كهربائي 220V"
+          },
+          "terms": {
+            "type": "string",
+            "description": "Payment terms and conditions",
+            "default": "",
+            "example": "50% مقدمة، 50% عند التسليم"
+          },
+          "validity": {
+            "type": "string",
+            "description": "Quotation validity period",
+            "default": "",
+            "example": "هذا العرض صالح لمدة 30 يوماً"
+          }
+        }
+      },
+      "QuotationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "quoteNo": {
+            "type": "string",
+            "example": "Q-2026-042"
+          },
+          "downloadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Direct PDF download URL (valid for 1 hour)",
+            "example": "https://your-api.railway.app/download/abc-123"
+          },
+          "expiresIn": {
+            "type": "string",
+            "example": "1 hour"
+          },
+          "message": {
+            "type": "string",
+            "example": "Quotation Q-2026-042 generated successfully."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "items array is required"
+          }
+        }
+      }
+    }
+  }
+}
