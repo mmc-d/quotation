@@ -962,7 +962,11 @@ table.qt tbody tr.dragging{opacity:.4;}
         <div class="full"><label>أرقام مستخدمين مدراء (مفصولة بفواصل)</label><textarea id="slAdminIds" rows="2" style="direction:ltr" placeholder="92, 15"></textarea></div>
         <div class="full"><label>بريد Google لمدراء (مفصولة بفواصل — بعد تفعيل تسجيل الدخول في الإعدادات)</label><textarea id="slAdminEmails" rows="2" style="direction:ltr" placeholder="owner@example.com"></textarea></div>
       </div>
-      <div class="fld-hint" style="margin:-.65rem 0 .85rem">هذا الحقل يظهر لكل المستخدمين لتسهيل الإعداد الأول. بعد نشر «الإعدادات المشتركة» (📤 في تبويب الاتصال) يتحكم بالقائمة الفعلية ملف الإعدادات المشترك، ولا يعدّله إلا من هو مدير فيه بالفعل.</div>
+      <div class="fld-hint" style="margin:-.65rem 0 .85rem">هذا الحقل يظهر لكل المستخدمين لتسهيل الإعداد الأول. بعد النشر أدناه يتحكم بالقائمة الفعلية ملف الإعدادات المشترك، ولا يعدّله إلا من هو مدير فيه بالفعل.</div>
+      <div class="set-sec">نشر الإعدادات المشتركة</div>
+      <div id="sharedSettingsStatus" class="form-ok" style="display:none"></div>
+      <button class="btn btn-outline" style="margin-bottom:.85rem" onclick="publishSharedSettings()">📤 نشر هذه البيانات كإعدادات مشتركة لكل المستخدمين</button>
+      <div class="fld-hint" style="margin:-.5rem 0 .85rem">يحتاج صلاحية مدير ورابط Apps Script ومجلد عروض الأسعار (في تبويب الاتصال). بعد النشر، تطغى هذه البيانات على إعداد كل متصفح عند بدء التشغيل.</div>
     </div>
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="closeSettings()">إلغاء</button>
@@ -1171,8 +1175,57 @@ let seller=(()=>{
   try{ return {...SELLER_DEFAULTS, ...JSON.parse(localStorage.getItem('gseller_info')||'{}')}; }
   catch(e){ return {...SELLER_DEFAULTS}; }
 })();
+let sharedSettingsLoaded = false;   // true once a published settings.json has actually been read
 
-document.addEventListener('DOMContentLoaded',()=>{
+// ── Shared company settings (R8, R10) ───────────────────────────────────
+// One settings.json, read the same way as any other Drive file (today's quotes-folder key), written
+// only through the Apps Script (admins only — see apps-script/Code.gs). Lives in the quotes folder so
+// no new per-browser connection setting is needed. At start-up it wins over the browser's own
+// gseller_info; if none has been published yet, today's per-browser behaviour continues unchanged.
+const SHARED_SETTINGS_NAME = 'settings.json';
+async function loadSharedSettings(){
+  if(!cfg.apiKey || !cfg.quotesFolderId) return;
+  try{
+    const q = `name='${SHARED_SETTINGS_NAME}'+and+'${cfg.quotesFolderId}'+in+parents+and+trashed=false`;
+    const listUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1&key=${cfg.apiKey}`;
+    const listRes = await fetch(listUrl);
+    if(!listRes.ok) return;
+    const listData = await listRes.json();
+    const file = (listData.files||[])[0];
+    if(!file) return;   // nothing published yet — keep this browser's own settings
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${cfg.apiKey}`);
+    if(!res.ok) return;
+    const shared = await res.json();
+    if(shared && typeof shared === 'object'){
+      seller = { ...SELLER_DEFAULTS, ...shared };
+      sharedSettingsLoaded = true;
+    }
+  }catch(e){ console.warn('Shared settings.json not loaded — keeping this browser’s own settings:', e); }
+}
+// Admin-only: publish this browser's current seller object as the company-wide settings.json.
+async function publishSharedSettings(){
+  if(!isAdminUser()){ toast('⚠️ هذه الميزة للمدراء فقط'); return; }
+  if(!cfg.appsScriptUrl || !cfg.quotesFolderId){ toast('⚠️ أدخل رابط Apps Script ومجلد عروض الأسعار في الإعدادات أولاً'); return; }
+  const s = readSellerForm();
+  const fmtErrs = sellerErrors(s, true);
+  if(fmtErrs.length){ toast('⚠️ صحّح حقول بيانات المنشأة أولاً (نفس تبويب الإعدادات)'); return; }
+  if(!await appConfirm('نشر الإعدادات المشتركة؟',
+    'ستصبح هذه البيانات (اسم المنشأة، الممثل، الحساب البنكي، الختم، قائمة المدراء...) هي المعتمدة لكل المستخدمين فوراً، بدل كل إعداد متصفح محلي.',
+    '📤 نعم، نشر الآن')) return;
+  try{
+    const res = await fetch(cfg.appsScriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'saveSettings', fileName:SHARED_SETTINGS_NAME, state:s, folderId:cfg.quotesFolderId, actorId:cfg.userId }),
+    });
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error||'Unknown error');
+    seller = { ...SELLER_DEFAULTS, ...s };
+    sharedSettingsLoaded = true;
+    toast('✅ تم نشر الإعدادات المشتركة لكل المستخدمين');
+  }catch(e){ toast('❌ تعذر النشر: ' + e.message); }
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
   // Watermark: set both screen watermark and body-level print watermark
   const logoEl = document.querySelector('.company-logo');
   if(logoEl && logoEl.src){
@@ -1204,6 +1257,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     "[ النطاق ]  التوريد والتركيب والبرمجة الأولية والتسليم الفعلي.";
 
   initDelegatedHandlers();
+  await loadSharedSettings();   // R8/R10: the shared company settings file, if one has been published, wins
   applyVatMode();
   cfg.apiKey?loadAll():openSettings();
   // Refresh navigation buttons for the admin allow-list
@@ -1235,6 +1289,11 @@ function openSettings(tab){
   document.getElementById('slNoVat').checked = seller.vatRegistered === false;
   document.getElementById('slAdminIds').value = arrToList(seller.adminIds);
   document.getElementById('slAdminEmails').value = arrToList(seller.adminEmails);
+  const sEl = document.getElementById('sharedSettingsStatus');
+  sEl.style.display = 'block';
+  sEl.textContent = sharedSettingsLoaded
+    ? '📤 هذه البيانات مصدرها ملف الإعدادات المشترك (settings.json) — تسري على كل المستخدمين.'
+    : 'ℹ️ لا يوجد ملف إعدادات مشترك منشور بعد — هذه البيانات محلية لهذا المتصفح فقط.';
   hideFormErr('sellerErr');
   updateSellerStatus();
   switchSettingsTab(typeof tab==='string'?tab:'conn');
@@ -1287,6 +1346,8 @@ function saveSettings(){
 async function loadAll(){
   document.getElementById('catList').innerHTML='<div class="loading-s"><div class="spin"></div><p style="font-size:.78rem">جاري التحميل...</p></div>';
   try{
+    await loadSharedSettings();   // picks up settings.json immediately after Settings is saved, too
+    applyVatMode();
     await Promise.all([loadSheet(),loadImages()]);
     // Purchase-cost conversion rate (sheet cell I2) — only the admin's cost calculation uses it
     if(isAdminUser()) loadCostRate().catch(e=>console.warn('Cost rate (I2) not loaded:',e));
