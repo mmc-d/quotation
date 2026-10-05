@@ -296,7 +296,7 @@ export class FinancePublicController {
       return {
         company: { legalNameAr: co.legalNameAr, bankName: co.bankName, iban: co.iban, vatRegistered: co.vatRegistered },
         number: pr.number, status: pr.status, amount: pr.amount, paidAmount: pr.paidAmount, due: halalasToFixed(toHalalas(pr.amount) - toHalalas(pr.paidAmount)), dueDate: pr.dueDate,
-        clientName: p?.nameAr ?? '', contractNumber: c?.number ?? null, milestone: m?.nameAr ?? '', canPayOnline: ['draft', 'sent', 'partially_paid'].includes(pr.status), sandbox: config.payments.provider === 'sandbox', invoices,
+        clientName: p?.nameAr ?? '', contractNumber: c?.number ?? null, milestone: m?.nameAr ?? '', canPayOnline: ['draft', 'sent', 'partially_paid'].includes(pr.status), sandbox: config.payments.provider === 'sandbox' && config.allowSandbox, invoices,
       };
     });
   }
@@ -318,7 +318,7 @@ export class FinancePublicController {
   @Post('public/pay/:token/sandbox')
   @HttpCode(200)
   async sandboxPay(@Param('token') token: string) {
-    if (config.payments.provider !== 'sandbox' || config.env === 'production') throw forbidden('sandbox payments are disabled');
+    if (config.payments.provider !== 'sandbox' || !config.allowSandbox) throw forbidden('sandbox payments are disabled');
     const tenantId = await tenantForPay(token);
     const pr = await withTenant(getDb(), tenantId, async (tx) => (await tx.select().from(paymentRequest).where(eq(paymentRequest.publicToken, token)))[0]);
     if (!pr) throw notFound('payment request');

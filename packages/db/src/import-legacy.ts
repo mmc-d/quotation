@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import 'dotenv/config';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
@@ -220,7 +221,8 @@ async function collect(dir: string): Promise<LegacyDoc[]> {
   return out;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// Real paths: inside the deployed image @mmc/db is reached through a pnpm symlink.
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1]))) {
   const args = process.argv.slice(2);
   const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
   const dir = arg('--dir');

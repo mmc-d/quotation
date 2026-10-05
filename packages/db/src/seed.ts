@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -76,7 +77,8 @@ export async function seed(db: Db, opts: { ownerEmail: string; tenantSlug?: stri
   return tenantId;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// Real paths: inside the deployed image @mmc/db is reached through a pnpm symlink.
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1]))) {
   const url = process.env.DATABASE_ADMIN_URL;
   if (!url) throw new Error('DATABASE_ADMIN_URL is not set');
   const client = postgres(url, { max: 1, onnotice: () => {} });

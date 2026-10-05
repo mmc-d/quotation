@@ -114,7 +114,7 @@ export class PublicController {
       const otp = String(randomInt(0, 1_000_000)).padStart(6, '0');
       await tx.insert(quoteAcceptance).values({ quoteId: q.id, mobile, otpHash: otpHash(otp, q.id), expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000) });
       await sendTemplate(tx, { channel: 'whatsapp', to: mobile, templateKey: 'quote_otp', vars: { code: otp }, related: { type: 'quote', id: q.id }, link: { partyId: q.partyId, contactId: q.contactId } });
-      if (config.env !== 'production' && !config.whatsapp.accessToken) console.log(`[otp:sandbox] quote ${q.number} → ${mobile}: ${otp}`);
+      if (config.allowSandbox && !config.whatsapp.accessToken) console.log(`[otp:sandbox] quote ${q.number} → ${mobile}: ${otp}`);
       return { sentTo: `•••• ${mobile.slice(-4)}`, expiresInMinutes: OTP_TTL_MINUTES };
     });
   }
@@ -187,7 +187,7 @@ export class PublicController {
   @Post('esign/:id/complete')
   @HttpCode(200)
   async esignComplete(@Param('id') id: string, @Req() req: Request, @Body(new ZodPipe(z.object({ nationalIdLast4: z.string().regex(/^\d{4}$/), approve: z.boolean() }))) b: { nationalIdLast4: string; approve: boolean }) {
-    if (config.env === 'production') throw forbidden('sandbox signing is disabled in production');
+    if (!config.allowSandbox) throw forbidden('sandbox signing is disabled in production');
     const tenantId = await defaultTenant();
     return withTenant(getDb(), tenantId, async (tx) => {
       const [r] = await tx.select().from(esignRequest).where(eq(esignRequest.id, id));

@@ -1,0 +1,30 @@
+# SITE_ADDRESS=":80" → plain HTTP (local test). SITE_ADDRESS="mmc.example.com" → automatic HTTPS (Let's Encrypt).
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	request_body {
+		max_size 10MB
+	}
+
+	# API (incl. Better Auth, webhooks, public token pages' data) straight to the API container.
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -7,11 +7,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./schema": { "types": "./dist/schema/index.d.ts", "default": "./dist/schema/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/seed-data/clauses.json','dist/seed-data/clauses.json')\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
@@ -22,14 +28,18 @@
   "dependencies": {
     "@mmc/domain": "workspace:*",
     "drizzle-orm": "^0.45.3",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
     "drizzle-kit": "^0.31.5",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
-    "dotenv": "^17.2.3"
-  }
+    "vitest": "^3.2.4"
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
 }
