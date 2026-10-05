@@ -11,12 +11,16 @@ import { CrmController } from './modules/crm.controller.js';
 import { LeadsWebhookController, PublicController, WhatsAppWebhookController } from './modules/public.controller.js';
 import { FinanceController, FinancePublicController } from './modules/finance.controller.js';
 import { JobsController } from './modules/jobs.controller.js';
+import { PriceListsController } from './modules/pricelists.controller.js';
+import { ChangeOrdersController } from './modules/change-orders.controller.js';
+import { CalendarController } from './modules/calendar.controller.js';
 
 @Module({
   controllers: [
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
+    PriceListsController, ChangeOrdersController, CalendarController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })

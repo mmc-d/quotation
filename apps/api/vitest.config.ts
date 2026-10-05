@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
-const DB = 'mmc_e2e';
+// E2E_DB lets parallel runs use separate databases.
+const DB = process.env.E2E_DB ?? 'mmc_e2e';
 export default defineConfig({
   test: {
     globalSetup: ['./test/global-setup.ts'],
@@ -15,7 +16,7 @@ export default defineConfig({
       WEB_ORIGIN: 'http://localhost:3999',
       PUBLIC_BASE_URL: 'http://localhost:3999',
       BETTER_AUTH_SECRET: 'e2e-secret-e2e-secret-e2e-secret-123',
-      FILES_DIR: '/tmp/mmc-e2e-files',
+      FILES_DIR: `/tmp/${DB}-files`,
       WORKER_IN_PROCESS: 'false',
       GOTENBERG_URL: 'http://localhost:3300',
       ERPNEXT_WEBHOOK_SECRET: 'erp-e2e',
