@@ -21,6 +21,7 @@ import { assertCan, scopeFilter } from '../common/scope.js';
 import { ZodPipe, zDate, zMoney, zPage, zQty } from '../common/zod.js';
 import { config } from '../config.js';
 import { logActivity } from './quotes.service.js';
+import { ensureProjectForContract } from './projects.service.js';
 
 const milestoneSchema = z.object({ nameAr: z.string().min(1), nameEn: z.string().nullish(), percent: z.number().positive().max(100), trigger: z.enum(['on_signing', 'before_delivery', 'after_programming', 'on_handover', 'on_date', 'manual']).default('manual'), dueDate: zDate.nullish() });
 const contractUpdateSchema = z.object({
@@ -241,6 +242,7 @@ export class ContractsController {
       await tx.update(contract).set({ status: b.status, signedAt: b.status === 'signed' ? new Date() : c.signedAt, startDate: b.status === 'active' ? riyadhDate() : c.startDate, endDate: b.status === 'completed' || b.status === 'terminated' ? riyadhDate() : c.endDate, updatedAt: new Date() }).where(eq(contract.id, id));
       await audit(tx, actor, `status_${b.status}`, 'contract', id, { status: c.status }, { status: b.status, reason: b.reason });
       await emit(tx, 'contract', id, `contract.${b.status}`, { number: c.number });
+      if (b.status === 'signed') await ensureProjectForContract(tx, actor, id); // module 05: every signed contract becomes a project
       return contractView(tx, actor, id);
     }, actor.userId);
   }

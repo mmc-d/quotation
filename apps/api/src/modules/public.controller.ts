@@ -17,6 +17,7 @@ import { ZodPipe } from '../common/zod.js';
 import { config } from '../config.js';
 import { createLead } from './crm.controller.js';
 import { loadQuote, logActivity, quoteDocFrom } from './quotes.service.js';
+import { ensureProjectForContract } from './projects.service.js';
 import { calculateQuote } from '@mmc/domain';
 
 async function tenantForToken(kind: 'quote' | 'payment_request', token: string): Promise<string> {
@@ -197,7 +198,10 @@ export class PublicController {
       const status = b.approve ? 'signed' : 'declined';
       await tx.update(esignRequest).set({ status, completedAt: new Date(), updatedAt: new Date() }).where(eq(esignRequest.id, id));
       const [c] = await tx.select().from(contract).where(eq(contract.id, r.contractId));
-      if (c && b.approve && c.status === 'sent_for_signature') await tx.update(contract).set({ status: 'signed', signedAt: new Date(), updatedAt: new Date() }).where(eq(contract.id, c.id));
+      if (c && b.approve && c.status === 'sent_for_signature') {
+        await tx.update(contract).set({ status: 'signed', signedAt: new Date(), updatedAt: new Date() }).where(eq(contract.id, c.id));
+        await ensureProjectForContract(tx, null, c.id); // module 05: every signed contract becomes a project
+      }
       if (c && !b.approve && c.status === 'sent_for_signature') await tx.update(contract).set({ status: 'draft', updatedAt: new Date() }).where(eq(contract.id, c.id));
       await audit(tx, null, `esign_${status}`, 'contract', r.contractId, null, { requestId: id, signer: r.signerName, ip: clientIp(req), documentSha256: r.documentSha256 });
       if (c) {

@@ -37,6 +37,8 @@ export const DEFAULT_MESSAGE_TEMPLATES = [
     body: 'تذكير: طلب الدفع رقم {{number}} بمبلغ {{amount}} ريال مستحق بتاريخ {{due}}. للدفع: {{link}} — شكرًا لكم.' },
   { key: 'payment_received', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_payment_received', variables: ['name', 'amount', 'number'],
     body: 'شكرًا {{name}}، تم استلام مبلغ {{amount}} ريال. رقم الفاتورة: {{number}}.' },
+  { key: 'service_report', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_service_report', variables: ['name', 'number', 'link'],
+    body: 'مرحبًا {{name}}، تم إنجاز أمر العمل رقم {{number}} من المدى المبارك. تقرير الخدمة: {{link}}' },
   { key: 'quote_sent', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'number', 'link'],
     body: 'مرحبًا {{name}}،\n\nعرض السعر رقم {{number}} جاهز للاطلاع والقبول:\n{{link}}\n\nمع التحية،\nالمدى المبارك للتجارة والحلول الذكية' },
 ];

@@ -23,6 +23,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'المشاريع والخدمة', en: 'Projects & service', items: [
+      { href: '/projects', label: 'المشاريع', en: 'Projects', icon: 'FolderKanban', perm: 'project.read' },
+      { href: '/field/dispatch', label: 'لوحة التوزيع', en: 'Dispatch board', icon: 'CalendarRange', perm: 'workorder.dispatch' },
+      { href: '/field/work-orders', label: 'أوامر العمل', en: 'Work orders', icon: 'ClipboardList', perm: 'workorder.read' },
+      { href: '/field/tickets', label: 'بلاغات الأعطال', en: 'Service calls', icon: 'LifeBuoy', perm: 'ticket.read' },
+      { href: '/field/assets', label: 'الأجهزة المركبة', en: 'Installed devices', icon: 'Cpu', perm: 'asset.read' },
+      { href: '/tech', label: 'يومي (الفني)', en: 'My day (technician)', icon: 'Smartphone', perm: 'workorder.write' },
+    ],
+  },
+  {
     label: 'المالية', en: 'Finance', items: [
       { href: '/finance/requests', label: 'طلبات الدفع', en: 'Payment requests', icon: 'HandCoins', perm: 'billing.read' },
       { href: '/finance/invoices', label: 'الفواتير', en: 'Invoices', icon: 'Receipt', perm: 'invoice.read' },

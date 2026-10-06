@@ -32,13 +32,15 @@ export const PERM_GROUP_AR: Record<string, string> = {
   admin: 'الإدارة', party: 'العملاء والموردون', product: 'المنتجات', quote: 'عروض الأسعار', contract: 'العقود',
   lead: 'العملاء المحتملون', opportunity: 'الفرص', activity: 'المهام والأنشطة', message: 'الرسائل',
   billing: 'طلبات الدفع', invoice: 'الفواتير', payment: 'المدفوعات', report: 'التقارير',
+  project: 'المشاريع', asset: 'الأجهزة المركبة', workorder: 'أوامر العمل', ticket: 'بلاغات الأعطال',
 };
 export const PERM_GROUP_EN: Record<string, string> = {
   admin: 'Administration', party: 'Customers & suppliers', product: 'Products', quote: 'Quotations', contract: 'Contracts',
   lead: 'Leads', opportunity: 'Opportunities', activity: 'Tasks & activities', message: 'Messages',
   billing: 'Payment requests', invoice: 'Invoices', payment: 'Payments', report: 'Reports',
+  project: 'Projects', asset: 'Installed devices', workorder: 'Work orders', ticket: 'Service calls',
 };
-export const PERM_GROUP_ORDER = ['admin', 'party', 'product', 'quote', 'contract', 'lead', 'opportunity', 'activity', 'message', 'billing', 'invoice', 'payment', 'report'];
+export const PERM_GROUP_ORDER = ['admin', 'party', 'product', 'quote', 'contract', 'lead', 'opportunity', 'activity', 'message', 'billing', 'invoice', 'payment', 'report', 'project', 'asset', 'workorder', 'ticket'];
 
 export const PERM_AR: Record<string, string> = {
   'admin.users': 'إدارة المستخدمين', 'admin.roles': 'تعديل الأدوار والصلاحيات', 'admin.settings': 'إعدادات المنشأة', 'admin.audit': 'سجل التدقيق',
@@ -54,6 +56,10 @@ export const PERM_AR: Record<string, string> = {
   'invoice.read': 'عرض الفواتير', 'invoice.issue': 'إصدار الفواتير',
   'payment.read': 'عرض المدفوعات', 'payment.record': 'تسجيل المدفوعات',
   'report.sales': 'تقارير المبيعات', 'report.finance': 'التقارير المالية',
+  'project.read': 'عرض المشاريع', 'project.write': 'إدارة المشاريع', 'project.override': 'تجاوز بوابات المراحل (مع سبب)',
+  'asset.read': 'عرض الأجهزة المركبة', 'asset.write': 'تسجيل وتعديل الأجهزة',
+  'workorder.read': 'عرض أوامر العمل', 'workorder.write': 'تنفيذ أوامر العمل', 'workorder.dispatch': 'جدولة وتوزيع أوامر العمل',
+  'ticket.read': 'عرض البلاغات', 'ticket.write': 'تسجيل ومعالجة البلاغات',
 };
 
 export const PERM_EN: Record<string, string> = {
@@ -70,6 +76,10 @@ export const PERM_EN: Record<string, string> = {
   'invoice.read': 'View invoices', 'invoice.issue': 'Issue invoices',
   'payment.read': 'View payments', 'payment.record': 'Record payments',
   'report.sales': 'Sales reports', 'report.finance': 'Financial reports',
+  'project.read': 'View projects', 'project.write': 'Manage projects', 'project.override': 'Override stage gates (with reason)',
+  'asset.read': 'View installed devices', 'asset.write': 'Register & edit devices',
+  'workorder.read': 'View work orders', 'workorder.write': 'Carry out work orders', 'workorder.dispatch': 'Schedule & dispatch work orders',
+  'ticket.read': 'View service calls', 'ticket.write': 'Log & handle service calls',
 };
 
 export interface RoleRow { id: string; key: string; nameAr: string; nameEn: string; grants: Record<string, Scope>; maxDiscountPercent: number; isSystem: boolean }
