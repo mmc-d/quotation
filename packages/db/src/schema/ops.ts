@@ -103,7 +103,11 @@ export const projectTask = pgTable('project_task', {
   title: text('title').notNull(),
   locationId: uuid('location_id').references(() => siteLocation.id),
   assigneeId: uuid('assignee_id').references(() => appUser.id),
+  /** planned start (timeline / PRJ-14) */
+  startDate: date('start_date'),
   dueDate: date('due_date'),
+  /** finish-to-start predecessor (PRJ-13, simple form) */
+  dependsOnId: uuid('depends_on_id'),
   /** todo | doing | done */
   status: text('status').notNull().default('todo'),
   sort: integer('sort').notNull().default(0),
@@ -242,6 +246,14 @@ export const workOrder = pgTable('work_order', {
   checkInAt: timestamp('check_in_at', { withTimezone: true }),
   checkInLat: text('check_in_lat'),
   checkInLng: text('check_in_lng'),
+  /** metres from the site pin at check-in (FSM-49); null when either point is unknown */
+  checkInDistanceM: integer('check_in_distance_m'),
+  /** check-in further than the geofence radius — flagged for review, not blocked */
+  checkInOutsideGeofence: boolean('check_in_outside_geofence'),
+  /** outdoor work (heat-ban window applies) */
+  outdoor: boolean('outdoor').notNull().default(false),
+  /** scheduling warnings computed at booking (prayer / heat / Ramadan / holiday) */
+  scheduleWarnings: jsonb('schedule_warnings').$type<{ key: string; ar: string; en: string }[]>().notNull().default([]),
   checkOutAt: timestamp('check_out_at', { withTimezone: true }),
   checklist: jsonb('checklist').$type<{ key: string; labelAr: string; labelEn: string; required: boolean; done?: boolean; value?: string | null }[]>().notNull().default([]),
   photoFileIds: jsonb('photo_file_ids').$type<string[]>().notNull().default([]),

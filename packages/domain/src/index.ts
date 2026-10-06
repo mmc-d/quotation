@@ -10,3 +10,5 @@ export * from './permissions.js';
 export * from './calendar.js';
 export * from './projects.js';
 export * from './fieldservice.js';
+export * from './scheduling.js';
+export * from './inventory.js';
