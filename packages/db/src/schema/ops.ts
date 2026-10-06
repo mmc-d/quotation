@@ -183,6 +183,11 @@ export const installedAsset = pgTable('installed_asset', {
   status: text('status').notNull().default('active'),
   /** work order that registered it */
   workOrderId: uuid('work_order_id'),
+  /** ThingsBoard device id/name bound to this asset (IOT-01); usually the serial or MAC */
+  iotDeviceId: text('iot_device_id'),
+  /** last heartbeat / online state reported by ThingsBoard (IOT-06) */
+  iotOnline: boolean('iot_online'),
+  iotLastSeenAt: timestamp('iot_last_seen_at', { withTimezone: true }),
   ...audit,
 }, (t) => [
   index('installed_asset_site_idx').on(t.tenantId, t.siteId),

@@ -8,3 +8,4 @@ export * from './finance.js';
 export * from './ops.js';
 export * from './inventory.js';
 export * from './service.js';
+export * from './intelligence.js';

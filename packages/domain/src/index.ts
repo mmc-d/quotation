@@ -13,3 +13,4 @@ export * from './fieldservice.js';
 export * from './scheduling.js';
 export * from './inventory.js';
 export * from './service.js';
+export * from './intelligence.js';

@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   'asset.read', 'asset.write', 'workorder.read', 'workorder.write', 'workorder.dispatch', 'ticket.read', 'ticket.write',
   'inventory.read', 'inventory.write', 'inventory.count', 'purchase.read', 'purchase.write', 'purchase.approve', 'purchase.cost.read',
   'agreement.read', 'agreement.write', 'portal.manage',
+  'iot.manage', 'ai.use', 'ai.approve', 'commission.read', 'commission.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -42,7 +43,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'lead.read': 'team', 'lead.write': 'team', 'opportunity.read': 'team', 'opportunity.write': 'team',
       'activity.read': 'team', 'activity.write': 'team', 'message.read': 'team', 'message.send': 'team',
       'billing.read': 'team', 'invoice.read': 'team', 'payment.read': 'team', 'report.sales': 'team',
-      'project.read': 'team', 'asset.read': 'company',
+      'project.read': 'team', 'asset.read': 'company', 'ai.use': 'team', 'ai.approve': 'team', 'commission.read': 'team',
     },
   },
   sales_rep: {
@@ -53,7 +54,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'contract.read': 'own', 'contract.write': 'own',
       'lead.read': 'own', 'lead.write': 'own', 'opportunity.read': 'own', 'opportunity.write': 'own',
       'activity.read': 'own', 'activity.write': 'own', 'message.read': 'own', 'message.send': 'own',
-      'invoice.read': 'own', 'billing.read': 'own', 'project.read': 'own',
+      'invoice.read': 'own', 'billing.read': 'own', 'project.read': 'own', 'ai.use': 'own', 'commission.read': 'own',
     },
   },
   presales: {
@@ -67,7 +68,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'quote.read': 'company', 'contract.read': 'company', 'contract.stamp': 'company',
       'billing.read': 'company', 'billing.write': 'company', 'invoice.read': 'company', 'invoice.issue': 'company',
       'payment.read': 'company', 'payment.record': 'company', 'report.finance': 'company', 'report.sales': 'company',
-      'inventory.read': 'company', 'purchase.read': 'company', 'purchase.cost.read': 'company',
+      'inventory.read': 'company', 'purchase.read': 'company', 'purchase.cost.read': 'company', 'commission.read': 'company', 'commission.manage': 'company',
     },
   },
   customer_service: {

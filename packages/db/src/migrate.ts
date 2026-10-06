@@ -16,7 +16,7 @@ const pw = process.env.APP_DB_PASSWORD;
 if (pw) await client.unsafe(`ALTER ROLE mmc_app PASSWORD '${pw.replace(/'/g, "''")}'`);
 // Tables created by later migrations must stay reachable for the runtime role.
 await client.unsafe('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO mmc_app');
-await client.unsafe('REVOKE UPDATE, DELETE ON audit_log, issued_document, stock_move FROM mmc_app');
+await client.unsafe('REVOKE UPDATE, DELETE ON audit_log, issued_document, stock_move, ai_call FROM mmc_app');
 await client.unsafe('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO mmc_app');
 await client.end();
 console.log('migrations applied');
