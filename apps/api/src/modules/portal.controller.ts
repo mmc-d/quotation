@@ -16,6 +16,7 @@ import {
   ticketDetail, tickets, verifyLoginCode, withPortal, type PortalTicketInput,
 } from './portal.service.js';
 import { ensureServiceTemplates } from './service.service.js';
+import { siteHealth } from './iot.service.js';
 
 /**
  * Customer portal under /api/portal (module 11 §3.2).
@@ -169,6 +170,17 @@ export class PortalController {
   @Get('devices/:id')
   async device(@Req() req: Request, @Param('id') id: string) {
     return withPortal(req, (tx, c) => device(tx, c, id));
+  }
+
+  /** Phase 7c (IOT-07): online share and active-alarm count of the customer's site — no internal details. */
+  @Public()
+  @Get('sites/:siteId/health')
+  async siteHealth(@Req() req: Request, @Param('siteId') siteId: string) {
+    return withPortal(req, async (tx, c) => {
+      if (!c.siteIds.includes(siteId)) throw notFound('site');
+      const h = await siteHealth(tx, siteId, { detail: false });
+      return { siteId: h.siteId, siteName: h.siteName, devicesBound: h.devicesBound, online: h.online, onlinePercent: h.onlinePercent, activeAlarms: h.activeAlarms };
+    });
   }
 
   @Public()

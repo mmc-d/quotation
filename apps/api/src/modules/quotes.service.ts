@@ -164,9 +164,29 @@ async function writeLines(tx: Tx, quoteId: string, input: QuoteInput, vatRegiste
   };
 }
 
+/** "margin 12.5% < 20%" → "margin below the minimum": the reason stays visible, the figure doesn't. */
+const hideMarginFigure = (r: string) => (r.startsWith('margin ') ? 'margin below the minimum' : r);
+
+/**
+ * Without quote.cost.read nothing derived from purchase cost leaves the API: stored totals, line unit
+ * costs, the computed cost/margin (per line and in totals) and the margin figure in approval reasons.
+ */
 function stripCost<T extends { lines?: { unitCost: string | null }[]; costTotal?: string; marginTotal?: string }>(actor: RequestActor, q: T): T {
   if (actor.grants['quote.cost.read']) return q;
-  return { ...q, costTotal: undefined, marginTotal: undefined, lines: q.lines?.map((l) => ({ ...l, unitCost: null })) } as T;
+  const x = q as T & {
+    computed?: { lines: Record<string, unknown>[]; totals: Record<string, unknown> };
+    approvalReasons?: string[];
+    approvals?: { reasons: string[] }[];
+  };
+  return {
+    ...x,
+    costTotal: undefined,
+    marginTotal: undefined,
+    lines: x.lines?.map((l) => ({ ...l, unitCost: null })),
+    ...(x.computed ? { computed: { lines: x.computed.lines.map((l) => ({ ...l, cost: null })), totals: { ...x.computed.totals, cost: null, margin: null, marginPercent: null } } } : {}),
+    ...(x.approvalReasons ? { approvalReasons: x.approvalReasons.map(hideMarginFigure) } : {}),
+    ...(x.approvals ? { approvals: x.approvals.map((a) => ({ ...a, reasons: (a.reasons ?? []).map(hideMarginFigure) })) } : {}),
+  } as T;
 }
 
 export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {

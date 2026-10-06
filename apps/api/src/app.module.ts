@@ -19,13 +19,21 @@ import { FieldServiceController } from './modules/field-service.controller.js';
 import { InventoryController } from './modules/inventory.controller.js';
 import { ServiceController } from './modules/service.controller.js';
 import { PortalController } from './modules/portal.controller.js';
+import { InsightsController } from './modules/insights.controller.js';
+import { ErpSyncController } from './modules/erp-sync.controller.js';
+import { IotBindingController, IotController } from './modules/iot.controller.js';
+import { CommissionsController } from './modules/commissions.controller.js';
+import { AiController } from './ai/ai.controller.js';
+import { McpController } from './ai/mcp.js';
 
 @Module({
   controllers: [
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
-    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, ServiceController, PortalController,
+    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, ServiceController, PortalController, InsightsController, ErpSyncController,
+    IotController, IotBindingController, CommissionsController,
+    AiController, McpController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })

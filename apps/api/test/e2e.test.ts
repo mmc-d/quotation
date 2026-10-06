@@ -113,6 +113,13 @@ describe('Phase 1 — catalog, customers, quotes v2, contracts v2', () => {
   it('requires approval above the rep limit; the rep cannot approve; the manager can', async () => {
     const q = await rep.put(`/api/quotes/${S.quote.id}`, { ...S.quote, discountType: 'percent', discountValue: '3', lines: lines(), version: S.quote.version });
     expect(q.needsApproval).toBe(true); // ≈ 11.6% vs list: rep (10%) needs the manager (15%)
+    // a rep without quote.cost.read never receives purchase cost or margin, not even computed ones
+    expect(q.computed.totals.cost).toBeNull();
+    expect(q.computed.totals.margin).toBeNull();
+    expect(q.computed.totals.marginPercent).toBeNull();
+    expect(q.computed.lines.every((l: any) => l.cost === null)).toBe(true);
+    expect(q.lines.every((l: any) => l.unitCost === null)).toBe(true);
+    expect(JSON.stringify(q.approvalReasons)).not.toMatch(/margin \d/);
     const sub = await rep.post(`/api/quotes/${S.quote.id}/submit`);
     expect(sub.status).toBe('pending_approval');
     await rep.post(`/api/quotes/${S.quote.id}/approve`, {}, { expect: 403 });

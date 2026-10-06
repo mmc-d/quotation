@@ -50,6 +50,9 @@ export const DEFAULT_MESSAGE_TEMPLATES = [
     body: 'مرحبًا {{name}}، ينتهي عقد الصيانة رقم {{number}} بتاريخ {{end}}. لتجديد العقد واستمرار التغطية تواصلوا معنا أو تابعوا عبر البوابة: {{link}}' },
   { key: 'amc_visit_due', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_amc_visit_due', variables: ['name', 'number', 'date'],
     body: 'مرحبًا {{name}}، زيارة الصيانة الوقائية ضمن عقد الصيانة {{number}} مستحقة بتاريخ {{date}}. سنتواصل معكم لتحديد الموعد المناسب.' },
+  // Phase 7c — IoT alarm → service ticket (also ensured at runtime by the API)
+  { key: 'iot_alert', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_iot_alert', variables: ['name', 'device', 'number'],
+    body: 'مرحبًا {{name}}، رصدت منظومة المراقبة لدى المدى المبارك تنبيهًا في الجهاز {{device}}. تم فتح طلب الصيانة رقم {{number}} وسيتواصل معكم فريق الدعم الفني.' },
   { key: 'quote_sent', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'number', 'link'],
     body: 'مرحبًا {{name}}،\n\nعرض السعر رقم {{number}} جاهز للاطلاع والقبول:\n{{link}}\n\nمع التحية،\nالمدى المبارك للتجارة والحلول الذكية' },
 ];

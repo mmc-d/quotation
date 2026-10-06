@@ -19,6 +19,7 @@ import { SettingsDialog } from '../_components/settings-dialog';
 import { SnagsTab } from '../_components/snags-tab';
 import { TasksTab } from '../_components/tasks-tab';
 import { PROJECT_STATUS, type ProjectView } from '../_components/types';
+import { ProfitCard } from '../_components/profit-card';
 
 type Tab = 'approvals' | 'payments' | 'tasks' | 'snags' | 'devices' | 'workorders' | 'materials';
 
@@ -86,6 +87,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <GateCard p={p} action={action} />
         <ClockCard p={p} action={action} />
       </div>
+
+      <ProfitCard projectId={p.id} />
 
       {showHandover && <div className="mb-5"><HandoverCard key={`${p.acceptedOn}`} p={p} action={action} /></div>}
 

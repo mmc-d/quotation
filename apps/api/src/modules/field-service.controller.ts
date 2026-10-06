@@ -15,6 +15,7 @@ import { ZodPipe, zDate, zPage, zQty, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import { consumeForWorkOrder } from './inventory.service.js';
 import { markFirstResponse, sendCsatRequest, slaDue, slaFilter, ticketSla } from './service.service.js';
+import { syncAlarmsForTicket } from './iot.service.js';
 import {
   EDITABLE, LocationResolver, bookingWarnings, checkInGeofence, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
   loadLocation, loadSite, loadTicket, loadWo, locationPaths, matchPartyByPhone, missingError, parseCsv, parseReportToken, productByCode, renderServiceReport, reportToken, riyadhDayRange,
@@ -534,6 +535,8 @@ export class FieldServiceController {
       if (b.status !== 'open') await markFirstResponse(tx, id); // SLA: first staff action stops the response clock
       await audit(tx, actor, `status_${b.status}`, 'ticket', id, { status: t.status }, { status: b.status }, b.note ?? undefined);
       await emit(tx, 'ticket', id, `ticket.${b.status}`, { number: t.number });
+      // Phase 7c: resolved/closed → ack + clear the ThingsBoard alarm(s) behind the ticket (never blocks)
+      if (b.status === 'resolved' || b.status === 'closed') await tx.transaction((sp) => syncAlarmsForTicket(sp, id)).catch((e: Error) => console.warn(`[iot] ${t.number}: ${e.message}`));
       return this.ticketView(tx, actor, id);
     }, actor.userId);
   }
@@ -951,6 +954,8 @@ export class FieldServiceController {
           await audit(tx, actor, 'status_resolved', 'ticket', t.id, { status: t.status }, { status: 'resolved', workOrder: wo.number });
           await emit(tx, 'ticket', t.id, 'ticket.resolved', { number: t.number });
         }
+        // Phase 7c: the job is done → ack + clear the ThingsBoard alarm(s) behind the ticket (never blocks)
+        await tx.transaction((sp) => syncAlarmsForTicket(sp, wo.ticketId)).catch((e: Error) => console.warn(`[iot] ${wo.number}: ${e.message}`));
       }
       if (wo.ownerId && wo.ownerId !== actor.userId) await tx.insert(notification).values({ userId: wo.ownerId, kind: 'work_order', titleAr: `✅ اكتمل أمر العمل ${wo.number} — ${wo.title}`, link: `/field/work-orders/${wo.id}` });
       // Phase 5: post parts / installed serials as stock consumption (own savepoint — never blocks completion)

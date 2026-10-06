@@ -52,6 +52,8 @@ export const CHANNEL: L = {
   web: ['الموقع الإلكتروني', 'Website'],
   email: ['بريد إلكتروني', 'E-mail'],
   walk_in: ['حضور شخصي', 'Walk-in'],
+  portal: ['بوابة العملاء', 'Customer portal'],
+  iot: ['تنبيه جهاز (IoT)', 'Device alert (IoT)'],
 };
 
 export const PRIORITY: L = {

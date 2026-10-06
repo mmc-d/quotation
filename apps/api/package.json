@@ -13,11 +13,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@better-auth/passkey": "^1.7.7",
     "@mmc/db": "workspace:*",
     "@mmc/doc-templates": "workspace:*",
     "@mmc/domain": "workspace:*",
     "@mmc/erp-connector": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",

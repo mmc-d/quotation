@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { Button, Card, Checkbox, Dialog, ErrorBox, Field, Input, PageHeader, Select, Spinner, Textarea } from '@/components/ui';
+import { BilingualTranslate } from '@/components/ai-assist';
 import { KitComponentsCard } from '../_components/kit-components';
 import { CURRENCY_AR, CURRENCY_EN, PRODUCT_TYPES, PRODUCT_TYPES_EN, type Product } from '../_components/types';
 
@@ -141,6 +142,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
             <Field label={bi('الوصف', 'Description')} className="mt-3" hint={bi('الوصف الثنائي القديم «عربي | English» يظهر في عرض السعر.', 'The legacy bilingual description “Arabic | English” appears on the quotation.')}>
               <Textarea rows={3} value={f.description} onChange={(e) => set('description', e.target.value)} />
+              <BilingualTranslate value={f.description} onChange={(v) => set('description', v)} />
             </Field>
             <div className="mt-3"><Checkbox label={bi('يُتتبَّع بالرقم التسلسلي', 'Tracked by serial number')} checked={f.serialTracked} onChange={(v) => set('serialTracked', v)} /></div>
           </Card>

@@ -11,6 +11,7 @@ export const NAV: NavGroup[] = [
       { href: '/customers', label: 'العملاء', en: 'Customers', icon: 'Building2', perm: 'party.read' },
       { href: '/products', label: 'المنتجات', en: 'Products', icon: 'Package', perm: 'product.read' },
       { href: '/products/price-lists', label: 'قوائم الأسعار', en: 'Price lists', icon: 'Tags', perm: 'product.read' },
+      { href: '/ai/boq', label: 'من جدول الكميات إلى عرض (ذكاء اصطناعي)', en: 'BOQ → quote (AI)', icon: 'Sparkles', perm: 'ai.use' },
     ],
   },
   {
@@ -29,6 +30,9 @@ export const NAV: NavGroup[] = [
       { href: '/field/work-orders', label: 'أوامر العمل', en: 'Work orders', icon: 'ClipboardList', perm: 'workorder.read' },
       { href: '/field/tickets', label: 'بلاغات الأعطال', en: 'Service calls', icon: 'LifeBuoy', perm: 'ticket.read' },
       { href: '/field/assets', label: 'الأجهزة المركبة', en: 'Installed devices', icon: 'Cpu', perm: 'asset.read' },
+      { href: '/service/agreements', label: 'عقود الصيانة', en: 'Service agreements', icon: 'ShieldCheck', perm: 'agreement.read' },
+      { href: '/service/reports', label: 'تقارير الخدمة', en: 'Service reports', icon: 'Gauge', perm: 'agreement.read' },
+      { href: '/iot', label: 'تنبيهات الأجهزة (IoT)', en: 'Device alerts (IoT)', icon: 'Radio', perm: 'asset.read' },
       { href: '/tech', label: 'يومي (الفني)', en: 'My day (technician)', icon: 'Smartphone', perm: 'workorder.write' },
     ],
   },
@@ -49,7 +53,14 @@ export const NAV: NavGroup[] = [
       { href: '/finance/aging', label: 'أعمار الذمم', en: 'AR aging', icon: 'Hourglass', perm: 'invoice.read' },
     ],
   },
-  { label: 'التقارير', en: 'Reports', items: [{ href: '/reports', label: 'تقارير المبيعات', en: 'Sales reports', icon: 'BarChart3', perm: 'report.sales' }] },
+  {
+    label: 'التقارير', en: 'Reports', items: [
+      { href: '/reports', label: 'تقارير المبيعات', en: 'Sales reports', icon: 'BarChart3', perm: 'report.sales' },
+      { href: '/reports/finance', label: 'التقارير المالية', en: 'Finance dashboard', icon: 'Wallet', perm: 'report.finance' },
+      { href: '/reports/projects', label: 'ربحية المشاريع', en: 'Project profitability', icon: 'TrendingUp', perm: 'report.finance' },
+      { href: '/commissions', label: 'العمولات والحوافز', en: 'Commissions & incentives', icon: 'BadgePercent', perm: 'commission.read' },
+    ],
+  },
   {
     label: 'الإعدادات', en: 'Settings', items: [
       { href: '/settings/company', label: 'بيانات المنشأة', en: 'Company', icon: 'Landmark', perm: 'admin.settings' },
@@ -58,6 +69,7 @@ export const NAV: NavGroup[] = [
       { href: '/settings/calendar', label: 'تقويم العمل', en: 'Work calendar', icon: 'CalendarDays', perm: 'admin.settings' },
       { href: '/settings/audit', label: 'سجل التدقيق', en: 'Audit log', icon: 'ShieldCheck', perm: 'admin.audit' },
       { href: '/settings/security', label: 'أمان حسابي', en: 'My security', icon: 'KeyRound' },
+      { href: '/settings/ai', label: 'الذكاء الاصطناعي', en: 'AI & tokens', icon: 'Bot' },
     ],
   },
 ];

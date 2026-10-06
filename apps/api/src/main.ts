@@ -20,10 +20,11 @@ export async function createApp() {
   server.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-site' } }));
   server.all('/api/auth/{*any}', toNodeHandler(auth));
   // CSRF defence in depth (cookies are SameSite=Lax already): state-changing staff requests must come
-  // from our own origin. Webhooks and public customer pages are exempt (signed or token-scoped).
+  // from our own origin. Webhooks and public customer pages are exempt (signed or token-scoped), and so is
+  // the MCP endpoint (bearer personal tokens only, never cookies).
   const allowed = new Set([config.webOrigin, config.publicBaseUrl].map((u) => new URL(u).origin));
   server.use((req, res, next) => {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path.startsWith('/api/webhooks/') || req.path.startsWith('/api/public/')) return next();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path.startsWith('/api/webhooks/') || req.path.startsWith('/api/public/') || req.path === '/api/mcp') return next();
     const origin = req.headers.origin ?? (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
     if (origin && !allowed.has(origin)) return res.status(403).json({ error: 'forbidden', message: 'cross-site request refused' });
     if (!origin && req.headers.cookie?.includes('mmc.session_token')) return res.status(403).json({ error: 'forbidden', message: 'missing Origin header' });

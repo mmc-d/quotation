@@ -13,6 +13,7 @@ import { isConflict } from '../../../quotes/_components/common';
 import { ASSET_STATUS, Chip, CoverageBadge, Info, Ltr, TicketStatusBadge, WoStatusBadge, WoTypeBadge, useReason } from '../../_components/common';
 import { LocationPicker } from '../../_components/locations';
 import type { AssetDetail } from '../../_components/types';
+import { IotBindingCard } from '../../../iot/_components/common';
 
 const DEFAULT_CHECKS: { key: string; ar: string; en: string }[] = [
   { key: 'call', ar: 'اختبار الاتصال', en: 'Call test' },
@@ -120,6 +121,8 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
             {warrantyRow(bi('ضمان القطع', 'Parts'), a.warranty.partsEnd)}
             {warrantyRow(bi('ضمان المصنّع', 'Manufacturer'), a.warranty.manufacturerEnd)}
           </Card>
+
+          <IotBindingCard asset={a as typeof a & { iotDeviceId?: string | null; iotOnline?: boolean | null; iotLastSeenAt?: string | null }} />
 
           <Card title={bi('السجل', 'Timeline')}>
             {a.timeline.length === 0 ? <p className="text-sm text-muted">{bi('لا أحداث', 'No events')}</p> : (

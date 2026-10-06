@@ -13,6 +13,7 @@ import { payments } from '../common/payments.js';
 import { config } from '../config.js';
 import type { RequestActor } from '../auth/actor.js';
 import { addDays, loadCalendar } from './calendar.controller.js';
+import { recomputeCommissions } from './commissions.service.js';
 
 /** Push the customer to the back office once (and on change); returns its ERP name. */
 export async function ensureCustomer(tx: Tx, tenantId: string, partyId: string): Promise<{ erpName: string; b2b: boolean }> {
@@ -36,6 +37,12 @@ export async function mirrorInvoice(tx: Tx, inv: InvoiceResult, links: { partyId
   };
   const [row] = await tx.insert(invoiceMirror).values({ ...values, partyId: links.partyId ?? null, contractId: links.contractId ?? null, milestoneId: links.milestoneId ?? null, paymentRequestId: links.paymentRequestId ?? null, originalInvoiceId: links.originalInvoiceId ?? null })
     .onConflictDoUpdate({ target: [invoiceMirror.tenantId, invoiceMirror.erpName], set: values }).returning();
+  // Phase 7a: commissions earned on 388 / clawed back on 381 (own savepoint — never blocks invoicing)
+  try {
+    await tx.transaction((sp) => recomputeCommissions(sp, row!.id));
+  } catch (e) {
+    console.warn(`[commissions] ${inv.number}:`, (e as Error).message);
+  }
   return row!;
 }
 

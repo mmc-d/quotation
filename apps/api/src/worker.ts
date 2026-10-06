@@ -9,6 +9,7 @@ import { sendPaymentRequest } from './modules/finance.service.js';
 import { reconcile } from './modules/finance.controller.js';
 import { loadCalendar } from './modules/calendar.controller.js';
 import { agreementRenewalsFor, preventiveVisitsFor, slaEscalationsFor } from './modules/service.service.js';
+import { recalcOpenCommissions } from './modules/commissions.service.js';
 
 /**
  * Background jobs on pg-boss (Postgres-backed, no extra infrastructure). pg-boss manages its own
@@ -24,6 +25,8 @@ const JOBS = {
   sla: { name: 'service-sla-escalations', cron: '*/15 * * * *' },
   preventive: { name: 'service-preventive-visits', cron: '0 6 * * *' },
   renewals: { name: 'service-agreement-renewals', cron: '30 6 * * *' },
+  // Phase 7a — commissions: payable share refreshed from collections (nightly)
+  commissions: { name: 'commissions-recalc', cron: '45 1 * * *' },
 } as const;
 
 async function forEachTenant(fn: (tenantId: string) => Promise<void>) {
@@ -119,6 +122,13 @@ export async function runOutbox() {
   }));
 }
 
+/** Nightly: commission payable = earned × collected ÷ invoice total, for entries not fully paid. */
+export async function runCommissionsRecalc() {
+  let updated = 0;
+  await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => { updated += (await recalcOpenCommissions(tx)).updated; }));
+  return { updated };
+}
+
 let boss: PgBoss | null = null;
 
 export async function startWorker() {
@@ -135,6 +145,7 @@ export async function startWorker() {
     [JOBS.sla.name]: runSlaEscalations,
     [JOBS.preventive.name]: runPreventiveVisits,
     [JOBS.renewals.name]: runAgreementRenewals,
+    [JOBS.commissions.name]: runCommissionsRecalc,
   };
   for (const j of Object.values(JOBS)) {
     await boss.createQueue(j.name);
@@ -142,6 +153,7 @@ export async function startWorker() {
     await boss.work(j.name, async () => { await handlers[j.name]!(); });
   }
   console.log('[worker] started:', Object.values(JOBS).map((j) => j.name).join(', '));
+  await (await import('./modules/erp-sync.service.js')).registerErpSyncJob(boss); // Phase 5 → ERPNext push every 15 min, only when ERPNEXT_URL is set
   return boss;
 }
 

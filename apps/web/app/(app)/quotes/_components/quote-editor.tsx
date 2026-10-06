@@ -39,6 +39,7 @@ function reasonText(r: string, bi: (ar: string, en: string) => string): string {
   if (m) return bi(`الخصم ${m[1]}% أعلى من الحد المسموح ${m[2]}%`, `Discount ${m[1]}% is above the allowed limit ${m[2]}%`);
   m = /^margin ([\d.-]+)% < ([\d.]+)%$/.exec(r);
   if (m) return bi(`هامش الربح ${m[1]}% أقل من الحد الأدنى ${m[2]}%`, `Margin ${m[1]}% is below the minimum ${m[2]}%`);
+  if (r === 'margin below the minimum') return bi('هامش الربح أقل من الحد الأدنى', 'Margin is below the minimum');
   m = /^discount ([\d.]+)% above your limit ([\d.]+)%$/.exec(r);
   if (m) return bi(`الخصم ${m[1]}% يتجاوز حدّك ${m[2]}%`, `Discount ${m[1]}% exceeds your limit ${m[2]}%`);
   return r;
