@@ -8,3 +8,5 @@ export * from './saudi.js';
 export * from './crm.js';
 export * from './permissions.js';
 export * from './calendar.js';
+export * from './projects.js';
+export * from './fieldservice.js';

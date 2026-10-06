@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   'activity.read', 'activity.write', 'message.read', 'message.send',
   'billing.read', 'billing.write', 'invoice.read', 'invoice.issue', 'payment.read', 'payment.record',
   'report.sales', 'report.finance',
+  'project.read', 'project.write', 'project.override',
+  'asset.read', 'asset.write', 'workorder.read', 'workorder.write', 'workorder.dispatch', 'ticket.read', 'ticket.write',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -38,6 +40,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'lead.read': 'team', 'lead.write': 'team', 'opportunity.read': 'team', 'opportunity.write': 'team',
       'activity.read': 'team', 'activity.write': 'team', 'message.read': 'team', 'message.send': 'team',
       'billing.read': 'team', 'invoice.read': 'team', 'payment.read': 'team', 'report.sales': 'team',
+      'project.read': 'team', 'asset.read': 'company',
     },
   },
   sales_rep: {
@@ -48,7 +51,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'contract.read': 'own', 'contract.write': 'own',
       'lead.read': 'own', 'lead.write': 'own', 'opportunity.read': 'own', 'opportunity.write': 'own',
       'activity.read': 'own', 'activity.write': 'own', 'message.read': 'own', 'message.send': 'own',
-      'invoice.read': 'own', 'billing.read': 'own',
+      'invoice.read': 'own', 'billing.read': 'own', 'project.read': 'own',
     },
   },
   presales: {
@@ -66,7 +69,28 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
   },
   customer_service: {
     name_ar: 'خدمة العملاء', name_en: 'Customer Service', maxDiscountPercent: 0,
-    grants: { 'party.read': 'company', 'party.write': 'company', 'quote.read': 'company', 'contract.read': 'company', 'lead.read': 'company', 'lead.write': 'company', 'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company', 'invoice.read': 'company', 'payment.read': 'company' },
+    grants: { 'party.read': 'company', 'party.write': 'company', 'quote.read': 'company', 'contract.read': 'company', 'lead.read': 'company', 'lead.write': 'company', 'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company', 'invoice.read': 'company', 'payment.read': 'company', 'ticket.read': 'company', 'ticket.write': 'company', 'asset.read': 'company', 'workorder.read': 'company', 'workorder.write': 'company', 'project.read': 'company' },
+  },
+  project_manager: {
+    name_ar: 'مدير المشاريع', name_en: 'Projects Manager', maxDiscountPercent: 0,
+    grants: {
+      'party.read': 'company', 'product.read': 'all', 'quote.read': 'company', 'contract.read': 'company', 'billing.read': 'company', 'invoice.read': 'company', 'payment.read': 'company',
+      'project.read': 'company', 'project.write': 'company', 'project.override': 'company', 'asset.read': 'company', 'asset.write': 'company',
+      'workorder.read': 'company', 'workorder.write': 'company', 'workorder.dispatch': 'company', 'ticket.read': 'company', 'ticket.write': 'company',
+      'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company',
+    },
+  },
+  service_coordinator: {
+    name_ar: 'منسق الخدمة والصيانة', name_en: 'Service Coordinator', maxDiscountPercent: 0,
+    grants: {
+      'party.read': 'company', 'product.read': 'all', 'contract.read': 'company', 'project.read': 'company', 'asset.read': 'company', 'asset.write': 'company',
+      'workorder.read': 'company', 'workorder.write': 'company', 'workorder.dispatch': 'company', 'ticket.read': 'company', 'ticket.write': 'company',
+      'message.read': 'company', 'message.send': 'company',
+    },
+  },
+  technician: {
+    name_ar: 'فني', name_en: 'Technician', maxDiscountPercent: 0,
+    grants: { 'party.read': 'company', 'product.read': 'all', 'project.read': 'own', 'asset.read': 'company', 'asset.write': 'own', 'workorder.read': 'own', 'workorder.write': 'own', 'ticket.read': 'own' },
   },
   auditor: {
     name_ar: 'مدقق', name_en: 'Auditor', maxDiscountPercent: 0,

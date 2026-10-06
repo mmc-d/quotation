@@ -14,13 +14,15 @@ import { JobsController } from './modules/jobs.controller.js';
 import { PriceListsController } from './modules/pricelists.controller.js';
 import { ChangeOrdersController } from './modules/change-orders.controller.js';
 import { CalendarController } from './modules/calendar.controller.js';
+import { ProjectsController } from './modules/projects.controller.js';
+import { FieldServiceController } from './modules/field-service.controller.js';
 
 @Module({
   controllers: [
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
-    PriceListsController, ChangeOrdersController, CalendarController,
+    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })

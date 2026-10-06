@@ -64,6 +64,9 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   payment_request: { pattern: 'MMC-PR-{SEQ:5}', reset: 'never' },
   change_order: { pattern: 'MMC-CO-{SEQ:4}', reset: 'never' },
   lead: { pattern: 'L-{SEQ:5}', reset: 'never' },
+  project: { pattern: 'PRJ-{SEQ:4}', reset: 'never' },
+  work_order: { pattern: 'WO-{SEQ:5}', reset: 'never' },
+  ticket: { pattern: 'TCK-{SEQ:5}', reset: 'never' },
 };
 
 /** The bucket key a sequence counts within (e.g. the day for daily series). */
