@@ -36,9 +36,13 @@ Not built: OCR/AI capture of supplier documents, supplier ZATCA XML parsing (INV
 
 In progress at the time of writing: AMC agreements with preventive-visit work orders and payment requests per billing period, SLA targets and escalations on service calls (business-hour clock), CSAT after each visit, and the customer portal (WhatsApp-OTP sign-in; devices and warranty, service calls, invoices and payment requests, project progress and online approvals). Phase 7a (HR & payroll on Frappe HR) and 7c (IoT/ThingsBoard, AI) are not started.
 
-## Phase 6 — Full accounting: decision pending
+## Phase 6 — Full accounting: ERPNext (owner decision 2026-10-06)
 
-The plan places bank reconciliation, expenses, fixed assets, cost centres/project P&L, VAT return and period close in **ERPNext** (module 08), with Core showing dashboards. Building a general ledger in Core would duplicate ERPNext and need a migration later, so it has not been started. Owner decision needed: install ERPNext (implementer + accountant), or a temporary Core ledger.
+The owner kept the plan: the ledger, bank reconciliation, expenses, fixed assets, VAT return and period
+close will run in **ERPNext + the KSA compliance app**, installed later with an implementer and the
+accountant. MMC Core does not get its own general ledger. Until then Core keeps operational records
+(invoice mirrors via the fake back office, payments, the stock ledger) ready to sync, and provides the
+finance and project-profitability dashboards from its own data.
 
 ## External accounts still needed
 

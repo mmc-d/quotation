@@ -78,7 +78,7 @@ Production-style run: `cd infra/prod && ./mmc.sh init && ./mmc.sh build && ./mmc
    - direct Meta/Snapchat/TikTok adapters (a signed intake exists);
    - a real Nafath e-sign provider and payment gateway;
    - the ERPNext + KSA compliance app (configurable field names in `ErpNextBackOffice`).
-6. **Phases 4, 5, 7b** — see `docs/erp-plan/phase-4-7-status.md` (Phase 4 and 5 built 2026-10-06; 7b in progress). **Phase 6** (accounting) waits on the owner's ERPNext decision; 7a (HR) and 7c (IoT/AI) not started.
+6. **Phases 4, 5, 7b** — see `docs/erp-plan/phase-4-7-status.md` (Phase 4 and 5 built 2026-10-06; 7b in progress). **Phase 6** (accounting) → ERPNext later (owner decision 2026-10-06; no ledger in Core); 7a (HR) and 7c (IoT/AI) not started.
 
 ## Owner decisions / actions (deferred by the user until the app is complete)
 
