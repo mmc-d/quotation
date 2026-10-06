@@ -16,6 +16,7 @@ import { Badge, Button, Card, clsx, Field, Input, Money, PageHeader, Select, Sta
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from '../../quotes/_components/common';
 import { Menu } from '../../quotes/_components/menu';
 import { newKey } from '../../quotes/_components/types';
+import { ContractProjectLink } from '../../projects/_components/contract-project-link';
 import { ChangeOrdersCard } from './change-orders';
 import { ClauseLibrary } from './clause-library';
 import { EsignDialog } from './esign-dialog';
@@ -195,6 +196,7 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
           {primaryT && <Button variant={canEsign ? 'outline' : 'gold'} icon={T_META[primaryT].icon} onClick={() => setDialog(primaryT)}>{tLabel(primaryT)}</Button>}
           <Button variant="outline" icon={<FileText className="size-4" />} onClick={() => void ensureSaved().then((c) => c && openFile(`/contracts/${c.id}/pdf`))}>PDF</Button>
           {canStamp && <Button variant="outline" icon={<Stamp className="size-4" />} onClick={() => { openFile(`/contracts/${contract.id}/pdf?stamp=1`); setTimeout(() => void qc.invalidateQueries({ queryKey: ['contract', contract.id] }), 4000); }}>{bi('PDF مختوم', 'Stamped PDF')}</Button>}
+          <ContractProjectLink contract={contract} />
           {otherT.length > 0 && <Menu label={bi('الحالة', 'Status')} items={otherT.map((x) => ({ label: tLabel(x), icon: T_META[x].icon, danger: T_META[x].danger, onClick: () => setDialog(x) }))} />}
         </>}
       />
@@ -365,9 +367,9 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
           {contract.status !== 'draft' && <ChangeOrdersCard contract={contract} />}
 
           {contract.status !== 'draft' && can('billing.read') && (
-            <Card title={bi('الفوترة والتحصيل', 'Billing & collection')}>
+            <div id="billing" className="scroll-mt-4"><Card title={bi('الفوترة والتحصيل', 'Billing & collection')}>
               <BillingPanel contractId={contract.id} />
-            </Card>
+            </Card></div>
           )}
         </div>
 

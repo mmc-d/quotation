@@ -166,18 +166,20 @@ export async function locationPaths(tx: Tx, ids: (string | null | undefined)[]):
   return new Map([...rows].map((r) => [r.leaf, r.path]));
 }
 
-export function navUrl(s: { mapLink?: string | null; lat?: string | null; lng?: string | null } | null | undefined): string | null {
+export function navUrl(s: { mapLink?: string | null; lat?: string | null; lng?: string | null; buildingNumber?: string | null; street?: string | null; district?: string | null; city?: string | null } | null | undefined): string | null {
   if (!s) return null;
   if (s.mapLink) return s.mapLink;
   if (s.lat && s.lng) return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${s.lat},${s.lng}`)}`;
-  return null;
+  // no pin yet: let Google Maps search the national address
+  const address = [s.buildingNumber, s.street, s.district, s.city].filter(Boolean).join('، ');
+  return s.city && address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : null;
 }
 
 /** List rows decorated with site/party/technician names and the location path. */
 export async function decorateWorkOrders(tx: Tx, rows: WorkOrderRow[]) {
   const siteIds = [...new Set(rows.map((r) => r.siteId).filter((x): x is string => !!x))];
   const partyIds = [...new Set(rows.map((r) => r.partyId).filter((x): x is string => !!x))];
-  const sites = siteIds.length ? await tx.select({ id: site.id, name: site.name, city: site.city, district: site.district, lat: site.lat, lng: site.lng, mapLink: site.mapLink }).from(site).where(inArray(site.id, siteIds)) : [];
+  const sites = siteIds.length ? await tx.select({ id: site.id, name: site.name, city: site.city, district: site.district, street: site.street, buildingNumber: site.buildingNumber, lat: site.lat, lng: site.lng, mapLink: site.mapLink }).from(site).where(inArray(site.id, siteIds)) : [];
   const parties = partyIds.length ? await tx.select({ id: party.id, nameAr: party.nameAr, phone: party.phone }).from(party).where(inArray(party.id, partyIds)) : [];
   const names = await userNames(tx, rows.flatMap((r) => [r.technicianId, ...(r.crewIds ?? [])]));
   const paths = await locationPaths(tx, rows.map((r) => r.locationId));

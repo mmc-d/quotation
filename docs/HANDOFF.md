@@ -78,7 +78,7 @@ Production-style run: `cd infra/prod && ./mmc.sh init && ./mmc.sh build && ./mmc
    - direct Meta/Snapchat/TikTok adapters (a signed intake exists);
    - a real Nafath e-sign provider and payment gateway;
    - the ERPNext + KSA compliance app (configurable field names in `ErpNextBackOffice`).
-6. **Phases 4–7** of the plan: projects and field service, procurement and stock, full accounting, HR/payroll, helpdesk, customer portal, IoT and AI.
+6. **Phase 4** (projects & field service) — core built 2026-10-06: projects cockpit with gates/clock/approvals/snags/handover, installed base + location tree, tickets with coverage, work orders, dispatch board, technician app `/tech`. Still open in Phase 4: geofenced check-in, prayer/heat/Ramadan scheduling rules, full offline sync, AMC (Phase 7b), Gantt/dependencies, photos on approvals/snags. **Phases 5–7** not started.
 
 ## Owner decisions / actions (deferred by the user until the app is complete)
 
