@@ -7,7 +7,7 @@ import { isValidUnifiedNumber, isValidVatNumber, normalizeArabic, normalizePhone
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { audit, diff } from '../common/audit.js';
-import { badRequest, notFound } from '../common/errors.js';
+import { badRequest, conflict, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { ZodPipe, zMoney, zPage, zQty } from '../common/zod.js';
 
@@ -195,7 +195,14 @@ const productSchema = z.object({
   costCurrency: z.enum(['USD', 'SAR', 'CNY']).default('USD'),
   costRateToSar: zMoney.default('3.75'),
   warrantyMonths: z.number().int().nullish(),
-  serialTracked: z.boolean().default(false),
+  // inventory fields are optional so a form that doesn't send them leaves them unchanged (Phase 5)
+  serialTracked: z.boolean().optional(),
+  radio: z.boolean().optional(),
+  hsCode: z.string().trim().max(20).nullish(),
+  originCountry: z.string().trim().length(2).toUpperCase().nullish(),
+  reorderLevel: zQty.nullish(),
+  reorderQty: zQty.nullish(),
+  weightKg: zQty.nullish(),
   imageUrl: z.string().nullish(),
   datasheetUrl: z.string().nullish(),
   status: z.enum(['active', 'discontinued']).default('active'),
@@ -278,6 +285,10 @@ export class ProductsController {
       }
       const [before] = await tx.select().from(product).where(eq(product.id, id));
       if (!before) throw notFound('product');
+      if (b.serialTracked !== undefined && b.serialTracked !== before.serialTracked) {
+        const held = await tx.execute(sql`select 1 from stock_balance where product_id = ${id} and qty <> 0 limit 1`);
+        if ([...held].length) throw conflict('serial tracking cannot change while the product is in stock');
+      }
       const [row] = await tx.update(product).set({ ...values, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(product.id, id)).returning();
       const d = diff(before as Record<string, unknown>, values as Record<string, unknown>);
       if (d) await audit(tx, actor, 'update', 'product', id, d.before, d.after);

@@ -36,8 +36,11 @@ async function status(c: Client, method: string, path: string, body?: unknown) {
   return { status: res.status, body: text ? JSON.parse(text) : null };
 }
 
+const myProducts: string[] = [];
 async function product(code: string, extra: Record<string, unknown> = {}) {
-  return owner.put('/api/products/new', { code, nameAr: `منتج ${code}`, listPrice: '100', ...extra });
+  const p = await owner.put('/api/products/new', { code, nameAr: `منتج ${code}`, listPrice: '100', ...extra });
+  myProducts.push(p.id);
+  return p;
 }
 
 async function stockOf(productId: string, c: Client = owner) {
@@ -76,6 +79,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    // archived products drop out of the catalog, so other test files sharing the DB see their own counts
+    if (myProducts.length) {
+      const sql = ADMIN_SQL();
+      await sql`update product set archived_at = now() where id in ${sql(myProducts)}`;
+      await sql.end();
+    }
     if (myQuotes.length) {
       const sql = ADMIN_SQL();
       const prefix = quotePrefix();

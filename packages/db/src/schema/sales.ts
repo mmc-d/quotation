@@ -141,7 +141,8 @@ export const contract = pgTable('contract', {
   vatAmount: amount('vat_amount').notNull().default('0'),
   total: amount('total').notNull().default('0'),
   /** lines snapshot (code, description, qty, unitPrice) — editable while draft */
-  lines: jsonb('lines').$type<{ code: string; description: string; qty: string; unitPrice: string }[]>().notNull().default([]),
+  /** productId is kept from the quote line (Phase 5 BOQ); older contracts may lack it */
+  lines: jsonb('lines').$type<{ code: string; description: string; qty: string; unitPrice: string; productId?: string | null }[]>().notNull().default([]),
   stampApplied: boolean('stamp_applied').notNull().default(false),
   signedAt: timestamp('signed_at', { withTimezone: true }),
   signedFileId: uuid('signed_file_id'),

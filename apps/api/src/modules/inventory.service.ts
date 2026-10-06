@@ -1,5 +1,5 @@
 import {
-  and, appUser, asc, changeOrder, complianceCert, contract, desc, eq, inArray, installedAsset, kitComponent, ne, product, purchaseOrder, purchaseOrderLine, serialNumber, sql,
+  and, appUser, asc, changeOrder, complianceCert, contract, desc, eq, inArray, installedAsset, kitComponent, ne, or, product, purchaseOrder, purchaseOrderLine, serialNumber, sql,
   stockBalance, stockMove, stockReservation, warehouse, workOrder, type SQL, type Tx,
 } from '@mmc/db';
 import { STOCK_MOVE_KINDS, complianceStatus, dec, movingAverageCost, riyadhDate, type StockMoveKind } from '@mmc/domain';
@@ -302,9 +302,12 @@ export async function contractBoq(tx: Tx, contractId: string): Promise<{ lines: 
   if (!c) throw notFound('contract');
   const cos = await tx.select({ lines: changeOrder.lines }).from(changeOrder).where(and(eq(changeOrder.contractId, contractId), inArray(changeOrder.status, ['approved', 'signed', 'billed'])));
   const raw = [...c.lines, ...cos.flatMap((x) => x.lines)].filter((l) => l.code && l.code.trim().toUpperCase() !== 'INS');
+  // prefer the productId kept on the line (contracts from now on); fall back to the code for older ones
   const codes = [...new Set(raw.map((l) => l.code.trim()))];
-  const prods = codes.length ? await tx.select().from(product).where(inArray(product.code, codes)) : [];
+  const ids = [...new Set(raw.map((l) => (l as { productId?: string | null }).productId).filter((x): x is string => !!x))];
+  const prods = codes.length || ids.length ? await tx.select().from(product).where(or(codes.length ? inArray(product.code, codes) : undefined, ids.length ? inArray(product.id, ids) : undefined)) : [];
   const byCode = new Map(prods.map((p) => [p.code, p]));
+  const byId = new Map(prods.map((p) => [p.id, p]));
   const out: BoqLine[] = [];
   const unmatched = new Set<string>();
   const add = async (p: ProductRow, qty: D, depth: number): Promise<void> => {
@@ -318,7 +321,8 @@ export async function contractBoq(tx: Tx, contractId: string): Promise<{ lines: 
     out.push({ productId: p.id, code: p.code, description: p.nameAr, qty });
   };
   for (const l of raw) {
-    const p = byCode.get(l.code.trim());
+    const pid = (l as { productId?: string | null }).productId;
+    const p = (pid ? byId.get(pid) : undefined) ?? byCode.get(l.code.trim());
     if (!p) { unmatched.add(l.code.trim()); continue; }
     await add(p, dec(l.qty), 0);
   }

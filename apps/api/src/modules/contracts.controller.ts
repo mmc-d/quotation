@@ -150,7 +150,7 @@ export class ContractsController {
       const [p] = q.partyId ? await tx.select().from(party).where(eq(party.id, q.partyId)) : [];
       const [ct] = q.contactId ? await tx.select().from(contact).where(eq(contact.id, q.contactId)) : [];
       const [st] = q.siteId ? await tx.select().from(site).where(eq(site.id, q.siteId)) : [];
-      const contractLines = lines.map((l) => ({ code: l.code, description: l.description, qty: dec(l.qty).toString(), unitPrice: dec(l.unitPrice).toString() }));
+      const contractLines = lines.map((l) => ({ code: l.code, description: l.description, qty: dec(l.qty).toString(), unitPrice: dec(l.unitPrice).toString(), productId: l.productId ?? null }));
       const { totals, schedule } = computeContract(contractLines, q.discountAmount, q.vatOn, co.vatRegistered, defaults.schedule);
       const { number } = await nextNumber(tx, 'contract');
       const [c] = await tx.insert(contract).values({
