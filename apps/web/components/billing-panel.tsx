@@ -27,7 +27,7 @@ interface Billing {
   requests: PaymentRequestRow[];
   invoices: InvoiceRow[];
   payments: PaymentRow[];
-  summary: { total: string; paid: string; remaining: string; adjustedTotal?: string };
+  summary: { total: string; paid: string; remaining: string; adjustedTotal?: string; credited?: string };
   nextMilestoneId: string | null;
 }
 
@@ -50,7 +50,8 @@ export function BillingPanel({ contractId }: { contractId: string }) {
   const d = q.data;
   const totalH = h(d.summary.total);
   const paidH = h(d.summary.paid);
-  const pct = totalH > 0 ? Math.min(100, Math.round((paidH / totalH) * 100)) : 0;
+  const creditedH = h(d.summary.credited ?? '0');
+  const pct = totalH > 0 ? Math.min(100, Math.round(((paidH + creditedH) / totalH) * 100)) : 0;
   const signed = ['signed', 'active', 'completed'].includes(d.contract.status);
   const lastId = d.milestones[d.milestones.length - 1]?.id;
   const coMs = d.changeOrderMilestones ?? [];
@@ -76,7 +77,7 @@ export function BillingPanel({ contractId }: { contractId: string }) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div><div className="text-xs font-bold text-muted">قيمة العقد</div><div className="mt-0.5 text-xl font-extrabold text-primary"><Money value={d.summary.total} fixed /></div></div>
           <div><div className="text-xs font-bold text-muted">المحصّل</div><div className="mt-0.5 text-xl font-extrabold text-ok"><Money value={d.summary.paid} fixed /></div></div>
-          <div><div className="text-xs font-bold text-muted">المتبقي</div><div className={clsx('mt-0.5 text-xl font-extrabold', h(d.summary.remaining) > 0 ? 'text-gold-dark' : 'text-ok')}><Money value={d.summary.remaining} fixed /></div></div>
+          <div><div className="text-xs font-bold text-muted">المتبقي</div><div className={clsx('mt-0.5 text-xl font-extrabold', h(d.summary.remaining) > 0 ? 'text-gold-dark' : 'text-ok')}><Money value={d.summary.remaining} fixed /></div>{creditedH > 0 && <div className="mt-0.5 text-[11px] text-muted">بعد خصم إشعارات دائنة على الدفعات المقدمة: <span className="num font-bold">{money(creditedH, { fixed: true })}</span></div>}</div>
         </div>
         <div className="mt-3">
           <div className="h-2.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>

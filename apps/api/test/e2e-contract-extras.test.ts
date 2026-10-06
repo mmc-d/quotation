@@ -273,18 +273,18 @@ describe('Change orders', () => {
     expect(credited.invoice.originalInvoiceId).toBe(latest386.id);
     expect(credited.changeOrder.status).toBe('billed');
 
-    // Final milestone → 388 for the original contract only, deducting the two 386s.
+    // Final milestone → 388 for the original contract only, deducting the two 386s; the request nets the 381.
     const pr3 = await owner.post(`/api/finance/milestones/${S.contract.milestones[2].id}/request`, {});
     bill = await owner.get(`/api/finance/contracts/${S.contract.id}`);
     const finals = bill.invoices.filter((i: any) => i.typeCode === '388' && !i.milestoneId);
     expect(finals).toHaveLength(1);
     expect(finals[0]).toMatchObject({ total: '11500.00', vatAmount: '1500.00', prepaidAmount: '10350.00', balanceDue: '1150.00' });
     expect(finals[0].lines.map((l: any) => l.code)).toEqual(['SYS']);
-    expect(pr3.amount).toBe('1150.00');
+    expect(pr3.amount).toBe('1035.00'); // 388 balance 1150 − credit 115 on the 386
     expect(bill.invoices.filter((i: any) => i.typeCode === '388')).toHaveLength(2);
-    await acct.post(`/api/finance/payment-requests/${pr3.id}/payments`, { amount: '1150.00', paidOn: today, method: 'mada', reference: 'CX-3' });
+    await acct.post(`/api/finance/payment-requests/${pr3.id}/payments`, { amount: '1035.00', paidOn: today, method: 'mada', reference: 'CX-3' });
     bill = await owner.get(`/api/finance/contracts/${S.contract.id}`);
-    expect(bill.summary.remaining).toBe('0.00');
+    expect(bill.summary).toMatchObject({ credited: '115.00', remaining: '0.00' });
     expect(bill.milestones.every((m: any) => m.status === 'paid')).toBe(true);
     expect(bill.summary.adjustedTotal).toBe('12305.00'); // 11500 + 920 − 115
     S.final = finals[0];

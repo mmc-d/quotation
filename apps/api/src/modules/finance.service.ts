@@ -135,9 +135,13 @@ export async function requestMilestone(tx: Tx, actor: RequestActor, milestoneId:
   const [co] = isCo ? await tx.select().from(changeOrder).where(eq(changeOrder.milestoneId, m.id)) : [];
   if (isCo && (!co || !['approved', 'signed', 'billed'].includes(co.status))) throw badRequest('the change order must be approved before it is billed');
   let amount = toHalalas(m.amount) - toHalalas(m.paidAmount);
+  let netted = 0;
   if (!isCo && isFinal(milestones, milestoneId)) {
     const inv = await issueFinalInvoice(tx, actor, actor.tenantId, c.id);
-    amount = toHalalas(inv.balanceDue);
+    // Credit notes issued against the advances (386) before the 388 existed are owed back to the
+    // customer, so the final request nets them instead of only showing them on the statement.
+    netted = await advanceCredits(tx, c.id);
+    amount = toHalalas(inv.balanceDue) - netted;
   }
   if (amount <= 0) throw badRequest('nothing left to request on this milestone');
   const { number } = await nextNumber(tx, 'payment_request');
@@ -150,8 +154,17 @@ export async function requestMilestone(tx: Tx, actor: RequestActor, milestoneId:
     await tx.update(changeOrder).set({ status: 'billed', updatedAt: new Date(), updatedBy: actor.userId }).where(eq(changeOrder.id, co.id));
     await audit(tx, actor, 'status_billed', 'change_order', co.id, { status: co.status }, { status: 'billed', paymentRequest: number });
   }
-  await audit(tx, actor, 'request', 'payment_request', pr!.id, null, { number, amount: halalasToFixed(amount), milestone: m.nameAr });
+  await audit(tx, actor, 'request', 'payment_request', pr!.id, null, { number, amount: halalasToFixed(amount), milestone: m.nameAr, ...(netted ? { creditsNetted: halalasToFixed(netted) } : {}) });
   return pr!;
+}
+
+/** Σ of the 381 credit notes (as a positive amount) issued against this contract's 386 advance invoices. */
+export async function advanceCredits(tx: Tx, contractId: string): Promise<number> {
+  const [r] = await tx.select({ total: sql<string>`coalesce(sum(-${invoiceMirror.total}), 0)` }).from(invoiceMirror).where(and(
+    eq(invoiceMirror.contractId, contractId), eq(invoiceMirror.typeCode, '381'), sql`${invoiceMirror.status} <> 'cancelled'`,
+    sql`${invoiceMirror.originalInvoiceId} in (select id from invoice_mirror where contract_id = ${contractId} and type_code = '386' and status <> 'cancelled')`,
+  ));
+  return toHalalas(r?.total ?? '0');
 }
 
 /** Default due date: today + the customer's payment terms, moved to the next business day (company calendar). */

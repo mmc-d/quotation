@@ -14,3 +14,4 @@ dist/
 coverage/
 .data/
 LOCAL-TEST-LOGIN.md
+.local-logs/

@@ -18,7 +18,7 @@ import { payments, signSandboxWebhook } from '../common/payments.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { ZodPipe, zDate, zMoney, zPage } from '../common/zod.js';
 import { config } from '../config.js';
-import { applyPayment, CO_TRIGGER, ensureCustomer, issueFinalInvoice, mirrorInvoice, requestMilestone, sendPaymentRequest } from './finance.service.js';
+import { advanceCredits, applyPayment, CO_TRIGGER, ensureCustomer, issueFinalInvoice, mirrorInvoice, requestMilestone, sendPaymentRequest } from './finance.service.js';
 
 const METHODS = ['bank_transfer', 'mada', 'credit_card', 'apple_pay', 'stc_pay', 'cash', 'cheque', 'payment_link'] as const;
 
@@ -58,6 +58,7 @@ export class FinanceController {
       const effective = cos.filter((x) => ['approved', 'signed', 'billed'].includes(x.status));
       const coTotal = effective.reduce((s, x) => s + toHalalas(x.amountDelta), 0);
       const coPaid = coMilestones.reduce((s, m) => s + toHalalas(m.paidAmount), 0);
+      const credited = await advanceCredits(tx, id);
       return {
         contract: { id: c.id, number: c.number, status: c.status, total: c.total, partyId: c.partyId },
         milestones, requests, invoices, payments: pays,
@@ -68,7 +69,8 @@ export class FinanceController {
           paid: halalasToFixed(coPaid),
           adjustedTotal: halalasToFixed(toHalalas(c.total) + coTotal),
         },
-        summary: { total: c.total, paid: halalasToFixed(paid), remaining: halalasToFixed(toHalalas(c.total) - paid), adjustedTotal: halalasToFixed(toHalalas(c.total) + coTotal) },
+        // credited = credit notes against the advances, netted in the final request (so they reduce what remains)
+        summary: { total: c.total, paid: halalasToFixed(paid), credited: halalasToFixed(credited), remaining: halalasToFixed(toHalalas(c.total) - paid - credited), adjustedTotal: halalasToFixed(toHalalas(c.total) + coTotal) },
         nextMilestoneId: milestones.find((m) => m.status === 'pending')?.id ?? null,
       };
     });
