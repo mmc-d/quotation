@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'report.sales', 'report.finance',
   'project.read', 'project.write', 'project.override',
   'asset.read', 'asset.write', 'workorder.read', 'workorder.write', 'workorder.dispatch', 'ticket.read', 'ticket.write',
+  'inventory.read', 'inventory.write', 'inventory.count', 'purchase.read', 'purchase.write', 'purchase.approve', 'purchase.cost.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -65,6 +66,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'quote.read': 'company', 'contract.read': 'company', 'contract.stamp': 'company',
       'billing.read': 'company', 'billing.write': 'company', 'invoice.read': 'company', 'invoice.issue': 'company',
       'payment.read': 'company', 'payment.record': 'company', 'report.finance': 'company', 'report.sales': 'company',
+      'inventory.read': 'company', 'purchase.read': 'company', 'purchase.cost.read': 'company',
     },
   },
   customer_service: {
@@ -77,6 +79,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'party.read': 'company', 'product.read': 'all', 'quote.read': 'company', 'contract.read': 'company', 'billing.read': 'company', 'invoice.read': 'company', 'payment.read': 'company',
       'project.read': 'company', 'project.write': 'company', 'project.override': 'company', 'asset.read': 'company', 'asset.write': 'company',
       'workorder.read': 'company', 'workorder.write': 'company', 'workorder.dispatch': 'company', 'ticket.read': 'company', 'ticket.write': 'company',
+      'inventory.read': 'company', 'purchase.read': 'company',
       'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company',
     },
   },
@@ -88,9 +91,23 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'message.read': 'company', 'message.send': 'company',
     },
   },
+  storekeeper: {
+    name_ar: 'أمين المستودع', name_en: 'Storekeeper', maxDiscountPercent: 0,
+    grants: {
+      'party.read': 'company', 'product.read': 'all', 'project.read': 'company', 'asset.read': 'company', 'workorder.read': 'company',
+      'inventory.read': 'company', 'inventory.write': 'company', 'inventory.count': 'company', 'purchase.read': 'company',
+    },
+  },
+  purchaser: {
+    name_ar: 'مسؤول المشتريات', name_en: 'Purchaser', maxDiscountPercent: 0,
+    grants: {
+      'party.read': 'company', 'party.write': 'company', 'product.read': 'all', 'product.write': 'all', 'product.cost.read': 'all', 'contract.read': 'company', 'project.read': 'company',
+      'inventory.read': 'company', 'purchase.read': 'company', 'purchase.write': 'company', 'purchase.approve': 'company', 'purchase.cost.read': 'company',
+    },
+  },
   technician: {
     name_ar: 'فني', name_en: 'Technician', maxDiscountPercent: 0,
-    grants: { 'party.read': 'company', 'product.read': 'all', 'project.read': 'own', 'asset.read': 'company', 'asset.write': 'own', 'workorder.read': 'own', 'workorder.write': 'own', 'ticket.read': 'own' },
+    grants: { 'party.read': 'company', 'product.read': 'all', 'project.read': 'own', 'asset.read': 'company', 'asset.write': 'own', 'workorder.read': 'own', 'workorder.write': 'own', 'ticket.read': 'own', 'inventory.read': 'own' },
   },
   auditor: {
     name_ar: 'مدقق', name_en: 'Auditor', maxDiscountPercent: 0,

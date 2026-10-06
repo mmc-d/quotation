@@ -43,6 +43,16 @@ export const product = pgTable('product', {
   warrantyMonths: integer('warranty_months'),
   serialTracked: boolean('serial_tracked').notNull().default(false),
   hsCode: text('hs_code'),
+  /** country of origin (ISO 3166 alpha-2) — duty and SABER (INV-05) */
+  originCountry: text('origin_country'),
+  /** radio device (Wi-Fi, Zigbee, BLE, LoRa, cellular) → CST type approval required (INV-08) */
+  radio: boolean('radio').notNull().default(false),
+  /** moving-weighted-average cost in SAR, maintained by stock receipts and landed costs (INV-73) */
+  avgCostSar: unitPrice('avg_cost_sar'),
+  /** reorder point and quantity for replenishment suggestions (INV-25) */
+  reorderLevel: qty('reorder_level'),
+  reorderQty: qty('reorder_qty'),
+  weightKg: qty('weight_kg'),
   imageFileId: uuid('image_file_id'),
   imageUrl: text('image_url'),
   datasheetUrl: text('datasheet_url'),

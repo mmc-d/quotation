@@ -67,6 +67,13 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   project: { pattern: 'PRJ-{SEQ:4}', reset: 'never' },
   work_order: { pattern: 'WO-{SEQ:5}', reset: 'never' },
   ticket: { pattern: 'TCK-{SEQ:5}', reset: 'never' },
+  material_request: { pattern: 'MR-{SEQ:5}', reset: 'never' },
+  purchase_order: { pattern: 'PO-{SEQ:5}', reset: 'never' },
+  goods_receipt: { pattern: 'GRN-{SEQ:5}', reset: 'never' },
+  shipment: { pattern: 'SHP-{SEQ:4}', reset: 'never' },
+  stock_transfer: { pattern: 'TRF-{SEQ:5}', reset: 'never' },
+  stock_count: { pattern: 'CNT-{SEQ:4}', reset: 'never' },
+  supplier_bill: { pattern: 'BILL-{SEQ:5}', reset: 'never' },
 };
 
 /** The bucket key a sequence counts within (e.g. the day for daily series). */
