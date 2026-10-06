@@ -126,6 +126,22 @@ describe('CPQ-13 — quote sections with subtotals', () => {
     expect(html.lastIndexOf('class="section-sub"')).toBeLessThan(html.lastIndexOf('class="ins'));
   });
 
+  it('groups the Excel export by section like the PDF', async () => {
+    const { default: ExcelJS } = await import('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await owner.get(`/api/quotes/${S.rev.id}/excel`, { raw: true }));
+    const rows: string[] = [];
+    wb.worksheets[0]!.eachRow((r, i) => { if (i > 1) rows.push(`${r.getCell(2).text}|${r.getCell(3).text}|${r.getCell(6).text}`); });
+    const at = (prefix: string) => rows.findIndex((r) => r.startsWith(prefix));
+    expect(at('|البوابة الرئيسية|')).toBeGreaterThan(-1);
+    expect(rows).toContain('|المجموع الفرعي — البوابة الرئيسية|200');
+    expect(rows).toContain('|المجموع الفرعي — فيلا 3|90');
+    // section order follows the quote; INS comes after the last subtotal
+    expect(at('|البوابة الرئيسية|')).toBeLessThan(at('|المبنى أ|'));
+    expect(at('INS|')).toBeGreaterThan(at('|المجموع الفرعي — فيلا 3|'));
+    expect(rows.some((r) => r.startsWith('QX-B|') && r.includes('(اختياري)'))).toBe(true);
+  });
+
   it('renders the quote PDF with sections (Gotenberg)', async () => {
     if (!pdfs) return;
     const pdf = await owner.get<Buffer>(`/api/quotes/${S.rev.id}/pdf`, { raw: true });

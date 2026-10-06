@@ -103,6 +103,8 @@ describe('Contract template sets', () => {
     expect(c).toMatchObject({ templateSet: 'supply_only', title: 'عقد توريد', status: 'draft' });
     expect(c.clauses.map((x: any) => x.templateId)).toEqual(S.supplyClauses.map((x: any) => x.id));
     expect(c.milestones.map((m: any) => Number(m.percent))).toEqual([50, 50]);
+    // the quote now links to its contract (the editor shows it instead of «إنشاء عقد»)
+    expect((await owner.get(`/api/quotes/${q.id}`)).contract).toMatchObject({ id: c.id, number: c.number });
     // Change orders only apply after signing.
     await owner.post('/api/change-orders', { contractId: c.id, description: 'x', lines: [{ code: 'A', description: 'a', qty: 1, unitPrice: '1' }] }, { expect: 400 });
 

@@ -8,10 +8,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatNationalAddress } from '@mmc/domain';
-import { api, openFile } from '@/lib/api';
+import { api, openFile, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { date, dateTime } from '@/lib/format';
-import { Badge, Button, Card, Checkbox, clsx, Dialog, Field, Input, Money, PageHeader, Select, StatusBadge, Textarea } from '@/components/ui';
+import { Badge, Button, Card, LinkButton, Checkbox, clsx, Dialog, Field, Input, Money, PageHeader, Select, StatusBadge, Textarea } from '@/components/ui';
 import { PartyPicker, type PickedParty } from '@/components/party-picker';
 import { CatalogPanel } from './catalog-panel';
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from './common';
@@ -20,8 +20,9 @@ import { LinesEditor, type SectionActions } from './lines-editor';
 import { Menu } from './menu';
 import { SendDialog, type PartyContact } from './send-dialog';
 import { TotalsPanel } from './totals';
+import { TEMPLATE_SETS, type TemplateSet } from '../../contracts/_components/types';
 import {
-  calcDraft, cleanMoney, cleanQty, draftFromView, draftToBody, groupLines, INS_CODE, INS_DESC, newKey, quoteNo, syncLines, trimNum, type EditLine, type Product, type QuoteDraft, type QuoteView,
+  calcDraft, cleanMoney, cleanQty, draftFromView, draftToBody, groupLines, INS_CODE, INS_DESC, newKey, quoteNo, syncLines, trimNum, type EditLine, type Product, type QuoteDraft, type QuoteView, type ResolvedPrices,
 } from './types';
 
 interface PartySite { id: string; name: string; type: string; buildingNumber: string | null; street: string | null; district: string | null; city: string | null; postalCode: string | null; additionalNumber: string | null }
@@ -193,8 +194,34 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
   };
 
   const pickParty = (p: PickedParty | null) => {
-    if (!p) { set({ partyId: null, contactId: null, siteId: null }); return; }
-    set({ partyId: p.id, contactId: null, siteId: null, clientName: p.nameAr, clientPhone: p.phone ?? draft.clientPhone, clientEmail: p.email ?? draft.clientEmail });
+    const prevPartyId = draft.partyId;
+    if (!p) set({ partyId: null, contactId: null, siteId: null });
+    else set({ partyId: p.id, contactId: null, siteId: null, clientName: p.nameAr, clientPhone: p.phone ?? draft.clientPhone, clientEmail: p.email ?? draft.clientEmail });
+    if ((p?.id ?? null) !== prevPartyId) void repriceForParty(prevPartyId, p?.id ?? null);
+  };
+  /**
+   * Customer changed: lines still at the previous customer's price move to the new customer's price
+   * (price list, else catalog). Hand-edited prices and kit prices don't match the old price, so they stay.
+   */
+  const repriceForParty = async (fromParty: string | null, toParty: string | null) => {
+    const ids = [...new Set(draft.lines.filter((l) => l.productId && l.code !== INS_CODE).map((l) => l.productId!))];
+    if (!ids.length || !can('product.read')) return;
+    try {
+      const resolve = (partyId: string | null) => api.get<ResolvedPrices>(`/price-lists/resolve${qs({ partyId, productIds: ids.join(',') })}`);
+      const [before, after] = await Promise.all([resolve(fromParty), resolve(toParty)]);
+      const reprice = (l: EditLine): EditLine | null => {
+        const was = l.productId ? before.prices[l.productId] : undefined;
+        const now = l.productId ? after.prices[l.productId] : undefined;
+        if (!was || !now || l.code === INS_CODE || Number(l.unitPrice) !== Number(was.price) || Number(now.price) === Number(l.unitPrice)) return null;
+        return { ...l, unitPrice: trimNum(now.price), listPrice: trimNum(now.listPrice) };
+      };
+      // count from the snapshot (state updaters run later); apply to the latest lines
+      const changed = draft.lines.filter((l) => reprice(l)).length;
+      setLines((lines) => lines.map((l) => reprice(l) ?? l));
+      if (changed) toast.info(after.priceList ? `أُعيد تسعير ${changed} بند حسب قائمة «${after.priceList.name}»` : `أُعيد تسعير ${changed} بند بسعر الكتالوج`);
+    } catch (e) {
+      toast.error(`تعذّر تحديث الأسعار: ${errMsg(e)}`);
+    }
   };
   const pickContact = (id: string) => {
     const c = party?.contacts.find((x) => x.id === id);
@@ -289,9 +316,10 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
     const n = await run('duplicate', () => api.post<QuoteView>(`/quotes/${v.id}/duplicate`), 'تم إنشاء نسخة جديدة من العرض');
     if (n) { qc.invalidateQueries({ queryKey: ['quotes'] }); router.push(`/quotes/${n.id}`); }
   });
+  const [contractSet, setContractSet] = useState<TemplateSet>('supply_install');
   const createContract = async () => {
     if (!view) return;
-    const c = await run('contract', () => api.post<{ id: string; number: string }>(`/contracts/from-quote/${view.id}`), 'تم إنشاء العقد');
+    const c = await run('contract', () => api.post<{ id: string; number: string }>(`/contracts/from-quote/${view.id}`, { templateSet: contractSet }), 'تم إنشاء العقد');
     if (c) { qc.invalidateQueries({ queryKey: ['quote', view.id] }); qc.invalidateQueries({ queryKey: ['contracts'] }); setPending(null); router.push(`/contracts/${c.id}`); }
   };
 
@@ -325,7 +353,9 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
             )}
             {canSend && <Button variant={status === 'approved' ? 'gold' : 'outline'} icon={<Send className="size-4" />} onClick={() => void withSaved(() => setPending('send'))}>إرسال</Button>}
             {view && <Button variant="outline" icon={<FileText className="size-4" />} onClick={() => void withSaved((v) => openFile(`/quotes/${v.id}/pdf`))}>PDF</Button>}
-            {canContract && <Button variant={status === 'accepted' ? 'gold' : 'outline'} icon={<FileSignature className="size-4" />} onClick={() => setPending('contract')}>إنشاء عقد</Button>}
+            {view?.contract ? (
+              <LinkButton href={`/contracts/${view.contract.id}`} icon={<FileSignature className="size-4" />}>العقد {view.contract.number}</LinkButton>
+            ) : canContract && <Button variant={status === 'accepted' ? 'gold' : 'outline'} icon={<FileSignature className="size-4" />} onClick={() => setPending('contract')}>إنشاء عقد</Button>}
             {view && (
               <Menu label="المزيد" icon={<MoreHorizontal className="size-4" />} items={[
                 { label: 'تصدير Excel', icon: <FileSpreadsheet className="size-4" />, onClick: () => void withSaved((v) => openFile(`/quotes/${v.id}/excel`)) },
@@ -518,7 +548,17 @@ export function QuoteEditor({ view, initial }: { view?: QuoteView; initial: Quot
       <ReasonDialog open={pending === 'rejected'} title="رفض العميل للعرض" label="سبب الرفض" danger confirmLabel="تعليم كمرفوض" loading={busy === 'status'} onConfirm={(r) => void setStatus('rejected', r)} onClose={() => setPending(null)} />
       <ConfirmDialog open={pending === 'accept'} title="تعليم العرض كمقبول" message="سيُعلَّم العرض كمقبول من العميل وتنتقل الفرصة المرتبطة إلى «تم الفوز». يمكنك بعدها إنشاء العقد." confirmLabel="تعليم كمقبول" loading={busy === 'status'} onConfirm={() => void setStatus('accepted')} onClose={() => setPending(null)} />
       <ConfirmDialog open={pending === 'revise'} title="إنشاء نسخة معدّلة" message={view ? <>ستُنشأ النسخة <b className="num">R{Math.max(...view.revisions.map((r) => r.revision), view.revision) + 1}</b> كمسودة قابلة للتعديل، وتُعلَّم هذه النسخة كمُستبدلة.</> : null} confirmLabel="إنشاء النسخة" loading={busy === 'revise'} onConfirm={() => void revise()} onClose={() => setPending(null)} />
-      <ConfirmDialog open={pending === 'contract'} title="إنشاء عقد من العرض" message={<>سيُنشأ عقد توريد وتركيب (مسودة) من بنود هذا العرض مع البنود القانونية وجدول الدفعات الافتراضي (50/40/10).{status !== 'accepted' && <> سيُعلَّم العرض كمقبول.</>}</>} confirmLabel="إنشاء العقد" loading={busy === 'contract'} onConfirm={() => void createContract()} onClose={() => setPending(null)} />
+      <ConfirmDialog open={pending === 'contract'} title="إنشاء عقد من العرض" message={<>
+        <p>سيُنشأ عقد (مسودة) من بنود هذا العرض مع البنود القانونية وجدول الدفعات الافتراضي لنوع العقد.{status !== 'accepted' && <> سيُعلَّم العرض كمقبول.</>}</p>
+        <div className="mt-3 space-y-2" role="radiogroup" aria-label="نوع العقد">
+          {TEMPLATE_SETS.map((ts) => (
+            <label key={ts.value} className={clsx('flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2', contractSet === ts.value ? 'border-primary bg-primary-50' : 'border-line hover:bg-tint/40')}>
+              <input type="radio" name="contract-set" className="mt-1 accent-[var(--color-primary)]" checked={contractSet === ts.value} onChange={() => setContractSet(ts.value)} />
+              <span><span className="block font-bold">{ts.label}</span><span className="block text-xs text-muted">{ts.hint}</span></span>
+            </label>
+          ))}
+        </div>
+      </>} confirmLabel="إنشاء العقد" loading={busy === 'contract'} onConfirm={() => void createContract()} onClose={() => setPending(null)} />
     </>
   );
 }

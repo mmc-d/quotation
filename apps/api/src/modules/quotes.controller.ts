@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { and, appUser, contact, desc, eq, gte, ilike, inArray, lte, or, party, quote, sql } from '@mmc/db';
 import { formatSar, normalizeArabic } from '@mmc/domain';
+import { quotePrintRows } from '@mmc/doc-templates';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { badRequest } from '../common/errors.js';
@@ -11,7 +12,7 @@ import { sendTemplate } from '../common/messaging.js';
 import { scopeFilter, assertCan } from '../common/scope.js';
 import { ZodPipe, zDate, zMoney, zPage, zQty } from '../common/zod.js';
 import {
-  createQuote, decideQuote, getQuoteView, issueQuoteDocument, logActivity, markQuoteSent, renderQuotePdf, reviseQuote, setQuoteStatus, submitQuote, updateQuote, type QuoteInput,
+  createQuote, decideQuote, getQuoteView, issueQuoteDocument, logActivity, markQuoteSent, quoteDocFrom, renderQuotePdf, reviseQuote, setQuoteStatus, submitQuote, updateQuote, type QuoteInput,
 } from './quotes.service.js';
 
 const lineSchema = z.object({
@@ -217,7 +218,27 @@ export class QuotesController {
     const head = ws.getRow(1);
     head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D4A2E' } };
-    q.lines.forEach((l, i) => ws.addRow({ n: i + 1, code: l.code, desc: l.description, qty: Number(l.qty), price: Number(l.unitPrice), total: Number(l.lineTotal), ...(withCost ? { cost: l.unitCost ? Number(l.unitCost) : null } : {}) }));
+    // Same grouping as the PDF: unsectioned lines, then each section (title row → lines → subtotal), INS last.
+    const doc = quoteDocFrom(q);
+    const lines = doc.lines.map((l, i) => ({ ...l, unitCost: q.lines[i]!.unitCost }));
+    let n = 0;
+    for (const r of quotePrintRows({ lines, sections: doc.sections })) {
+      if (r.kind === 'head') {
+        const row = ws.addRow({ desc: r.section.title });
+        row.font = { bold: true, color: { argb: 'FF0D4A2E' } };
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF6F1E1' } };
+      } else if (r.kind === 'sub') {
+        const row = ws.addRow({ desc: `المجموع الفرعي — ${r.section.title}`, total: r.section.subtotal / 100 });
+        row.font = { bold: true, italic: true };
+      } else {
+        const l = r.line;
+        ws.addRow({
+          n: ++n, code: l.code, desc: `${l.description}${l.isOptional ? ' (اختياري)' : ''}${l.isFree ? ' (مجاني)' : ''}`,
+          qty: Number(l.qty), price: l.unitPrice / 100, total: l.amount / 100,
+          ...(withCost ? { cost: l.unitCost ? Number(l.unitCost) : null } : {}),
+        });
+      }
+    }
     const t = q.computed.totals;
     ws.addRow({});
     const add = (label: string, h: number) => { const r = ws.addRow({ desc: label, total: h / 100 }); r.font = { bold: true }; };

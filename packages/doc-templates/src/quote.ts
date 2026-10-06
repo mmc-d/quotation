@@ -52,13 +52,15 @@ const money = (h: Halalas) => `${formatSar(h)} ${riyal}`;
  * Print order: lines without a section, then each section (header row → its lines → subtotal row),
  * then the INS line last. Without sections the stored order is kept.
  */
-type PrintRow = { kind: 'line'; line: QuoteDocLine } | { kind: 'head'; section: QuoteDocSection } | { kind: 'sub'; section: QuoteDocSection };
+export type PrintRow<L extends PrintableLine = QuoteDocLine> = { kind: 'line'; line: L } | { kind: 'head'; section: QuoteDocSection } | { kind: 'sub'; section: QuoteDocSection };
+type PrintableLine = { isIns: boolean; sectionKey?: string | null };
 
-function orderedRows(q: QuoteDoc): PrintRow[] {
+/** Shared by the PDF and the Excel export so both group sections the same way. */
+export function quotePrintRows<L extends PrintableLine>(q: { lines: L[]; sections?: QuoteDocSection[] }): PrintRow<L>[] {
   const sections = (q.sections ?? []).filter((s) => q.lines.some((l) => !l.isIns && l.sectionKey === s.key));
   if (!sections.length) return q.lines.map((line) => ({ kind: 'line' as const, line }));
   const known = new Set(sections.map((s) => s.key));
-  const out: PrintRow[] = [];
+  const out: PrintRow<L>[] = [];
   for (const line of q.lines) if (!line.isIns && !(line.sectionKey && known.has(line.sectionKey))) out.push({ kind: 'line', line });
   for (const section of sections) {
     out.push({ kind: 'head', section });
@@ -72,7 +74,7 @@ function orderedRows(q: QuoteDoc): PrintRow[] {
 export function renderQuoteHtml(q: QuoteDoc): string {
   const cols = q.showImages !== false ? 7 : 6;
   let n = 0;
-  const rows = orderedRows(q).map((r) => {
+  const rows = quotePrintRows(q).map((r) => {
     if (r.kind === 'head') {
       return `<tr class="section-head"><td colspan="${cols}" style="background:var(--tint);border-top:2px solid var(--primary);color:var(--primary);font-weight:800;padding:6px 8px">${esc(r.section.title)}</td></tr>`;
     }

@@ -62,6 +62,8 @@ export interface QuoteView {
   ownerId: string | null;
   priceListId: string | null;
   priceList: { id: string; name: string } | null;
+  /** live contract made from this quote (cancelled ones excluded) */
+  contract?: { id: string; number: string; status: string } | null;
   sections: ApiQuoteSection[];
   lines: ApiQuoteLine[];
   computed: { lines: QuoteLineResult[]; totals: QuoteTotals };

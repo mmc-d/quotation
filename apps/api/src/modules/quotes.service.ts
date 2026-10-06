@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
-  and, appUser, approvalRequest, asc, company, desc, emit, eq, inArray, issuedDocument, nextNumber, notification, opportunity, pipelineStage, priceList, product, quote, quoteLine, quoteSection, role, userRole, activity, type Tx,
+  and, appUser, approvalRequest, asc, company, contract, desc, emit, eq, inArray, issuedDocument, nextNumber, notification, opportunity, pipelineStage, priceList, product, quote, quoteLine, quoteSection, role, sql, userRole, activity, type Tx,
 } from '@mmc/db';
 import {
   approvalReasons, calculateQuote, canTransitionQuote, dec, fromHalalas, halalasToFixed, INS_CODE, isQuoteEditable, riyadhDate, syncInstallationLine, type QuoteLineInput, type QuoteStatus,
@@ -185,6 +185,8 @@ export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {
   const approvals = await tx.select().from(approvalRequest).where(and(eq(approvalRequest.documentType, 'quote'), eq(approvalRequest.entityId, id))).orderBy(desc(approvalRequest.createdAt));
   const documents = await tx.select().from(issuedDocument).where(and(eq(issuedDocument.documentType, 'quote'), eq(issuedDocument.entityId, id))).orderBy(desc(issuedDocument.issuedAt));
   const revisions = await tx.select({ id: quote.id, revision: quote.revision, status: quote.status, total: quote.total, createdAt: quote.createdAt }).from(quote).where(eq(quote.rootQuoteId, q.rootQuoteId ?? q.id)).orderBy(asc(quote.revision));
+  // the live (not cancelled) contract made from this quote, so the editor links to it instead of offering a new one
+  const [linkedContract] = await tx.select({ id: contract.id, number: contract.number, status: contract.status }).from(contract).where(and(eq(contract.quoteId, id), sql`${contract.status} <> 'cancelled'`));
   const [owner] = q.ownerId ? await tx.select({ id: appUser.id, nameAr: appUser.nameAr, email: appUser.email }).from(appUser).where(eq(appUser.id, q.ownerId)) : [];
   const given = Math.max(calc.totals.discountPercent, calc.totals.discountFromListPercent);
   const needsApproval = reasons.length > 0 || given > actor.maxDiscountPercent;
@@ -200,6 +202,7 @@ export async function getQuoteView(tx: Tx, actor: RequestActor, id: string) {
     documents,
     revisions,
     vatRegistered: co.vatRegistered,
+    contract: linkedContract ?? null,
   });
 }
 

@@ -121,6 +121,7 @@ const STATUS: Record<string, [string, string]> = {
   invoiced: ['مفوتر', 'bg-sky-100 text-sky-800'],
   partially_paid: ['مدفوع جزئيًا', 'bg-amber-100 text-amber-800'],
   paid: ['مدفوع', 'bg-emerald-100 text-emerald-800'],
+  billed: ['مفوتر', 'bg-sky-100 text-sky-800'],
   issued: ['صادرة', 'bg-sky-100 text-sky-800'],
   new: ['جديد', 'bg-sky-100 text-sky-800'],
   contacted: ['تم التواصل', 'bg-indigo-100 text-indigo-800'],
