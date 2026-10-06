@@ -12,3 +12,4 @@ export * from './projects.js';
 export * from './fieldservice.js';
 export * from './scheduling.js';
 export * from './inventory.js';
+export * from './service.js';

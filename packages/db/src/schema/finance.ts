@@ -25,6 +25,10 @@ export const paymentRequest = pgTable('payment_request', {
   publicToken: text('public_token'),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   remindersSent: jsonb('reminders_sent').$type<number[]>().notNull().default([]),
+  /** AMC billing (Phase 7b): the service agreement and the period this request covers */
+  agreementId: uuid('agreement_id'),
+  periodFrom: date('period_from'),
+  periodTo: date('period_to'),
   ...audit,
 }, (t) => [uniqueIndex('payment_request_number_uq').on(t.tenantId, t.number), uniqueIndex('payment_request_token_uq').on(t.publicToken)]);
 

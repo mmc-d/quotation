@@ -216,6 +216,15 @@ export const ticket = pgTable('ticket', {
   teamId: uuid('team_id'),
   branchId: uuid('branch_id').references(() => branch.id),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  /** Phase 7b SLA (FSM-64/83): agreement that covers the call, targets and the first staff response */
+  agreementId: uuid('agreement_id'),
+  slaResponseDue: timestamp('sla_response_due', { withTimezone: true }),
+  slaResolutionDue: timestamp('sla_resolution_due', { withTimezone: true }),
+  firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
+  /** escalation notifications already sent: response_at_risk, response_breached, resolution_at_risk, resolution_breached */
+  slaEscalations: jsonb('sla_escalations').$type<string[]>().notNull().default([]),
+  /** opened by the customer through the portal */
+  portalAccountId: uuid('portal_account_id'),
   ...audit,
 }, (t) => [uniqueIndex('ticket_number_uq').on(t.tenantId, t.number), index('ticket_status_idx').on(t.tenantId, t.status)]);
 
@@ -264,6 +273,12 @@ export const workOrder = pgTable('work_order', {
   signatureFileId: uuid('signature_file_id').references(() => file.id),
   reportFileId: uuid('report_file_id').references(() => file.id),
   completedAt: timestamp('completed_at', { withTimezone: true }),
+  /** preventive visit of a service agreement (FSM-62) */
+  agreementId: uuid('agreement_id'),
+  /** one-tap customer satisfaction after completion (FSM-87) */
+  csatScore: integer('csat_score'),
+  csatComment: text('csat_comment'),
+  csatAt: timestamp('csat_at', { withTimezone: true }),
   ownerId: uuid('owner_id').references(() => appUser.id),
   teamId: uuid('team_id'),
   branchId: uuid('branch_id').references(() => branch.id),

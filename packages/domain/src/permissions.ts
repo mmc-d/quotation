@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   'project.read', 'project.write', 'project.override',
   'asset.read', 'asset.write', 'workorder.read', 'workorder.write', 'workorder.dispatch', 'ticket.read', 'ticket.write',
   'inventory.read', 'inventory.write', 'inventory.count', 'purchase.read', 'purchase.write', 'purchase.approve', 'purchase.cost.read',
+  'agreement.read', 'agreement.write', 'portal.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -71,7 +72,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
   },
   customer_service: {
     name_ar: 'خدمة العملاء', name_en: 'Customer Service', maxDiscountPercent: 0,
-    grants: { 'party.read': 'company', 'party.write': 'company', 'quote.read': 'company', 'contract.read': 'company', 'lead.read': 'company', 'lead.write': 'company', 'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company', 'invoice.read': 'company', 'payment.read': 'company', 'ticket.read': 'company', 'ticket.write': 'company', 'asset.read': 'company', 'workorder.read': 'company', 'workorder.write': 'company', 'project.read': 'company' },
+    grants: { 'party.read': 'company', 'party.write': 'company', 'quote.read': 'company', 'contract.read': 'company', 'lead.read': 'company', 'lead.write': 'company', 'activity.read': 'company', 'activity.write': 'own', 'message.read': 'company', 'message.send': 'company', 'invoice.read': 'company', 'payment.read': 'company', 'ticket.read': 'company', 'ticket.write': 'company', 'asset.read': 'company', 'workorder.read': 'company', 'workorder.write': 'company', 'project.read': 'company', 'agreement.read': 'company', 'portal.manage': 'company' },
   },
   project_manager: {
     name_ar: 'مدير المشاريع', name_en: 'Projects Manager', maxDiscountPercent: 0,
@@ -88,7 +89,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
     grants: {
       'party.read': 'company', 'product.read': 'all', 'contract.read': 'company', 'project.read': 'company', 'asset.read': 'company', 'asset.write': 'company',
       'workorder.read': 'company', 'workorder.write': 'company', 'workorder.dispatch': 'company', 'ticket.read': 'company', 'ticket.write': 'company',
-      'message.read': 'company', 'message.send': 'company',
+      'message.read': 'company', 'message.send': 'company', 'agreement.read': 'company', 'agreement.write': 'company', 'portal.manage': 'company',
     },
   },
   storekeeper: {
