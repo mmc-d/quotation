@@ -876,7 +876,6 @@ table.qt tbody tr.dragging{opacity:.4;}
       <button class="btn btn-ghost" onclick="closeContract()">✕ إغلاق</button>
       <button class="btn btn-ghost" onclick="openLoadContract()">📂 تحميل عقد</button>
       <button class="btn btn-ghost" onclick="saveContract()">💾 حفظ</button>
-      <button id="ctStampBtn" class="btn btn-outline" onclick="printContractStamped()" style="display:none" title="يضيف ختم الشركة لهذه الطباعة فقط">🔏 ختم وطباعة</button>
       <button class="btn btn-orange" onclick="printContract()">🖨️ طباعة العقد / PDF</button>
     </div>
   </div>
@@ -970,7 +969,7 @@ table.qt tbody tr.dragging{opacity:.4;}
       <div class="set-grid">
         <div class="full"><label>معرّف ملف الختم في Drive (اختياري)</label><input id="slStampFileId" style="direction:ltr;font-size:.78rem"></div>
       </div>
-      <div class="fld-hint" style="margin:-.65rem 0 .75rem">نفس مجلد صور المنتجات، بالمعرّف (ID) لا بالاسم. يُستخدم فقط عند ضغط المدير على «ختم وطباعة» في العقد — لا يظهر تلقائياً في أي مسودة.</div>
+      <div class="fld-hint" style="margin:-.65rem 0 .75rem">نفس مجلد صور المنتجات، بالمعرّف (ID) لا بالاسم. يظهر تلقائياً في خانة توقيع الطرف الثاني في كل عقد.</div>
       <div class="set-grid">
         <div class="full"><label>أرقام مستخدمين مدراء (مفصولة بفواصل)</label><textarea id="slAdminIds" rows="2" style="direction:ltr" placeholder="92, 15"></textarea></div>
         <div class="full"><label>بريد Google لمدراء (مفصولة بفواصل — بعد تفعيل تسجيل الدخول في الإعدادات)</label><textarea id="slAdminEmails" rows="2" style="direction:ltr" placeholder="owner@example.com"></textarea></div>
@@ -2701,7 +2700,7 @@ async function openContract(){
       <div style="font-size:.82rem;color:var(--muted)">${escHtml(seller.repName||'')}</div>
       <div class="ct-sig-line"></div>
       <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem">التوقيع والختم / Signature &amp; Stamp</div>
-      <!-- Empty by default (R9) — filled only when an admin uses "ختم وطباعة", never on a draft -->
+      <!-- Filled by fillContractStamp() from the Drive stamp file in Settings -->
       <div id="ctStampSlot" style="width:166px;height:166px;margin:0 auto;"></div>
     </div>
   </div>
@@ -2723,22 +2722,21 @@ function attachContractHandlers(){
     el.removeEventListener('input', ctRecalc);
     el.addEventListener('input', ctRecalc);
   });
-  const stampBtn = document.getElementById('ctStampBtn');
-  if(stampBtn) stampBtn.style.display = isAdminUser() ? '' : 'none';
+  fillContractStamp();
 }
-// Stamp file, fetched the same way as a product image (R2/R9) — never embedded in the page or in a draft.
-function getStampUrl(){ return seller.stampFileId ? `https://drive.google.com/thumbnail?id=${seller.stampFileId}&sz=w400` : null; }
-async function printContractStamped(){
-  if(!isAdminUser()) return;
-  const url = getStampUrl();
-  if(!url){ toast('⚠️ أدخل معرّف ملف الختم أولاً من ⚙️ الإعدادات → بيانات المنشأة'); return; }
-  if(!await appConfirm('ختم وطباعة العقد؟',
-    'يُضاف ختم الشركة إلى هذه الطباعة فقط — تأكد أن العقد معتمد بصيغته النهائية قبل الختم.',
-    '🔏 نعم، ختم وطباعة')) return;
+// Stamp file, fetched from Drive like a product image (R2) — never embedded in the page. Every
+// contract shows it, including ones loaded from Drive that were saved before it was automatic.
+function getStampUrl(){ return seller.stampFileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(seller.stampFileId)}&sz=w400` : null; }
+function fillContractStamp(){
   const slot = document.getElementById('ctStampSlot');
-  if(slot) slot.innerHTML = `<img src="${url}" style="width:166px;height:166px;object-fit:contain;opacity:.92;transform:rotate(-7deg)" alt="ختم الشركة" onerror="this.style.display='none'">`;
-  printContract();
-  if(slot) slot.innerHTML = '';   // never stays stamped in the on-screen/editable view
+  const url = getStampUrl();
+  if(!slot || !url || slot.querySelector('img')) return;
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = 'ختم الشركة';
+  img.style.cssText = 'width:166px;height:166px;object-fit:contain;opacity:.92;transform:rotate(-7deg)';
+  img.addEventListener('error', ()=>{ img.style.display='none'; });
+  slot.appendChild(img);
 }
 
 function closeContract(){
