@@ -3,7 +3,7 @@ import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req, Res 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
-  and, asc, billingMilestone, changeOrder, contract, desc, eq, inArray, inboxEvent, invoiceMirror, party, paymentMirror, paymentRequest, sql, withTenant,
+  and, asc, billingMilestone, changeOrder, contract, desc, eq, inArray, inboxEvent, invoiceMirror, isNotNull, or, party, paymentMirror, paymentRequest, serviceAgreement, sql, withTenant,
 } from '@mmc/db';
 import { agingBucket, riyadhDate, toHalalas, halalasToFixed, VAT_RATE } from '@mmc/domain';
 import { htmlToPdf, renderInvoiceHtml, renderPaymentRequestHtml } from '@mmc/doc-templates';
@@ -34,6 +34,14 @@ async function invoicePdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0], id:
     taxable: toHalalas(inv.taxable), vat: toHalalas(inv.vatAmount), total: toHalalas(inv.total), prepaid: toHalalas(inv.prepaidAmount), balanceDue: toHalalas(inv.balanceDue), qrPayload: inv.qrPayload, zatcaStatus: inv.zatcaStatus,
   });
   return { pdf: await htmlToPdf(html, config.gotenbergUrl), number: inv.number };
+}
+
+/** Scope for payment-request lists: contract requests follow the contract, AMC requests the agreement. */
+function requestScope(actor: RequestActor) {
+  const byContract = scopeFilter(actor, 'billing.read', { owner: contract.ownerId, team: contract.teamId });
+  if (!byContract) return undefined;
+  const byAgreement = scopeFilter(actor, 'billing.read', { owner: serviceAgreement.ownerId, team: serviceAgreement.teamId });
+  return or(and(isNotNull(paymentRequest.contractId), byContract), and(isNotNull(paymentRequest.agreementId), byAgreement));
 }
 
 @Controller('finance')
@@ -93,11 +101,12 @@ export class FinanceController {
       const where = and(
         q.status ? inArray(paymentRequest.status, q.status.split(',')) : undefined,
         q.overdue ? and(sql`${paymentRequest.dueDate} < current_date`, inArray(paymentRequest.status, ['sent', 'partially_paid'])) : undefined,
-        scopeFilter(actor, 'billing.read', { owner: contract.ownerId, team: contract.teamId }),
-        q.q ? sql`(${paymentRequest.number} ilike ${`%${q.q}%`} or ${party.nameAr} ilike ${`%${q.q}%`} or ${contract.number} ilike ${`%${q.q}%`})` : undefined,
+        // contract requests follow the contract's owner/team; AMC requests (Phase 7b) the agreement's
+        requestScope(actor),
+        q.q ? sql`(${paymentRequest.number} ilike ${`%${q.q}%`} or ${party.nameAr} ilike ${`%${q.q}%`} or ${contract.number} ilike ${`%${q.q}%`} or ${serviceAgreement.number} ilike ${`%${q.q}%`})` : undefined,
       );
-      return tx.select({ pr: paymentRequest, partyName: party.nameAr, contractNumber: contract.number }).from(paymentRequest).leftJoin(party, eq(party.id, paymentRequest.partyId)).leftJoin(contract, eq(contract.id, paymentRequest.contractId)).where(where).orderBy(desc(paymentRequest.createdAt)).limit(q.limit).offset(q.offset)
-        .then((rows) => rows.map((r) => ({ ...r.pr, partyName: r.partyName, contractNumber: r.contractNumber })));
+      return tx.select({ pr: paymentRequest, partyName: party.nameAr, contractNumber: contract.number, agreementNumber: serviceAgreement.number }).from(paymentRequest).leftJoin(party, eq(party.id, paymentRequest.partyId)).leftJoin(contract, eq(contract.id, paymentRequest.contractId)).leftJoin(serviceAgreement, eq(serviceAgreement.id, paymentRequest.agreementId)).where(where).orderBy(desc(paymentRequest.createdAt)).limit(q.limit).offset(q.offset)
+        .then((rows) => rows.map((r) => ({ ...r.pr, partyName: r.partyName, contractNumber: r.contractNumber ?? r.agreementNumber, agreementNumber: r.agreementNumber })));
     });
   }
 
@@ -314,12 +323,15 @@ export class FinancePublicController {
       const [p] = pr.partyId ? await tx.select({ nameAr: party.nameAr }).from(party).where(eq(party.id, pr.partyId)) : [];
       const [c] = pr.contractId ? await tx.select({ number: contract.number }).from(contract).where(eq(contract.id, pr.contractId)) : [];
       const [m] = pr.milestoneId ? await tx.select({ nameAr: billingMilestone.nameAr }).from(billingMilestone).where(eq(billingMilestone.id, pr.milestoneId)) : [];
+      // AMC billing period (Phase 7b): show the agreement number and the period instead of a milestone
+      const [ag] = pr.agreementId ? await tx.select({ number: serviceAgreement.number }).from(serviceAgreement).where(eq(serviceAgreement.id, pr.agreementId)) : [];
       const co = await companyBlock(tx);
       const invoices = pr.status === 'paid' || pr.status === 'partially_paid' ? await tx.select({ id: invoiceMirror.id, number: invoiceMirror.number, typeCode: invoiceMirror.typeCode, total: invoiceMirror.total }).from(invoiceMirror).where(eq(invoiceMirror.paymentRequestId, pr.id)) : [];
       return {
         company: { legalNameAr: co.legalNameAr, bankName: co.bankName, iban: co.iban, vatRegistered: co.vatRegistered },
         number: pr.number, status: pr.status, amount: pr.amount, paidAmount: pr.paidAmount, due: halalasToFixed(toHalalas(pr.amount) - toHalalas(pr.paidAmount)), dueDate: pr.dueDate,
-        clientName: p?.nameAr ?? '', contractNumber: c?.number ?? null, milestone: m?.nameAr ?? '', canPayOnline: ['draft', 'sent', 'partially_paid'].includes(pr.status), sandbox: config.payments.provider === 'sandbox' && config.allowSandbox, invoices,
+        clientName: p?.nameAr ?? '', contractNumber: c?.number ?? ag?.number ?? null,
+        milestone: m?.nameAr ?? (ag ? `عقد صيانة ${ag.number} — من ${pr.periodFrom ?? ''} إلى ${pr.periodTo ?? ''}` : ''), canPayOnline: ['draft', 'sent', 'partially_paid'].includes(pr.status), sandbox: config.payments.provider === 'sandbox' && config.allowSandbox, invoices,
       };
     });
   }

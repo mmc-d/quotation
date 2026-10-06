@@ -15,7 +15,7 @@ import { ZodPipe, zDate, zPage, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import { loadCalendar } from './calendar.controller.js';
 import {
-  TEMPLATE_KEYS, applyTemplateTasks, assertProject, ensureProjectForContract, handoverDoc, loadFacts, loadProject, projectClock, projectScope, projectView,
+  TEMPLATE_KEYS, applyTemplateTasks, assertProject, decideApproval, ensureProjectForContract, handoverDoc, loadFacts, loadProject, projectClock, projectScope, projectView,
   type ProjectRow, type TemplateKey,
 } from './projects.service.js';
 
@@ -529,11 +529,7 @@ export class ProjectsController {
   private approvalStep(actor: RequestActor, aid: string, from: string[], to: string, set: Partial<typeof projectApproval.$inferInsert>) {
     return tenantTx(actor.tenantId, async (tx) => {
       const { a } = await this.loadApproval(tx, actor, aid);
-      if (!from.includes(a.status)) throw badRequest(`a ${a.status} approval cannot become ${to}`);
-      const [n] = await tx.update(projectApproval).set({ ...set, status: to, ...touch(actor), version: a.version + 1 }).where(eq(projectApproval.id, aid)).returning();
-      await audit(tx, actor, `approval_${to}`, 'project_approval', aid, { status: a.status }, { status: to, ...set }, typeof set.rejectionReason === 'string' ? set.rejectionReason : undefined);
-      if (to === 'approved') await emit(tx, 'project', a.projectId, 'project.approval_approved', { kind: a.kind, revision: a.revision });
-      return n!;
+      return decideApproval(tx, actor, a, from, to, set);
     }, actor.userId);
   }
 

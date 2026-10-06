@@ -168,6 +168,11 @@ describe('Phase 2 — online acceptance, CRM, inbox, e-signature', () => {
     spy.mockRestore();
     const otp = line.trim().slice(-6);
     await anon.post(`/api/public/quotes/${S.publicToken}/decision`, { otp: otp === '000000' ? '111111' : '000000', signerName: 'سالم', decision: 'accept' }, { expect: 400 });
+    // the wrong attempt is persisted (it used to be rolled back with the error)
+    const adm = ADMIN_SQL();
+    const [att] = await adm`select attempts from quote_acceptance where quote_id = ${S.quote.id} and verified_at is null order by created_at desc limit 1`;
+    await adm.end();
+    expect(att!.attempts).toBe(1);
     const r = await anon.post(`/api/public/quotes/${S.publicToken}/decision`, { otp, signerName: 'سالم', decision: 'accept' }, { expect: 200 });
     expect(r.status).toBe('accepted');
     expect((await rep.get(`/api/quotes/${S.quote.id}`)).status).toBe('accepted');

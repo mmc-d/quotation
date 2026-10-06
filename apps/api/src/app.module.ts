@@ -17,13 +17,15 @@ import { CalendarController } from './modules/calendar.controller.js';
 import { ProjectsController } from './modules/projects.controller.js';
 import { FieldServiceController } from './modules/field-service.controller.js';
 import { InventoryController } from './modules/inventory.controller.js';
+import { ServiceController } from './modules/service.controller.js';
+import { PortalController } from './modules/portal.controller.js';
 
 @Module({
   controllers: [
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
-    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController,
+    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, ServiceController, PortalController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })

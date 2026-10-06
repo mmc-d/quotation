@@ -39,6 +39,17 @@ export const DEFAULT_MESSAGE_TEMPLATES = [
     body: 'شكرًا {{name}}، تم استلام مبلغ {{amount}} ريال. رقم الفاتورة: {{number}}.' },
   { key: 'service_report', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_service_report', variables: ['name', 'number', 'link'],
     body: 'مرحبًا {{name}}، تم إنجاز أمر العمل رقم {{number}} من المدى المبارك. تقرير الخدمة: {{link}}' },
+  // Phase 7b — service agreements, CSAT and the customer portal (also ensured at runtime by the API)
+  { key: 'csat_request', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_csat_request', variables: ['name', 'number', 'link'],
+    body: 'مرحبًا {{name}}، شكرًا لاختياركم المدى المبارك. كيف تقيّمون خدمة أمر العمل رقم {{number}}؟ قيّمونا بنقرة واحدة: {{link}}' },
+  { key: 'portal_otp', channel: 'whatsapp', category: 'authentication', language: 'ar', providerTemplateName: 'mmc_otp', variables: ['code'],
+    body: 'رمز الدخول إلى بوابة عملاء المدى المبارك: {{code}} — صالح لمدة 10 دقائق. لا تشاركه مع أحد.' },
+  { key: 'portal_invite', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_portal_invite', variables: ['name', 'link'],
+    body: 'مرحبًا {{name}}، يمكنكم الآن متابعة أجهزتكم وطلبات الصيانة والفواتير عبر بوابة عملاء المدى المبارك: {{link}} — الدخول برمز يصلكم على واتساب.' },
+  { key: 'amc_renewal', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_amc_renewal', variables: ['name', 'number', 'end', 'link'],
+    body: 'مرحبًا {{name}}، ينتهي عقد الصيانة رقم {{number}} بتاريخ {{end}}. لتجديد العقد واستمرار التغطية تواصلوا معنا أو تابعوا عبر البوابة: {{link}}' },
+  { key: 'amc_visit_due', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_amc_visit_due', variables: ['name', 'number', 'date'],
+    body: 'مرحبًا {{name}}، زيارة الصيانة الوقائية ضمن عقد الصيانة {{number}} مستحقة بتاريخ {{date}}. سنتواصل معكم لتحديد الموعد المناسب.' },
   { key: 'quote_sent', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'number', 'link'],
     body: 'مرحبًا {{name}}،\n\nعرض السعر رقم {{number}} جاهز للاطلاع والقبول:\n{{link}}\n\nمع التحية،\nالمدى المبارك للتجارة والحلول الذكية' },
 ];

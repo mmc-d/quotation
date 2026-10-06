@@ -16,6 +16,7 @@ import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { readStoredFile, storeFile } from '../common/files.js';
 import { config } from '../config.js';
 import { loadCalendar } from './calendar.controller.js';
+import { activeAgreementFor, slaPolicyOf } from './service.service.js';
 
 /**
  * Field service (module 06): installed base, helpdesk-lite tickets, work orders and the technician
@@ -139,10 +140,17 @@ export async function projectInProgress(tx: Tx, siteId: string | null | undefine
   return !!p;
 }
 
+/**
+ * Coverage decision (FSM-60) incl. an active AMC on the device or its site (Phase 7b). The agreement
+ * (if any) also sets the ticket SLA, even when the device is still under warranty.
+ */
 export async function coverageFor(tx: Tx, input: { siteId?: string | null; asset?: AssetRow | null; today?: string }) {
   const today = input.today ?? riyadhDate();
-  const inProgress = await projectInProgress(tx, input.siteId ?? input.asset?.siteId, input.asset?.projectId);
-  return decideCoverage({ today, projectInProgress: inProgress, asset: input.asset ?? null });
+  const siteId = input.siteId ?? input.asset?.siteId ?? null;
+  const inProgress = await projectInProgress(tx, siteId, input.asset?.projectId);
+  const agreement = await activeAgreementFor(tx, { siteId, assetId: input.asset?.id ?? null, today });
+  const d = decideCoverage({ today, projectInProgress: inProgress, asset: input.asset ?? null, amcEnd: agreement?.endDate ?? null });
+  return { ...d, agreementId: agreement?.id ?? null, agreementNumber: agreement?.number ?? null, sla: slaPolicyOf(agreement) };
 }
 
 // ───────────────────────── look-ups ─────────────────────────

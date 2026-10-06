@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
-  and, asc, billingMilestone, changeOrder, contact, contract, desc, emit, eq, inArray, invoiceMirror, nextNumber, notification, party, paymentMirror, paymentRequest, site, sql, erpLink, type Tx,
+  and, asc, billingMilestone, changeOrder, contact, contract, desc, emit, eq, inArray, invoiceMirror, nextNumber, notification, party, paymentMirror, paymentRequest, serviceAgreement, site, sql, erpLink, type Tx,
 } from '@mmc/db';
 import { dec, halalasToFixed, lineAmountHalalas, nextBusinessDay, riyadhDate, toHalalas, VAT_RATE, type InvoiceTypeCode } from '@mmc/domain';
 import type { InvoiceResult, PaymentResult } from '@mmc/erp-connector';
@@ -280,6 +280,7 @@ export async function applyPayment(tx: Tx, actor: RequestActor | null, tenantId:
   if (amountH > remaining) throw badRequest(`amount exceeds the remaining ${halalasToFixed(remaining)}`);
   const [already] = await tx.select().from(paymentMirror).where(sql`${paymentMirror.reference} = ${p.idempotencyKey} or ${paymentMirror.erpName} = ${p.idempotencyKey}`);
   if (already) return { payment: already, invoice: null, duplicate: true };
+  if (pr.agreementId) return applyAgreementPayment(tx, actor, tenantId, pr, amountH, p);
   const { c, milestones, coMilestones } = await contractWithMilestones(tx, pr.contractId!);
   const co = await loadCompany(tx);
   const customer = await ensureCustomer(tx, tenantId, pr.partyId!);
@@ -327,4 +328,48 @@ export async function applyPayment(tx: Tx, actor: RequestActor | null, tenantId:
   await emit(tx, 'payment', payRow.id, 'payment.received', { amount: halalasToFixed(amountH), paymentRequest: pr.number });
   if (c.ownerId) await tx.insert(notification).values({ userId: c.ownerId, kind: 'payment', titleAr: `💰 استُلم ${halalasToFixed(amountH)} ريال — ${pr.number} (${c.number})`, link: `/contracts/${c.id}` });
   return { payment: payRow, invoice, changeOrderInvoice, duplicate: false };
+}
+
+/**
+ * AMC billing (Phase 7b, FSM-63): a payment on a service-agreement request issues one 388 tax
+ * invoice for that billing period (tax-inclusive, so it equals the request exactly; issued once, on
+ * the first payment), records the payment against it and mirrors both.
+ */
+async function applyAgreementPayment(tx: Tx, actor: RequestActor | null, tenantId: string, pr: typeof paymentRequest.$inferSelect, amountH: number, p: { amount: string; paidOn: string; method: string; reference?: string | null; idempotencyKey: string }) {
+  const [a] = await tx.select().from(serviceAgreement).where(eq(serviceAgreement.id, pr.agreementId!));
+  if (!a) throw notFound('service agreement');
+  const co = await loadCompany(tx);
+  const customer = await ensureCustomer(tx, tenantId, pr.partyId ?? a.partyId);
+  let [inv] = await tx.select().from(invoiceMirror).where(and(eq(invoiceMirror.paymentRequestId, pr.id), eq(invoiceMirror.typeCode, '388'), sql`${invoiceMirror.status} <> 'cancelled'`));
+  let issued: InvoiceResult | null = null;
+  if (!inv) {
+    const period = `${pr.periodFrom ?? a.startDate} → ${pr.periodTo ?? a.endDate}`;
+    issued = await backOffice(tenantId).createInvoice({
+      idempotencyKey: `amc:${pr.id}`,
+      typeCode: '388',
+      customer,
+      issueDate: p.paidOn,
+      dueDate: pr.dueDate,
+      lines: [{ code: 'AMC', description: `عقد صيانة ${a.number} — الفترة ${period}`, qty: '1', unitPrice: pr.amount }],
+      vatRate: co.vatRegistered && a.vatOn ? VAT_RATE : 0,
+      taxInclusive: true,
+      core: { paymentRequestId: pr.id },
+      remarks: `${a.number} / ${pr.number}`,
+    });
+    if (toHalalas(issued.total) !== toHalalas(pr.amount)) throw new Error(`AMC invoice total ${issued.total} ≠ request ${pr.amount}`);
+    inv = await mirrorInvoice(tx, issued, { partyId: pr.partyId ?? a.partyId, paymentRequestId: pr.id });
+    await audit(tx, actor, 'issue_388', 'service_agreement', a.id, null, { invoice: issued.number, total: issued.total, period, paymentRequest: pr.number });
+    await emit(tx, 'invoice', inv.id, 'invoice.issued', { number: issued.number, typeCode: '388', agreement: a.number });
+  }
+  const pay = await backOffice(tenantId).recordPayment({ idempotencyKey: p.idempotencyKey, customerErpName: customer.erpName, amount: halalasToFixed(amountH), paidOn: p.paidOn, method: p.method, reference: p.reference ?? null, allocations: [{ invoiceErpName: inv.erpName, amount: halalasToFixed(amountH) }] });
+  const payRow = await mirrorPayment(tx, { ...pay, reference: p.idempotencyKey }, { partyId: pr.partyId, paymentRequestId: pr.id });
+  const refreshed = await backOffice(tenantId).getInvoice(inv.erpName);
+  if (refreshed) await mirrorInvoice(tx, refreshed, { partyId: pr.partyId ?? a.partyId, paymentRequestId: pr.id });
+  const paid = toHalalas(pr.paidAmount) + amountH;
+  const full = paid >= toHalalas(pr.amount);
+  await tx.update(paymentRequest).set({ paidAmount: halalasToFixed(paid), status: full ? 'paid' : 'partially_paid', updatedAt: new Date() }).where(eq(paymentRequest.id, pr.id));
+  await audit(tx, actor, 'payment', 'payment_request', pr.id, null, { amount: halalasToFixed(amountH), method: p.method, reference: p.reference, invoice: inv.number, agreement: a.number });
+  await emit(tx, 'payment', payRow.id, 'payment.received', { amount: halalasToFixed(amountH), paymentRequest: pr.number });
+  if (a.ownerId) await tx.insert(notification).values({ userId: a.ownerId, kind: 'payment', titleAr: `💰 استُلم ${halalasToFixed(amountH)} ريال — ${pr.number} (${a.number})`, link: `/service/agreements/${a.id}` });
+  return { payment: payRow, invoice: issued, changeOrderInvoice: null, agreementInvoice: inv, duplicate: false };
 }

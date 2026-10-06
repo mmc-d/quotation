@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@ne
 import type { Response } from 'express';
 import { z } from 'zod';
 import {
-  and, asc, contact, desc, emit, eq, file, gte, ilike, inArray, installedAsset, isNull, lt, nextNumber, notification, or, party, project, site, siteLocation, sql, ticket, timeEntry, workOrder, type Tx,
+  agreementVisit, and, asc, contact, desc, emit, eq, file, gte, ilike, inArray, installedAsset, isNull, lt, nextNumber, notification, or, party, project, serviceAgreement, site, siteLocation, sql, ticket, timeEntry, workOrder, type Tx,
 } from '@mmc/db';
 import { canTransitionWorkOrder, defaultChecklist, normalizeMac, normalizePhone, riyadhDate, TICKET_STATUSES, WORK_ORDER_TYPES, type WorkOrderStatus, type WorkOrderType } from '@mmc/domain';
 import { Actor, Perm, Public, type RequestActor } from '../auth/actor.js';
@@ -14,6 +14,7 @@ import { sendTemplate } from '../common/messaging.js';
 import { ZodPipe, zDate, zPage, zQty, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import { consumeForWorkOrder } from './inventory.service.js';
+import { markFirstResponse, sendCsatRequest, slaDue, slaFilter, ticketSla } from './service.service.js';
 import {
   EDITABLE, LocationResolver, bookingWarnings, checkInGeofence, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
   loadLocation, loadSite, loadTicket, loadWo, locationPaths, matchPartyByPhone, missingError, parseCsv, parseReportToken, productByCode, renderServiceReport, reportToken, riyadhDayRange,
@@ -407,7 +408,7 @@ export class FieldServiceController {
 
   @Get('tickets')
   @Perm('ticket.read')
-  async tickets(@Actor() actor: RequestActor, @Query(new ZodPipe(zPage.extend({ status: z.string().optional(), partyId: zUuid.optional(), siteId: zUuid.optional(), assetId: zUuid.optional(), coverage: z.string().optional() }))) q: { q?: string; limit: number; offset: number; status?: string; partyId?: string; siteId?: string; assetId?: string; coverage?: string }) {
+  async tickets(@Actor() actor: RequestActor, @Query(new ZodPipe(zPage.extend({ status: z.string().optional(), partyId: zUuid.optional(), siteId: zUuid.optional(), assetId: zUuid.optional(), coverage: z.string().optional(), agreementId: zUuid.optional(), sla: z.enum(['at_risk', 'breached']).optional() }))) q: { q?: string; limit: number; offset: number; status?: string; partyId?: string; siteId?: string; assetId?: string; coverage?: string; agreementId?: string; sla?: 'at_risk' | 'breached' }) {
     return tenantTx(actor.tenantId, async (tx) => {
       const term = q.q?.trim();
       const where = and(
@@ -417,6 +418,8 @@ export class FieldServiceController {
         q.partyId ? eq(ticket.partyId, q.partyId) : undefined,
         q.siteId ? eq(ticket.siteId, q.siteId) : undefined,
         q.assetId ? eq(ticket.assetId, q.assetId) : undefined,
+        q.agreementId ? eq(ticket.agreementId, q.agreementId) : undefined,
+        slaFilter(q.sla),
         term ? or(ilike(ticket.number, `%${term}%`), ilike(ticket.subject, `%${term}%`), ilike(ticket.contactName, `%${term}%`), ilike(ticket.contactPhone, `%${normalizePhone(term)?.slice(-9) ?? term}%`)) : undefined,
       );
       const rows = await tx.select().from(ticket).where(where).orderBy(desc(ticket.createdAt)).limit(q.limit).offset(q.offset);
@@ -432,9 +435,14 @@ export class FieldServiceController {
     const parties = pIds.length ? await tx.select({ id: party.id, nameAr: party.nameAr }).from(party).where(inArray(party.id, pIds)) : [];
     const sites = sIds.length ? await tx.select({ id: site.id, name: site.name }).from(site).where(inArray(site.id, sIds)) : [];
     const assets = aIds.length ? await tx.select({ id: installedAsset.id, code: installedAsset.code, serial: installedAsset.serial }).from(installedAsset).where(inArray(installedAsset.id, aIds)) : [];
+    const agIds = [...new Set(rows.map((r) => r.agreementId).filter((x): x is string => !!x))];
+    const agreements = agIds.length ? await tx.select({ id: serviceAgreement.id, number: serviceAgreement.number }).from(serviceAgreement).where(inArray(serviceAgreement.id, agIds)) : [];
     const paths = await locationPaths(tx, rows.map((r) => r.locationId));
+    const now = new Date();
     return rows.map((r) => ({
       ...r,
+      agreementNumber: agreements.find((a) => a.id === r.agreementId)?.number ?? null,
+      sla: ticketSla(r, now),
       partyName: parties.find((p) => p.id === r.partyId)?.nameAr ?? null,
       siteName: sites.find((s) => s.id === r.siteId)?.name ?? null,
       asset: assets.find((a) => a.id === r.assetId) ?? null,
@@ -479,7 +487,10 @@ export class FieldServiceController {
     return tenantTx(actor.tenantId, async (tx) => {
       const ctx = await this.ticketContext(tx, b);
       const { number } = await nextNumber(tx, 'ticket');
+      const openedAt = new Date();
+      const due = await slaDue(tx, openedAt, ctx.cov.sla);
       const [t] = await tx.insert(ticket).values({
+        createdAt: openedAt, updatedAt: openedAt, agreementId: ctx.cov.agreementId, ...due,
         number, channel: b.channel, partyId: ctx.partyId, siteId: ctx.siteId, locationId: ctx.locationId, assetId: b.assetId ?? null,
         contactName: ctx.contactName, contactPhone: b.contactPhone ? normalizePhone(b.contactPhone) ?? b.contactPhone : null,
         subject: b.subject, description: b.description ?? null, priority: b.priority, status: 'open',
@@ -503,7 +514,7 @@ export class FieldServiceController {
       const values = {
         channel: b.channel, partyId: ctx.partyId, siteId: ctx.siteId, locationId: ctx.locationId, assetId: b.assetId ?? null, contactName: ctx.contactName,
         contactPhone: b.contactPhone ? normalizePhone(b.contactPhone) ?? b.contactPhone : null, subject: b.subject, description: b.description ?? null, priority: b.priority,
-        ...(recheck ? { coverage: ctx.cov.coverage, coverageReason: ctx.cov.reasonAr } : {}),
+        ...(recheck ? { coverage: ctx.cov.coverage, coverageReason: ctx.cov.reasonAr, agreementId: ctx.cov.agreementId, ...(await slaDue(tx, before.createdAt, ctx.cov.sla)) } : {}),
       };
       await tx.update(ticket).set({ ...values, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(ticket.id, id));
       const d = diff(before as Record<string, unknown>, values as Record<string, unknown>);
@@ -520,8 +531,24 @@ export class FieldServiceController {
       if (t.status === b.status) throw badRequest(`the ticket is already ${b.status}`);
       if (t.status === 'closed' && b.status !== 'open') throw badRequest('a closed ticket can only be reopened');
       await tx.update(ticket).set({ status: b.status, resolvedAt: b.status === 'resolved' ? new Date() : b.status === 'open' || b.status === 'in_progress' ? null : t.resolvedAt, updatedAt: new Date(), updatedBy: actor.userId, version: t.version + 1 }).where(eq(ticket.id, id));
+      if (b.status !== 'open') await markFirstResponse(tx, id); // SLA: first staff action stops the response clock
       await audit(tx, actor, `status_${b.status}`, 'ticket', id, { status: t.status }, { status: b.status }, b.note ?? undefined);
       await emit(tx, 'ticket', id, `ticket.${b.status}`, { number: t.number });
+      return this.ticketView(tx, actor, id);
+    }, actor.userId);
+  }
+
+  /** Staff reply to the customer (shown on the portal timeline); the first one stops the SLA response clock. */
+  @Post('tickets/:id/respond')
+  @Perm('ticket.write')
+  async respond(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ note: zText(2000).min(1) }))) b: { note: string }) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      const t = await loadTicket(tx, actor, id, 'ticket.write');
+      if (t.status === 'closed') throw badRequest('the ticket is closed');
+      await markFirstResponse(tx, id);
+      await tx.update(ticket).set({ updatedAt: new Date(), updatedBy: actor.userId, version: t.version + 1 }).where(eq(ticket.id, id));
+      await audit(tx, actor, 'respond', 'ticket', id, null, { note: b.note });
+      await emit(tx, 'ticket', id, 'ticket.responded', { number: t.number });
       return this.ticketView(tx, actor, id);
     }, actor.userId);
   }
@@ -537,7 +564,8 @@ export class FieldServiceController {
       const type: WorkOrderType = b?.type ?? (t.coverage === 'warranty' ? 'warranty' : 'corrective');
       const wo = await this.insertWorkOrder(tx, actor, {
         type, title: b?.title || t.subject, description: b?.description ?? t.description, ticketId: t.id, partyId: t.partyId, siteId: t.siteId, locationId: t.locationId, assetId: t.assetId,
-      }, { coverage: t.coverage, coverageReason: t.coverageReason });
+      }, { coverage: t.coverage, coverageReason: t.coverageReason, agreementId: t.agreementId });
+      await markFirstResponse(tx, t.id);
       if (t.status === 'open') {
         await tx.update(ticket).set({ status: 'in_progress', updatedAt: new Date(), updatedBy: actor.userId, version: t.version + 1 }).where(eq(ticket.id, t.id));
         await audit(tx, actor, 'status_in_progress', 'ticket', t.id, { status: t.status }, { status: 'in_progress', workOrder: wo.number });
@@ -585,18 +613,19 @@ export class FieldServiceController {
   @Perm('workorder.write')
   async createWorkOrder(@Actor() actor: RequestActor, @Body(new ZodPipe(woCreateSchema)) b: z.infer<typeof woCreateSchema>) {
     return tenantTx(actor.tenantId, async (tx) => {
-      let fromTicket: { coverage: string; coverageReason: string | null } | undefined;
+      let fromTicket: { coverage: string; coverageReason: string | null; agreementId: string | null } | undefined;
       if (b.ticketId) {
         const t = await loadTicket(tx, actor, b.ticketId, 'ticket.read');
-        fromTicket = { coverage: t.coverage, coverageReason: t.coverageReason };
+        fromTicket = { coverage: t.coverage, coverageReason: t.coverageReason, agreementId: t.agreementId };
         b = { ...b, partyId: b.partyId ?? t.partyId, siteId: b.siteId ?? t.siteId, locationId: b.locationId ?? t.locationId, assetId: b.assetId ?? t.assetId };
       }
       const wo = await this.insertWorkOrder(tx, actor, b, b.projectId ? undefined : fromTicket);
+      await markFirstResponse(tx, b.ticketId);
       return workOrderView(tx, actor, wo.id);
     }, actor.userId);
   }
 
-  private async insertWorkOrder(tx: Tx, actor: RequestActor, b: z.infer<typeof woCreateSchema>, coverage?: { coverage: string; coverageReason: string | null }) {
+  private async insertWorkOrder(tx: Tx, actor: RequestActor, b: z.infer<typeof woCreateSchema>, coverage?: { coverage: string; coverageReason: string | null; agreementId?: string | null }) {
     const [pr] = b.projectId ? await tx.select().from(project).where(eq(project.id, b.projectId)) : [];
     if (b.projectId && !pr) throw notFound('project');
     const asset = b.assetId ? await loadAsset(tx, b.assetId) : null;
@@ -607,11 +636,11 @@ export class FieldServiceController {
     const partyId = b.partyId ?? pr?.partyId ?? asset?.partyId ?? s?.partyId ?? null;
     let cov = coverage;
     if (pr) cov = { coverage: 'project', coverageReason: `ضمن المشروع ${pr.number}` };
-    if (!cov) { const d = await coverageFor(tx, { siteId, asset }); cov = { coverage: d.coverage, coverageReason: d.reasonAr }; }
+    if (!cov) { const d = await coverageFor(tx, { siteId, asset }); cov = { coverage: d.coverage, coverageReason: d.reasonAr, agreementId: d.agreementId }; }
     const { number } = await nextNumber(tx, 'work_order');
     const [wo] = await tx.insert(workOrder).values({
       number, type: b.type, status: 'new', title: b.title, description: b.description ?? null, projectId: pr?.id ?? null, ticketId: b.ticketId ?? null,
-      partyId, siteId, locationId, assetId: asset?.id ?? null, outdoor: b.outdoor ?? false, coverage: cov.coverage, coverageReason: cov.coverageReason, checklist: defaultChecklist(b.type),
+      partyId, siteId, locationId, assetId: asset?.id ?? null, outdoor: b.outdoor ?? false, coverage: cov.coverage, coverageReason: cov.coverageReason, agreementId: cov.agreementId ?? null, checklist: defaultChecklist(b.type),
       ownerId: actor.userId, teamId: pr?.teamId ?? null, branchId: pr?.branchId ?? actor.branchId, createdBy: actor.userId, updatedBy: actor.userId,
     }).returning();
     await audit(tx, actor, 'create', 'work_order', wo!.id, null, { number, type: b.type, coverage: cov.coverage, project: pr?.number ?? null, ticketId: b.ticketId ?? null });
@@ -937,7 +966,15 @@ export class FieldServiceController {
       } catch (e) {
         reportError = (e as Error).message;
       }
-      return { ...(await workOrderView(tx, actor, id)), reportError };
+      // Phase 7b: the preventive visit is done; one-tap CSAT survey to the customer (never blocks completion)
+      if (wo.agreementId) await tx.update(agreementVisit).set({ status: 'done', updatedAt: now }).where(and(eq(agreementVisit.workOrderId, id), eq(agreementVisit.status, 'generated')));
+      let csatStatus: string | null = null;
+      try {
+        csatStatus = (await tx.transaction((sp) => sendCsatRequest(sp, actor.tenantId, id, actor.userId)))?.status ?? null;
+      } catch (e) {
+        console.warn(`[csat] ${wo.number}: ${(e as Error).message}`);
+      }
+      return { ...(await workOrderView(tx, actor, id)), reportError, csatStatus };
     }, actor.userId);
   }
 

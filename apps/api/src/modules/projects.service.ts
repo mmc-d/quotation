@@ -10,7 +10,7 @@ import type { HandoverDoc } from '@mmc/doc-templates';
 import type { RequestActor } from '../auth/actor.js';
 import { audit } from '../common/audit.js';
 import { companyBlock } from '../common/company.js';
-import { forbidden, notFound } from '../common/errors.js';
+import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { loadCalendar } from './calendar.controller.js';
 import { CO_TRIGGER, contractFinalInvoice } from './finance.service.js';
@@ -149,6 +149,19 @@ export async function ensureProjectForContract(tx: Tx, actor: RequestActor | nul
   await audit(tx, actor, 'create', 'project', row!.id, null, { number, contract: c.number, templateKey });
   await emit(tx, 'project', row!.id, 'project.created', { number, contract: c.number });
   return { project: row!, created: true };
+}
+
+/**
+ * Move a client approval package to approved / rejected / sent (PRJ-20). Shared by the staff cockpit
+ * and the customer portal (actor null, `via: 'portal'`), so the approval → delivery-clock facts stay in
+ * one place (the clock start is derived from the approved dates in loadFacts).
+ */
+export async function decideApproval(tx: Tx, actor: RequestActor | null, a: typeof projectApproval.$inferSelect, from: string[], to: string, set: Partial<typeof projectApproval.$inferInsert>, via?: 'portal') {
+  if (!from.includes(a.status)) throw badRequest(`a ${a.status} approval cannot become ${to}`);
+  const [n] = await tx.update(projectApproval).set({ ...set, status: to, updatedAt: new Date(), updatedBy: actor?.userId ?? null, version: a.version + 1 }).where(eq(projectApproval.id, a.id)).returning();
+  await audit(tx, actor, `approval_${to}`, 'project_approval', a.id, { status: a.status }, { status: to, ...set, ...(via ? { via } : {}) }, typeof set.rejectionReason === 'string' ? set.rejectionReason : undefined);
+  if (to === 'approved') await emit(tx, 'project', a.projectId, 'project.approval_approved', { kind: a.kind, revision: a.revision, ...(via ? { via } : {}) });
+  return n!;
 }
 
 /** Latest approval per kind (highest revision, superseded excluded) + the full history. */

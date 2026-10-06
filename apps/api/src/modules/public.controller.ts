@@ -124,7 +124,9 @@ export class PublicController {
   @HttpCode(200)
   async decide(@Param('token') token: string, @Req() req: Request, @Body(new ZodPipe(z.object({ otp: z.string().regex(/^\d{6}$/), signerName: z.string().min(2).max(120), decision: z.enum(['accept', 'reject']), reason: z.string().max(500).nullish() }))) b: { otp: string; signerName: string; decision: 'accept' | 'reject'; reason?: string | null }) {
     const tenantId = await tenantForToken('quote', token);
-    return withTenant(getDb(), tenantId, async (tx) => {
+    // A wrong code must still count: the attempt is committed first, and the error is thrown after the
+    // transaction (throwing inside it would roll the counter back and allow unlimited guesses).
+    const result = await withTenant(getDb(), tenantId, async (tx) => {
       const [q] = await tx.select().from(quote).where(eq(quote.publicToken, token));
       if (!q || !['sent', 'viewed'].includes(q.status)) throw badRequest('this quote can no longer be accepted online');
       const [acc] = await tx.select().from(quoteAcceptance).where(and(eq(quoteAcceptance.quoteId, q.id), sql`${quoteAcceptance.verifiedAt} is null`)).orderBy(desc(quoteAcceptance.createdAt)).limit(1);
@@ -134,7 +136,7 @@ export class PublicController {
       const e = Buffer.from(acc.otpHash);
       if (a.length !== e.length || !timingSafeEqual(a, e)) {
         await tx.update(quoteAcceptance).set({ attempts: acc.attempts + 1 }).where(eq(quoteAcceptance.id, acc.id));
-        throw badRequest('wrong code');
+        return { wrongCode: true as const };
       }
       const [doc] = await tx.select().from(issuedDocument).where(and(eq(issuedDocument.documentType, 'quote'), eq(issuedDocument.entityId, q.id))).orderBy(desc(issuedDocument.issuedAt)).limit(1);
       await tx.update(quoteAcceptance).set({ verifiedAt: new Date(), decision: b.decision, signerName: b.signerName, ip: clientIp(req), userAgent: req.headers['user-agent'] ?? null, documentSha256: doc?.sha256 ?? null }).where(eq(quoteAcceptance.id, acc.id));
@@ -145,6 +147,8 @@ export class PublicController {
       if (q.ownerId) await tx.insert(notification).values({ userId: q.ownerId, kind: 'quote', titleAr: status === 'accepted' ? `🎉 قبِل العميل العرض ${q.number}` : `رفض العميل العرض ${q.number}`, link: `/quotes/${q.id}` });
       return { status };
     });
+    if ('wrongCode' in result) throw badRequest('wrong code');
+    return result;
   }
 
   /** Website lead form (honeypot + per-IP rate limit). */

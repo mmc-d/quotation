@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { sendPaymentRequest } from './modules/finance.service.js';
 import { reconcile } from './modules/finance.controller.js';
 import { loadCalendar } from './modules/calendar.controller.js';
+import { agreementRenewalsFor, preventiveVisitsFor, slaEscalationsFor } from './modules/service.service.js';
 
 /**
  * Background jobs on pg-boss (Postgres-backed, no extra infrastructure). pg-boss manages its own
@@ -19,6 +20,10 @@ const JOBS = {
   expire: { name: 'quotes-expire', cron: '15 0 * * *' },
   reconcile: { name: 'erp-reconcile', cron: '0 2 * * *' },
   outbox: { name: 'outbox-dispatch', cron: '* * * * *' },
+  // Phase 7b — service agreements & SLAs
+  sla: { name: 'service-sla-escalations', cron: '*/15 * * * *' },
+  preventive: { name: 'service-preventive-visits', cron: '0 6 * * *' },
+  renewals: { name: 'service-agreement-renewals', cron: '30 6 * * *' },
 } as const;
 
 async function forEachTenant(fn: (tenantId: string) => Promise<void>) {
@@ -84,6 +89,28 @@ export async function runExpire() {
   return { expired };
 }
 
+/** Every 15 min: SLA at-risk / breached escalations (in-app). */
+export async function runSlaEscalations() {
+  let escalated = 0;
+  await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => { escalated += (await slaEscalationsFor(tx)).escalated; }));
+  return { escalated };
+}
+
+/** Daily 06:00 Riyadh: preventive work orders for AMC visits due within 14 days. */
+export async function runPreventiveVisits() {
+  let created = 0;
+  await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => { created += (await preventiveVisitsFor(tx)).created; }));
+  return { created };
+}
+
+/** Daily: expire ended agreements, renewal reminders, send AMC payment requests coming due. */
+export async function runAgreementRenewals() {
+  let expired = 0;
+  let reminded = 0;
+  await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => { const r = await agreementRenewalsFor(tx); expired += r.expired; reminded += r.reminded; }));
+  return { expired, reminded };
+}
+
 export async function runOutbox() {
   // No external subscribers yet (webhook subscriptions come with the integration catalogue);
   // events are marked delivered so the table stays a short queue.
@@ -105,6 +132,9 @@ export async function startWorker() {
     [JOBS.expire.name]: runExpire,
     [JOBS.reconcile.name]: () => forEachTenant(async (t) => { await reconcile(t); }),
     [JOBS.outbox.name]: runOutbox,
+    [JOBS.sla.name]: runSlaEscalations,
+    [JOBS.preventive.name]: runPreventiveVisits,
+    [JOBS.renewals.name]: runAgreementRenewals,
   };
   for (const j of Object.values(JOBS)) {
     await boss.createQueue(j.name);
