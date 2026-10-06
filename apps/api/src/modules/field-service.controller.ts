@@ -14,7 +14,7 @@ import { sendTemplate } from '../common/messaging.js';
 import { ZodPipe, zDate, zPage, zQty, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import {
-  EDITABLE, LocationResolver, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
+  EDITABLE, LocationResolver, bookingWarnings, checkInGeofence, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
   loadLocation, loadSite, loadTicket, loadWo, locationPaths, matchPartyByPhone, missingError, parseCsv, parseReportToken, productByCode, renderServiceReport, reportToken, riyadhDayRange,
   technicians, ticketFilter, transition, userNames, woFilter, workOrderView, type AssetRow, type WorkOrderRow,
 } from './field-service.service.js';
@@ -74,8 +74,10 @@ type TicketInput = z.infer<typeof ticketSchema>;
 const woCreateSchema = z.object({
   type: z.enum(WORK_ORDER_TYPES), title: zText(300).min(1), description: zText(5000).nullish(),
   projectId: zUuid.nullish(), ticketId: zUuid.nullish(), partyId: zUuid.nullish(), siteId: zUuid.nullish(), locationId: zUuid.nullish(), assetId: zUuid.nullish(),
+  /** outdoor work — the summer midday ban applies (default false; the dispatcher ticks it) */
+  outdoor: z.boolean().optional(),
 });
-const woUpdateSchema = z.object({ title: zText(300).min(1), description: zText(5000).nullish(), partyId: zUuid.nullish(), siteId: zUuid.nullish(), locationId: zUuid.nullish(), assetId: zUuid.nullish(), version: z.number().int().optional() });
+const woUpdateSchema = z.object({ title: zText(300).min(1), description: zText(5000).nullish(), partyId: zUuid.nullish(), siteId: zUuid.nullish(), locationId: zUuid.nullish(), assetId: zUuid.nullish(), outdoor: z.boolean().optional(), version: z.number().int().optional() });
 
 const fileInput = z.object({ fileId: zUuid.optional(), name: zText(200).optional(), contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/heic']).optional(), data: z.string().max(12_000_000).optional() })
   .refine((v) => !!v.fileId || (!!v.name && !!v.contentType && !!v.data), 'send fileId, or name + contentType + data (base64)');
@@ -608,7 +610,7 @@ export class FieldServiceController {
     const { number } = await nextNumber(tx, 'work_order');
     const [wo] = await tx.insert(workOrder).values({
       number, type: b.type, status: 'new', title: b.title, description: b.description ?? null, projectId: pr?.id ?? null, ticketId: b.ticketId ?? null,
-      partyId, siteId, locationId, assetId: asset?.id ?? null, coverage: cov.coverage, coverageReason: cov.coverageReason, checklist: defaultChecklist(b.type),
+      partyId, siteId, locationId, assetId: asset?.id ?? null, outdoor: b.outdoor ?? false, coverage: cov.coverage, coverageReason: cov.coverageReason, checklist: defaultChecklist(b.type),
       ownerId: actor.userId, teamId: pr?.teamId ?? null, branchId: pr?.branchId ?? actor.branchId, createdBy: actor.userId, updatedBy: actor.userId,
     }).returning();
     await audit(tx, actor, 'create', 'work_order', wo!.id, null, { number, type: b.type, coverage: cov.coverage, project: pr?.number ?? null, ticketId: b.ticketId ?? null });
@@ -626,8 +628,11 @@ export class FieldServiceController {
       const siteId = b.siteId ?? wo.siteId;
       await checkSiteLocation(tx, siteId, b.locationId);
       if (b.assetId) await loadAsset(tx, b.assetId);
-      const values = { title: b.title, description: b.description ?? null, partyId: b.partyId ?? wo.partyId, siteId, locationId: b.locationId ?? null, assetId: b.assetId ?? null };
-      await tx.update(workOrder).set({ ...values, updatedAt: new Date(), updatedBy: actor.userId, version: wo.version + 1 }).where(eq(workOrder.id, id));
+      const values = { title: b.title, description: b.description ?? null, partyId: b.partyId ?? wo.partyId, siteId, locationId: b.locationId ?? null, assetId: b.assetId ?? null, outdoor: b.outdoor ?? wo.outdoor };
+      // the site pin and the outdoor flag feed the booking warnings — refresh them when either changes
+      const rewarn = wo.scheduledStart && (values.outdoor !== wo.outdoor || siteId !== wo.siteId);
+      const warnings = rewarn ? { scheduleWarnings: await bookingWarnings(tx, { siteId, outdoor: values.outdoor, start: wo.scheduledStart, end: wo.scheduledEnd }) } : {};
+      await tx.update(workOrder).set({ ...values, ...warnings, updatedAt: new Date(), updatedBy: actor.userId, version: wo.version + 1 }).where(eq(workOrder.id, id));
       const d = diff(wo as Record<string, unknown>, values as Record<string, unknown>);
       if (d) await audit(tx, actor, 'update', 'work_order', id, d.before, d.after);
       return workOrderView(tx, actor, id);
@@ -637,7 +642,7 @@ export class FieldServiceController {
   /** Book on the dispatch board (also re-books: dispatched/en-route/awaiting-parts → scheduled). */
   @Post('work-orders/:id/schedule')
   @Perm('workorder.dispatch')
-  async schedule(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ technicianId: zUuid, crewIds: z.array(zUuid).max(20).default([]), scheduledStart: zInstant, scheduledEnd: zInstant }))) b: { technicianId: string; crewIds: string[]; scheduledStart: Date; scheduledEnd: Date }) {
+  async schedule(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ technicianId: zUuid, crewIds: z.array(zUuid).max(20).default([]), scheduledStart: zInstant, scheduledEnd: zInstant, outdoor: z.boolean().optional() }))) b: { technicianId: string; crewIds: string[]; scheduledStart: Date; scheduledEnd: Date; outdoor?: boolean }) {
     return tenantTx(actor.tenantId, async (tx) => {
       const wo = await loadWo(tx, actor, id, 'workorder.dispatch');
       if (b.scheduledEnd <= b.scheduledStart) throw badRequest('scheduledEnd must be after scheduledStart');
@@ -645,7 +650,10 @@ export class FieldServiceController {
       const names = await userNames(tx, [b.technicianId, ...crewIds]);
       const unknown = [b.technicianId, ...crewIds].filter((u) => !names.has(u));
       if (unknown.length) throw badRequest('unknown technician / crew member', unknown);
-      await transition(tx, actor, wo, 'scheduled', { technicianId: b.technicianId, crewIds, scheduledStart: b.scheduledStart, scheduledEnd: b.scheduledEnd });
+      const outdoor = b.outdoor ?? wo.outdoor;
+      // KSA rules (FSM-27): soft warnings, stored with the booking — never block it
+      const warnings = await bookingWarnings(tx, { siteId: wo.siteId, outdoor, start: b.scheduledStart, end: b.scheduledEnd });
+      await transition(tx, actor, wo, 'scheduled', { technicianId: b.technicianId, crewIds, scheduledStart: b.scheduledStart, scheduledEnd: b.scheduledEnd, outdoor, scheduleWarnings: warnings });
       return workOrderView(tx, actor, id);
     }, actor.userId);
   }
@@ -769,7 +777,9 @@ export class FieldServiceController {
     return tenantTx(actor.tenantId, async (tx) => {
       const wo = await loadWo(tx, actor, id, 'workorder.write');
       const now = new Date();
-      await transition(tx, actor, wo, 'on_site', { checkInAt: now, checkInLat: b?.lat != null ? String(b.lat) : null, checkInLng: b?.lng != null ? String(b.lng) : null });
+      // geofence (FSM-49): record the distance from the site pin and flag it when outside — never block
+      const fence = await checkInGeofence(tx, wo.siteId, b?.lat, b?.lng);
+      await transition(tx, actor, wo, 'on_site', { checkInAt: now, checkInLat: b?.lat != null ? String(b.lat) : null, checkInLng: b?.lng != null ? String(b.lng) : null, ...fence });
       await closeTimeEntries(tx, id, { userId: actor.userId });
       await tx.insert(timeEntry).values({ workOrderId: id, userId: actor.userId, kind: 'work', startedAt: now, createdBy: actor.userId });
       return workOrderView(tx, actor, id);

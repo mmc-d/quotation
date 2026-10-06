@@ -115,6 +115,42 @@ describe('Project creation', () => {
     await owner.req('DELETE', `/api/projects/tasks/${t.id}`);
     await owner.req('DELETE', `/api/projects/tasks/${t.id}`, undefined, { expect: 404 });
   });
+
+  it('links tasks finish-to-start, refuses cycles and shifts dependents by business days', async () => {
+    const base0 = addDays(today, 30);
+    const a = await owner.post(`/api/projects/${S.p1.id}/tasks`, { title: 'توريد الأجهزة', startDate: base0, dueDate: base0 });
+    const b = await owner.post(`/api/projects/${S.p1.id}/tasks`, { title: 'التركيب', startDate: addDays(base0, 1), dueDate: addDays(base0, 3), dependsOnId: a.id });
+    const c = await owner.post(`/api/projects/${S.p1.id}/tasks`, { title: 'الاختبار', dueDate: addDays(base0, 5), dependsOnId: b.id });
+    expect(b.dependsOnId).toBe(a.id);
+    await owner.put(`/api/projects/tasks/${a.id}`, { dependsOnId: c.id }, { expect: 400 }); // a → c → b → a
+    await owner.put(`/api/projects/tasks/${a.id}`, { dependsOnId: a.id }, { expect: 400 });
+    await owner.post(`/api/projects/${S.p1.id}/tasks`, { title: 'x', startDate: addDays(base0, 2), dueDate: base0 }, { expect: 400 });
+    // a predecessor from another project is refused
+    const other = await owner.get('/api/projects');
+    const foreign = other.rows?.find((r: any) => r.id !== S.p1.id);
+    if (foreign) {
+      const ft = (await owner.get(`/api/projects/${foreign.id}`)).tasks[0];
+      if (ft) await owner.put(`/api/projects/tasks/${c.id}`, { dependsOnId: ft.id }, { expect: 400 });
+    }
+
+    const newDue = addDays(base0, 7);
+    const n = businessDaysBetween(base0, newDue, S.cal);
+    const moved = await owner.put(`/api/projects/tasks/${a.id}`, { dueDate: newDue });
+    expect(moved.shifted.map((x: any) => x.id).sort()).toEqual([b.id, c.id].sort());
+    const v = await owner.get(`/api/projects/${S.p1.id}`);
+    const tb = v.tasks.find((t: any) => t.id === b.id);
+    const tc = v.tasks.find((t: any) => t.id === c.id);
+    expect(businessDaysBetween(addDays(base0, 3), tb.dueDate, S.cal)).toBe(n);
+    expect(tb.startDate > addDays(base0, 1)).toBe(true);
+    expect(businessDaysBetween(addDays(base0, 5), tc.dueDate, S.cal)).toBe(n);
+    expect(tc.startDate).toBeNull();
+    expect(tb.dependsOnId).toBe(a.id);
+    // moving it earlier does not pull dependents back
+    const back = await owner.put(`/api/projects/tasks/${a.id}`, { dueDate: base0 });
+    expect(back.shifted).toEqual([]);
+    // deleting the predecessor unlinks its dependents
+    for (const t of [a, b, c]) await owner.req('DELETE', `/api/projects/tasks/${t.id}`);
+  });
 });
 
 describe('Stage gates', () => {
@@ -203,8 +239,10 @@ describe('Stage gates', () => {
 
   it('closes snags and records acceptance → warranty dates on every device', async () => {
     await owner.post(`/api/projects/${S.p1.id}/accept`, { acceptedOn: addDays(today, 1), acceptedByName: 'سالم' }, { expect: 400 });
-    const s = await owner.post(`/api/projects/${S.p1.id}/snags`, { description: 'تعديل زاوية الكاميرا', dueDate: today });
+    const photo = await owner.post('/api/files', { name: 'snag.png', contentType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' });
+    const s = await owner.post(`/api/projects/${S.p1.id}/snags`, { description: 'تعديل زاوية الكاميرا', dueDate: today, photoFileIds: [photo.id] });
     expect(s.status).toBe('open');
+    expect((await owner.get(`/api/projects/${S.p1.id}`)).files[photo.id]).toMatchObject({ mime: 'image/png', url: photo.url });
     expect(await failedKeys(`/api/projects/${S.p1.id}/advance`, {})).toEqual(['snags', 'acceptance']);
     await owner.post(`/api/projects/snags/${s.id}/verify`, {}, { expect: 400 }); // not fixed yet
     await rep.post(`/api/projects/snags/${s.id}/fix`, {}, { expect: 403 });

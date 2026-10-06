@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Car, CheckCircle2, FileText, Hourglass, KeyRound, Loader2, MapPin, MessageCircle, Navigation, Phone, Send, ShieldCheck, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { bi as biNow, useI18n } from '@/lib/i18n';
 import { clsx, ErrorBox, Spinner } from '@/components/ui';
 import { EDITABLE, Section, StatusChip, TYPE_LABEL, errMsg, mapsHref, tap, tapTone, telHref, timeOf, waHref, type Missing, type WOView } from '../_components/shared';
 import { ChecklistStep } from '../_components/checklist';
@@ -13,6 +13,7 @@ import { PhotosStep } from '../_components/photos';
 import { DevicesStep } from '../_components/devices';
 import { PartsStep } from '../_components/parts';
 import { SignatureStep } from '../_components/signature';
+import { OutboxBar, OutboxProvider, isOffline, useOutbox } from '../_components/outbox';
 
 /** Section id for a `missing` key from the completion stage gate. */
 function sectionOf(key: string): string {
@@ -35,11 +36,24 @@ function getPosition(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
-/** The technician's job screen: a top-to-bottom step flow. */
+/** The technician's job screen: a top-to-bottom step flow, with an offline outbox for evidence edits. */
 export default function TechJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const qc = useQueryClient();
+  const onView = (v: WOView) => {
+    qc.setQueryData(['tech-wo', id], v);
+    void qc.invalidateQueries({ queryKey: ['my-day'] });
+  };
+  return <OutboxProvider woId={id} onView={onView}><TechJob id={id} /></OutboxProvider>;
+}
+
+/** Status changes and completion need the server — say so plainly instead of a network error. */
+const offlineMsg = () => biNow('هذه الخطوة تحتاج اتصالًا بالإنترنت — حاول عند عودة الاتصال. (بنود الفحص والقطع والملاحظات والصور تُحفظ على الجهاز)', 'This step needs an internet connection — try again when you are back online. (Checklist, parts, findings and photos are kept on the device.)');
+
+function TechJob({ id }: { id: string }) {
   const { bi, locale, dir } = useI18n();
   const qc = useQueryClient();
+  const outbox = useOutbox();
   const key = ['tech-wo', id];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<WOView>(`/field/work-orders/${id}`) });
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,12 +71,13 @@ export default function TechJobPage({ params }: { params: Promise<{ id: string }
   const refresh = () => void qc.invalidateQueries({ queryKey: key });
 
   const run = async (name: string, fn: () => Promise<WOView>, ok?: string) => {
+    if (isOffline()) return void toast.error(offlineMsg());
     setBusy(name);
     try {
       onView(await fn());
       if (ok) toast.success(ok);
     } catch (e) {
-      toast.error(errMsg(e));
+      toast.error(e instanceof TypeError ? offlineMsg() : errMsg(e));
     } finally {
       setBusy(null);
     }
@@ -87,6 +102,7 @@ export default function TechJobPage({ params }: { params: Promise<{ id: string }
 
   const startTravel = () => run('travel', () => api.post<WOView>(`/field/work-orders/${id}/start-travel`), bi('بدأت الرحلة — قُد بأمان', 'Travel started — drive safely'));
   const checkIn = async () => {
+    if (isOffline()) return void toast.error(offlineMsg());
     setBusy('checkin');
     const pos = await getPosition();
     try {
@@ -105,8 +121,16 @@ export default function TechJobPage({ params }: { params: Promise<{ id: string }
     setPartsNote(null);
   };
   const complete = async () => {
-    setBusy('complete');
+    if (isOffline()) return void toast.error(offlineMsg());
     setMissing(null);
+    // the completion gate reads the server copy — send what is still queued first
+    if (outbox.pending.length || outbox.photoPending) {
+      setBusy('complete');
+      const ok = await outbox.flush();
+      setBusy(null);
+      if (!ok) return void toast.error(bi('أرسل التعديلات المعلّقة أولًا (زر «إعادة المحاولة» أعلى الصفحة)', 'Send the pending changes first (the “Retry” button at the top)'));
+    }
+    setBusy('complete');
     try {
       const res = await fetch(`/api/field/work-orders/${id}/complete`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       const body = await res.json().catch(() => null);
@@ -165,6 +189,7 @@ export default function TechJobPage({ params }: { params: Promise<{ id: string }
           <StatusChip status={wo.status} bi={bi} />
         </div>
         <h1 className="text-xl font-extrabold text-primary">{wo.title}</h1>
+        <OutboxBar />
         {wo.scheduledStart && <p className="text-sm text-muted">{bi('الموعد', 'Scheduled')}: <span className="num" dir="ltr">{wo.scheduledStart.slice(0, 10)} {timeOf(wo.scheduledStart)}</span></p>}
       </header>
 

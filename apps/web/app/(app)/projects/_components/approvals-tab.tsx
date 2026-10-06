@@ -7,6 +7,7 @@ import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { date, today } from '@/lib/format';
 import { Badge, Button, Dialog, Empty, Field, Input, Select, Table, Td, Textarea, Th } from '@/components/ui';
+import { AttachmentList, AttachmentPicker, type AttachmentMeta } from '@/components/attachments';
 import { ConfirmDialog, ReasonDialog } from '../../quotes/_components/common';
 import { MapChip, type useProjectAction } from './kit';
 import { APPROVAL_STATUS, type Approval, type ApprovalGroup, type ProjectView } from './types';
@@ -21,7 +22,7 @@ export function ApprovalsTab({ p, action }: { p: ProjectView; action: ReturnType
   const [approveForm, setApproveForm] = useState({ approvedOn: today(), approvedByName: '' });
   const [rejectFor, setRejectFor] = useState<Approval | null>(null);
   const [reviseFor, setReviseFor] = useState<Approval | null>(null);
-  const [adding, setAdding] = useState<null | { kind: string; title: string; notes: string }>(null);
+  const [adding, setAdding] = useState<null | { kind: string; title: string; notes: string; files: AttachmentMeta[] }>(null);
 
   const existing = new Set(p.approvals.map((g) => g.kind));
   const required = (p.requiredApprovals ?? []) as string[];
@@ -31,10 +32,10 @@ export function ApprovalsTab({ p, action }: { p: ProjectView; action: ReturnType
   const step = (a: Approval, what: 'send' | 'approve' | 'reject' | 'revise', body?: unknown, msg?: string) =>
     action.run(`${what}:${a.id}`, () => api.post(`/projects/approvals/${a.id}/${what}`, body ?? {}), msg);
 
-  const startAdd = (kind: string) => setAdding({ kind, title: kindLabel(kind), notes: '' });
+  const startAdd = (kind: string) => setAdding({ kind, title: kindLabel(kind), notes: '', files: [] });
   const add = async () => {
     if (!adding) return;
-    const r = await action.run('add-approval', () => api.post(`/projects/${p.id}/approvals`, { kind: adding.kind, title: adding.title.trim(), notes: adding.notes.trim() || null }), bi('أُضيفت حزمة الاعتماد', 'Approval package added'));
+    const r = await action.run('add-approval', () => api.post(`/projects/${p.id}/approvals`, { kind: adding.kind, title: adding.title.trim(), notes: adding.notes.trim() || null, fileIds: adding.files.map((f) => f.id) }), bi('أُضيفت حزمة الاعتماد', 'Approval package added'));
     if (r) setAdding(null);
   };
 
@@ -58,6 +59,7 @@ export function ApprovalsTab({ p, action }: { p: ProjectView; action: ReturnType
                   <Td>
                     <div>{a.title}</div>
                     {a.notes && <div className="text-xs text-muted">{a.notes}</div>}
+                    <AttachmentList ids={a.fileIds ?? []} files={p.files} size="sm" className="mt-1" />
                     {a.status === 'rejected' && a.rejectionReason && <div className="text-xs text-danger">{bi('سبب الرفض:', 'Rejected:')} {a.rejectionReason}</div>}
                     {g.history.length > 1 && <div className="text-[11px] text-muted">{bi(`${g.history.length} مراجعات`, `${g.history.length} revisions`)}</div>}
                   </Td>
@@ -113,6 +115,9 @@ export function ApprovalsTab({ p, action }: { p: ProjectView; action: ReturnType
             </Field>
             <Field label={bi('العنوان *', 'Title *')}><Input value={adding.title} onChange={(e) => setAdding({ ...adding, title: e.target.value })} /></Field>
             <Field label={bi('ملاحظات', 'Notes')}><Textarea rows={3} value={adding.notes} onChange={(e) => setAdding({ ...adding, notes: e.target.value })} /></Field>
+            <Field label={bi('المرفقات (مخططات، صور، PDF)', 'Attachments (drawings, photos, PDF)')}>
+              <AttachmentPicker value={adding.files} onChange={(files) => setAdding((a) => (a ? { ...a, files } : a))} max={50} />
+            </Field>
           </div>
         )}
       </Dialog>

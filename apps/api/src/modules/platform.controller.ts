@@ -332,8 +332,43 @@ export class AuditController {
   }
 }
 
+/** Staff uploads (POST /api/files): photos and PDFs, ≤ 8 MB. */
+export const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'] as const;
+export const UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const uploadSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  contentType: z.enum(UPLOAD_TYPES),
+  data: z.string().min(1).max(Math.ceil((UPLOAD_MAX_BYTES * 4) / 3) + 16),
+});
+
+/** The first bytes must match the declared type (a renamed .exe is refused). */
+function sniffOk(mime: (typeof UPLOAD_TYPES)[number], b: Buffer): boolean {
+  const ascii = (from: number, to: number) => b.subarray(from, to).toString('latin1');
+  switch (mime) {
+    case 'image/jpeg': return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case 'image/png': return b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case 'image/webp': return ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP';
+    case 'image/heic': return ascii(4, 8) === 'ftyp';
+    case 'application/pdf': return ascii(0, 5) === '%PDF-';
+  }
+}
+
 @Controller('files')
 export class FilesController {
+  /** Any signed-in staff user (no specific permission): the file is only reachable by its id inside the tenant. */
+  @Post()
+  async upload(@Actor() actor: RequestActor, @Body(new ZodPipe(uploadSchema)) b: z.infer<typeof uploadSchema>) {
+    const data = Buffer.from(b.data, 'base64');
+    if (!data.length) throw badRequest('empty file');
+    if (data.length > UPLOAD_MAX_BYTES) throw badRequest('file larger than 8 MB');
+    if (!sniffOk(b.contentType, data)) throw badRequest(`the file content is not ${b.contentType}`);
+    return tenantTx(actor.tenantId, async (tx) => {
+      const f = await storeFile(tx, actor.tenantId, data, b.name, b.contentType, actor.userId);
+      await audit(tx, actor, 'upload', 'file', f.id, null, { filename: f.filename, mime: f.mime, size: f.size, sha256: f.sha256 });
+      return { id: f.id, url: `/api/files/${f.id}`, filename: f.filename, mime: f.mime, size: f.size };
+    }, actor.userId);
+  }
+
   @Get(':id')
   async download(@Actor() actor: RequestActor, @Param('id') id: string, @Res() res: Response) {
     const f = await tenantTx(actor.tenantId, (tx) => readStoredFile(tx, id));

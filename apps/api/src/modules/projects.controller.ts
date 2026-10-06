@@ -4,7 +4,7 @@ import { z } from 'zod';
 import {
   and, contract, desc, emit, eq, ilike, inArray, installedAsset, isNull, ne, or, party, project, projectApproval, projectClockPause, projectStageLog, projectTask, snag, sql, type Tx,
 } from '@mmc/db';
-import { APPROVAL_KINDS, PROJECT_STAGES, gateFor, clockStartDate, riyadhDate, warrantyEnds, type ProjectStage } from '@mmc/domain';
+import { APPROVAL_KINDS, PROJECT_STAGES, addBusinessDays, businessDaysBetween, gateFor, clockStartDate, riyadhDate, warrantyEnds, type ProjectStage } from '@mmc/domain';
 import { htmlToPdf, renderHandoverHtml } from '@mmc/doc-templates';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
@@ -51,8 +51,59 @@ const updateSchema = z.object({
 const advanceSchema = z.object({ override: z.boolean().optional(), reason: z.string().trim().max(1000).nullish() }).nullish();
 const approvalSchema = z.object({ kind: zKind, title: zText(200), notes: z.string().max(5000).nullish(), fileIds: z.array(zUuid).max(50).optional() });
 const pauseSchema = z.object({ fromDate: zDate, toDate: zDate.nullish(), kind: z.enum(['client_delay', 'consultant_delay', 'site_not_ready', 'other']).default('client_delay'), reason: zText(1000) });
-const taskSchema = z.object({ title: zText(300), stage: zStage.optional(), assigneeId: zUuid.nullish(), dueDate: zDate.nullish(), locationId: zUuid.nullish(), sort: z.number().int().optional() });
-const taskUpdateSchema = z.object({ title: zText(300).optional(), stage: zStage.optional(), status: z.enum(['todo', 'doing', 'done']).optional(), assigneeId: zUuid.nullable().optional(), dueDate: zDate.nullable().optional(), sort: z.number().int().optional() });
+const taskSchema = z.object({ title: zText(300), stage: zStage.optional(), assigneeId: zUuid.nullish(), startDate: zDate.nullish(), dueDate: zDate.nullish(), dependsOnId: zUuid.nullish(), locationId: zUuid.nullish(), sort: z.number().int().optional() });
+const taskUpdateSchema = z.object({ title: zText(300).optional(), stage: zStage.optional(), status: z.enum(['todo', 'doing', 'done']).optional(), assigneeId: zUuid.nullable().optional(), startDate: zDate.nullable().optional(), dueDate: zDate.nullable().optional(), dependsOnId: zUuid.nullable().optional(), sort: z.number().int().optional() });
+
+type TaskRow = typeof projectTask.$inferSelect;
+
+/** Finish-to-start predecessor (PRJ-13): same project, not itself, and no cycle. */
+async function checkDependency(tx: Tx, projectId: string, taskId: string | null, dependsOnId: string | null | undefined) {
+  if (!dependsOnId) return;
+  if (dependsOnId === taskId) throw badRequest('a task cannot depend on itself');
+  const rows = await tx.select({ id: projectTask.id, dependsOnId: projectTask.dependsOnId }).from(projectTask).where(eq(projectTask.projectId, projectId));
+  const byId = new Map(rows.map((r) => [r.id, r.dependsOnId]));
+  if (!byId.has(dependsOnId)) throw badRequest('the predecessor task belongs to another project');
+  // walk up from the predecessor: reaching this task again would close a loop
+  const seen = new Set<string>();
+  for (let cur: string | null | undefined = dependsOnId; cur; cur = byId.get(cur)) {
+    if (cur === taskId) throw badRequest('this dependency would create a cycle');
+    if (seen.has(cur)) break;
+    seen.add(cur);
+  }
+}
+
+function checkDates(startDate: string | null | undefined, dueDate: string | null | undefined) {
+  if (startDate && dueDate && startDate > dueDate) throw badRequest('the start date is after the due date');
+}
+
+/**
+ * Simple finish-to-start rescheduling: when a task's due date moves later by n business days, every
+ * open task that (transitively) depends on it moves its start and due dates by the same n business days.
+ */
+async function shiftDependents(tx: Tx, actor: RequestActor, t: TaskRow, oldDue: string, newDue: string) {
+  const calendar = await loadCalendar(tx);
+  const n = businessDaysBetween(oldDue, newDue, calendar);
+  if (n <= 0) return [];
+  const rows = await tx.select().from(projectTask).where(eq(projectTask.projectId, t.projectId));
+  const moved: { id: string; startDate: string | null; dueDate: string | null }[] = [];
+  const seen = new Set([t.id]);
+  const queue = [t.id];
+  while (queue.length) {
+    const parent = queue.shift()!;
+    for (const d of rows.filter((r) => r.dependsOnId === parent && !seen.has(r.id))) {
+      seen.add(d.id);
+      queue.push(d.id);
+      if (d.status === 'done') continue;
+      const startDate = d.startDate ? addBusinessDays(d.startDate, n, calendar) : null;
+      const dueDate = d.dueDate ? addBusinessDays(d.dueDate, n, calendar) : null;
+      if (!startDate && !dueDate) continue;
+      await tx.update(projectTask).set({ startDate, dueDate, ...touch(actor), version: d.version + 1 }).where(eq(projectTask.id, d.id));
+      moved.push({ id: d.id, startDate, dueDate });
+    }
+  }
+  if (moved.length) await audit(tx, actor, 'shift_dependents', 'project_task', t.id, { dueDate: oldDue }, { dueDate: newDue, businessDays: n, moved });
+  return moved;
+}
 const snagSchema = z.object({ description: zText(2000), locationId: zUuid.nullish(), assigneeId: zUuid.nullish(), dueDate: zDate.nullish(), photoFileIds: z.array(zUuid).max(30).optional() });
 
 const touch = (actor: RequestActor) => ({ updatedAt: new Date(), updatedBy: actor.userId });
@@ -342,8 +393,10 @@ export class ProjectsController {
     return tenantTx(actor.tenantId, async (tx) => {
       const p = await loadProject(tx, actor, id, 'project.write');
       const stage = b.stage ?? p.stage;
+      checkDates(b.startDate, b.dueDate);
+      await checkDependency(tx, id, null, b.dependsOnId);
       const [mx] = await tx.select({ s: sql<number>`coalesce(max(${projectTask.sort}), -1)::int` }).from(projectTask).where(and(eq(projectTask.projectId, id), eq(projectTask.stage, stage)));
-      const [t] = await tx.insert(projectTask).values({ projectId: id, stage, title: b.title, assigneeId: b.assigneeId ?? null, dueDate: b.dueDate ?? null, locationId: b.locationId ?? null, sort: b.sort ?? (mx?.s ?? -1) + 1, createdBy: actor.userId, updatedBy: actor.userId }).returning();
+      const [t] = await tx.insert(projectTask).values({ projectId: id, stage, title: b.title, assigneeId: b.assigneeId ?? null, startDate: b.startDate ?? null, dueDate: b.dueDate ?? null, dependsOnId: b.dependsOnId ?? null, locationId: b.locationId ?? null, sort: b.sort ?? (mx?.s ?? -1) + 1, createdBy: actor.userId, updatedBy: actor.userId }).returning();
       return t!;
     }, actor.userId);
   }
@@ -353,9 +406,12 @@ export class ProjectsController {
   async updateTask(@Actor() actor: RequestActor, @Param('tid') tid: string, @Body(new ZodPipe(taskUpdateSchema)) b: z.infer<typeof taskUpdateSchema>) {
     return tenantTx(actor.tenantId, async (tx) => {
       const t = await this.loadTask(tx, actor, tid);
+      checkDates(b.startDate === undefined ? t.startDate : b.startDate, b.dueDate === undefined ? t.dueDate : b.dueDate);
+      if (b.dependsOnId !== undefined) await checkDependency(tx, t.projectId, t.id, b.dependsOnId);
       const doneAt = b.status === undefined ? t.doneAt : b.status === 'done' ? t.doneAt ?? new Date() : null;
       const [n] = await tx.update(projectTask).set({ ...b, doneAt, ...touch(actor), version: t.version + 1 }).where(eq(projectTask.id, tid)).returning();
-      return n!;
+      const shifted = t.dueDate && b.dueDate && b.dueDate > t.dueDate ? await shiftDependents(tx, actor, t, t.dueDate, b.dueDate) : [];
+      return { ...n!, shifted };
     }, actor.userId);
   }
 
@@ -364,6 +420,8 @@ export class ProjectsController {
   async deleteTask(@Actor() actor: RequestActor, @Param('tid') tid: string) {
     return tenantTx(actor.tenantId, async (tx) => {
       const t = await this.loadTask(tx, actor, tid);
+      // dependents lose their predecessor (no FK on depends_on_id)
+      await tx.update(projectTask).set({ dependsOnId: null, ...touch(actor) }).where(eq(projectTask.dependsOnId, tid));
       await tx.delete(projectTask).where(eq(projectTask.id, tid));
       await audit(tx, actor, 'delete', 'project_task', tid, { title: t.title, stage: t.stage, status: t.status }, null);
       return { ok: true };

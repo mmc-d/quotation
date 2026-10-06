@@ -2,12 +2,12 @@
 import Link from 'next/link';
 import { useMemo, useState, type DragEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarRange, ChevronLeft, ChevronRight, Inbox, MapPin, User } from 'lucide-react';
+import { AlertTriangle, CalendarRange, ChevronLeft, ChevronRight, Inbox, MapPin, User } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { Button, Card, clsx, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui';
-import { CoverageBadge, WO_STATUS, WoTypeBadge, addDays, riyadhDay, riyadhHour, riyadhTime, toRiyadhLocal, weekday } from '../_components/common';
+import { CoverageBadge, WO_STATUS, WoTypeBadge, addDays, riyadhDay, riyadhHour, riyadhTime, toRiyadhLocal, warningsTitle, weekday } from '../_components/common';
 import { ScheduleDialog } from '../_components/schedule-dialog';
 import type { BoardWo, DispatchBoard, WoSummary } from '../_components/types';
 
@@ -221,12 +221,17 @@ function BoardCard({ wo, compact, onDragStart, onDragEnd }: { wo: BoardWo; compa
       draggable={!!onDragStart}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      title={`${wo.number} — ${wo.title}\n${wo.partyName ?? ''} ${wo.siteName ?? ''}\n${riyadhTime(wo.scheduledStart)}–${riyadhTime(wo.scheduledEnd)} · ${statusLabel}${wo.role === 'crew' ? ` · ${bi('مساعد', 'crew')}` : ''}`}
+      title={`${wo.number} — ${wo.title}\n${wo.partyName ?? ''} ${wo.siteName ?? ''}\n${riyadhTime(wo.scheduledStart)}–${riyadhTime(wo.scheduledEnd)} · ${statusLabel}${wo.role === 'crew' ? ` · ${bi('مساعد', 'crew')}` : ''}${wo.scheduleWarnings?.length ? `\n${warningsTitle(wo.scheduleWarnings, locale)}` : ''}`}
       className={clsx('block h-full overflow-hidden rounded-md border px-1.5 py-1 text-[11px] leading-tight shadow-sm transition hover:ring-2 hover:ring-gold', tone, wo.role === 'crew' ? 'border-dashed border-current/40' : 'border-transparent')}
     >
       <div className="flex items-center gap-1">
         <span dir="ltr" className="num font-bold">{riyadhTime(wo.scheduledStart)}</span>
         <span dir="ltr" className="num truncate opacity-80">{wo.number}</span>
+        {!!wo.scheduleWarnings?.length && (
+          <span className="ms-auto shrink-0 text-amber-700" title={warningsTitle(wo.scheduleWarnings, locale)} aria-label={bi('تنبيهات الجدولة', 'Scheduling warnings')}>
+            <AlertTriangle className="size-3" />
+          </span>
+        )}
       </div>
       <div className="truncate font-bold">{wo.title}</div>
       {!compact && (wo.siteName || wo.siteCity) && <div className="flex items-center gap-0.5 truncate opacity-80"><MapPin className="size-2.5 shrink-0" />{wo.siteName ?? wo.siteCity}</div>}

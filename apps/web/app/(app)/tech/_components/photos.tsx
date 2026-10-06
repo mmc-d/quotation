@@ -5,12 +5,12 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { clsx } from '@/components/ui';
+import { prepareImage } from '@/lib/upload';
 import { errMsg, isTransient, tap, tapTone, type WOView } from './shared';
+import { useOutbox } from './outbox';
 
 interface Pending { id: string; name: string; contentType: string; data: string; at: number }
 
-const MAX_SIDE = 1600;
-const QUALITY = 0.8;
 const outboxKey = (woId: string) => `mmc_tech_outbox_${woId}`;
 
 function readOutbox(woId: string): Pending[] {
@@ -33,48 +33,7 @@ function writeOutbox(woId: string, items: Pending[]): boolean {
   }
 }
 
-function readAsDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
-}
-
-function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
-    img.src = url;
-  });
-}
-
-/** Downscale to ≤1600 px JPEG (~0.8); falls back to the original when the browser cannot decode it. */
-async function prepare(file: File): Promise<{ name: string; contentType: string; data: string }> {
-  const base = (file.name || 'photo').replace(/\.[^.]+$/, '');
-  try {
-    const img = await loadImage(file);
-    const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas');
-    ctx.drawImage(img, 0, 0, w, h);
-    const url = canvas.toDataURL('image/jpeg', QUALITY);
-    return { name: `${base}.jpg`, contentType: 'image/jpeg', data: url.slice(url.indexOf(',') + 1) };
-  } catch {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-    if (!allowed.includes(file.type)) throw new Error('unsupported');
-    const url = await readAsDataUrl(file);
-    return { name: file.name || 'photo', contentType: file.type, data: url.slice(url.indexOf(',') + 1) };
-  }
-}
+const prepare = prepareImage;
 
 /** Photos: camera capture, client-side downscale, upload with a local outbox for weak signal. */
 export function PhotosStep({ wo, editable, onView }: { wo: WOView; editable: boolean; onView: (v: WOView) => void }) {
@@ -87,6 +46,10 @@ export function PhotosStep({ wo, editable, onView }: { wo: WOView; editable: boo
   const [memOnly, setMemOnly] = useState(false);
 
   useEffect(() => setOutbox(readOutbox(wo.id)), [wo.id]);
+  // the job header counts these too, and its "retry" button retries them (FSM-48)
+  const shared = useOutbox();
+  const { setPhotoPending, photoRetry } = shared;
+  useEffect(() => setPhotoPending(outbox.length), [outbox.length, setPhotoPending]);
   const outboxRef = useRef<Pending[]>([]);
   outboxRef.current = outbox;
   const persist = useCallback((items: Pending[]) => { outboxRef.current = items; setOutbox(items); setMemOnly(!writeOutbox(wo.id, items)); }, [wo.id]);
@@ -143,11 +106,10 @@ export function PhotosStep({ wo, editable, onView }: { wo: WOView; editable: boo
     setRetrying(false);
   };
 
-  // Try the outbox again when the phone comes back online.
+  // The shared outbox replays photos too (on `online` and from the header's retry button).
   useEffect(() => {
-    const on = () => { if (outboxRef.current.length) void retry(); };
-    window.addEventListener('online', on);
-    return () => window.removeEventListener('online', on);
+    photoRetry.current = async () => { if (outboxRef.current.length) await retry(); return outboxRef.current.length; };
+    return () => { photoRetry.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wo.id, outbox.length]);
 

@@ -5,16 +5,17 @@ import {
   type SQL, type Tx,
 } from '@mmc/db';
 import {
-  canTransitionWorkOrder, decideCoverage, missingForCompletion, normalizePhone, normalizeSaudiMobile, riyadhDate, WORK_ORDER_STATUSES,
-  type WorkOrderStatus, type WorkOrderType,
+  canTransitionWorkOrder, decideCoverage, distanceMeters, GEOFENCE_RADIUS_M, missingForCompletion, normalizePhone, normalizeSaudiMobile, riyadhDate, scheduleWarnings, WORK_ORDER_STATUSES,
+  type ScheduleWarning, type WorkOrderStatus, type WorkOrderType,
 } from '@mmc/domain';
 import { htmlToPdf, renderServiceReportHtml } from '@mmc/doc-templates';
 import type { RequestActor } from '../auth/actor.js';
 import { audit } from '../common/audit.js';
-import { companyBlock } from '../common/company.js';
+import { companyBlock, loadCompany } from '../common/company.js';
 import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { readStoredFile, storeFile } from '../common/files.js';
 import { config } from '../config.js';
+import { loadCalendar } from './calendar.controller.js';
 
 /**
  * Field service (module 06): installed base, helpdesk-lite tickets, work orders and the technician
@@ -190,6 +191,7 @@ export async function decorateWorkOrders(tx: Tx, rows: WorkOrderRow[]) {
       id: r.id, number: r.number, type: r.type, status: r.status, title: r.title, coverage: r.coverage,
       projectId: r.projectId, ticketId: r.ticketId, partyId: r.partyId, siteId: r.siteId, locationId: r.locationId, assetId: r.assetId,
       technicianId: r.technicianId, crewIds: r.crewIds, scheduledStart: r.scheduledStart, scheduledEnd: r.scheduledEnd, checkInAt: r.checkInAt, completedAt: r.completedAt,
+      outdoor: r.outdoor, scheduleWarnings: r.scheduleWarnings ?? [], checkInDistanceM: r.checkInDistanceM, checkInOutsideGeofence: r.checkInOutsideGeofence,
       partyName: p?.nameAr ?? null, siteName: s?.name ?? null, siteCity: s?.city ?? null, navUrl: navUrl(s), locationPath: r.locationId ? paths.get(r.locationId) ?? null : null,
       technicianName: r.technicianId ? names.get(r.technicianId) ?? null : null, crewNames: (r.crewIds ?? []).map((u) => names.get(u) ?? u),
     };
@@ -233,6 +235,45 @@ export async function workOrderView(tx: Tx, actor: RequestActor, id: string) {
     reportUrl: wo.reportFileId ? `/api/files/${wo.reportFileId}` : null,
     canDispatch: !!actor.grants['workorder.dispatch'],
   };
+}
+
+// ───────────────────────── KSA scheduling rules (FSM-27 / FSM-49) ─────────────────────────
+
+const num = (v: string | number | null | undefined) => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * Soft scheduling warnings for a booking (non-business day, midday heat ban for outdoor work,
+ * Ramadan hours, prayer times at the site — Jeddah when the site has no pin).
+ * Ramadan dates come from the company calendar settings (`company.ramadanRanges`).
+ */
+export async function bookingWarnings(tx: Tx, input: { siteId: string | null; outdoor: boolean; start: Date | null; end: Date | null }): Promise<ScheduleWarning[]> {
+  if (!input.start || !input.end) return [];
+  const [s] = input.siteId ? await tx.select({ lat: site.lat, lng: site.lng }).from(site).where(eq(site.id, input.siteId)) : [];
+  const lat = num(s?.lat);
+  const lng = num(s?.lng);
+  const hasPin = lat !== null && lng !== null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const startDay = riyadhDate(input.start);
+  const ramadan = ((await loadCompany(tx)).ramadanRanges ?? []).find((r) => r.from <= startDay && startDay <= r.to) ?? null;
+  return scheduleWarnings({
+    start: input.start, end: input.end, outdoor: input.outdoor, calendar: await loadCalendar(tx), ramadan,
+    lat: hasPin ? lat : null, lng: hasPin ? lng : null,
+  });
+}
+
+/** Check-in distance from the site pin (FSM-49) — flagged when outside the geofence, never blocked. */
+export async function checkInGeofence(tx: Tx, siteId: string | null, lat: string | number | null | undefined, lng: string | number | null | undefined) {
+  const la = num(lat);
+  const ln = num(lng);
+  const [s] = siteId ? await tx.select({ lat: site.lat, lng: site.lng }).from(site).where(eq(site.id, siteId)) : [];
+  const sla = num(s?.lat);
+  const sln = num(s?.lng);
+  if (la === null || ln === null || sla === null || sln === null) return { checkInDistanceM: null, checkInOutsideGeofence: null };
+  const d = Math.round(distanceMeters(la, ln, sla, sln));
+  return { checkInDistanceM: d, checkInOutsideGeofence: d > GEOFENCE_RADIUS_M };
 }
 
 // ───────────────────────── tickets ─────────────────────────

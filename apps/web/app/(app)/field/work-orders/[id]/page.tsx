@@ -8,9 +8,9 @@ import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { dateTime } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { Badge, Button, Card, Dialog, ErrorBox, Field, Input, PageHeader, Spinner, Table, Td, Textarea, Th } from '@/components/ui';
+import { Badge, Button, Card, Checkbox, Dialog, ErrorBox, Field, Input, PageHeader, Spinner, Table, Td, Textarea, Th } from '@/components/ui';
 import { ConfirmDialog, ReasonDialog, isConflict } from '../../../quotes/_components/common';
-import { CoverageBadge, Info, Ltr, TIME_KIND, WoStatusBadge, WoTypeBadge, mapsUrl, riyadhDay, riyadhTime, useLabel } from '../../_components/common';
+import { CoverageBadge, Info, Ltr, ScheduleWarnings, TIME_KIND, WoStatusBadge, WoTypeBadge, mapsUrl, riyadhDay, riyadhTime, useLabel } from '../../_components/common';
 import { LocationPicker } from '../../_components/locations';
 import { ScheduleDialog } from '../../_components/schedule-dialog';
 import type { WorkOrderView } from '../../_components/types';
@@ -82,6 +82,8 @@ export default function WorkOrderPage({ params }: { params: Promise<{ id: string
           <ul className="flex flex-wrap gap-1.5">{wo.missing.map((m) => <li key={m.key}><Badge tone="gold">{locale === 'en' ? m.en : m.ar}</Badge></li>)}</ul>
         </div>
       )}
+
+      {!['completed', 'closed', 'cancelled'].includes(wo.status) && <ScheduleWarnings warnings={wo.scheduleWarnings} className="mb-4" />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -173,7 +175,18 @@ export default function WorkOrderPage({ params }: { params: Promise<{ id: string
             <Info label={bi('الفريق', 'Crew')}>{wo.crewNames.length ? wo.crewNames.join('، ') : '—'}</Info>
             <Info label={bi('البداية', 'Start')}><span className="num">{wo.scheduledStart ? `${riyadhDay(wo.scheduledStart)} ${riyadhTime(wo.scheduledStart)}` : '—'}</span></Info>
             <Info label={bi('النهاية', 'End')}><span className="num">{wo.scheduledEnd ? `${riyadhDay(wo.scheduledEnd)} ${riyadhTime(wo.scheduledEnd)}` : '—'}</span></Info>
+            <Info label={bi('نوع العمل', 'Work setting')}>{wo.outdoor ? <Badge tone="gold">{bi('خارجي', 'Outdoor')}</Badge> : <span className="text-muted">{bi('داخلي', 'Indoor')}</span>}</Info>
             <Info label={bi('وصول الموقع', 'Checked in')}><span className="num">{dateTime(wo.checkInAt)}</span></Info>
+            {wo.checkInAt && (
+              <Info label={bi('بُعد الوصول عن الموقع', 'Check-in distance')}>
+                <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                  {wo.checkInDistanceM == null
+                    ? <span className="text-xs text-muted">{bi('غير معروف (لا إحداثيات)', 'Unknown (no coordinates)')}</span>
+                    : <span dir="ltr" className="num">{wo.checkInDistanceM >= 1000 ? `${(wo.checkInDistanceM / 1000).toFixed(1)} km` : `${wo.checkInDistanceM} m`}</span>}
+                  {wo.checkInOutsideGeofence && <Badge tone="red">{bi('خارج نطاق الموقع', 'Outside site area')}</Badge>}
+                </span>
+              </Info>
+            )}
             <Info label={bi('الإكمال', 'Completed')}><span className="num">{dateTime(wo.completedAt)}</span></Info>
             <Info label={bi('توقيع العميل', 'Customer signature')}>{wo.signatureName ?? <span className="text-muted">—</span>}</Info>
             {wo.signatureFileId && (
@@ -266,8 +279,9 @@ function EditWoDialog({ wo, onClose, onSaved }: { wo: WorkOrderView; onClose: ()
   const [title, setTitle] = useState(wo.title);
   const [description, setDescription] = useState(wo.description ?? '');
   const [locationId, setLocationId] = useState<string | null>(wo.locationId);
+  const [outdoor, setOutdoor] = useState(!!wo.outdoor);
   const save = useMutation({
-    mutationFn: () => api.put<WorkOrderView>(`/field/work-orders/${wo.id}`, { title: title.trim(), description: description.trim() || null, partyId: wo.partyId, siteId: wo.siteId, locationId, assetId: wo.assetId, version: wo.version }),
+    mutationFn: () => api.put<WorkOrderView>(`/field/work-orders/${wo.id}`, { title: title.trim(), description: description.trim() || null, partyId: wo.partyId, siteId: wo.siteId, locationId, assetId: wo.assetId, outdoor, version: wo.version }),
     onSuccess: onSaved,
     onError: (e) => toast.error(isConflict(e) ? bi('عدّل شخص آخر أمر العمل — أعد التحميل', 'Someone else changed the work order — reload') : (e as Error).message),
   });
@@ -278,6 +292,7 @@ function EditWoDialog({ wo, onClose, onSaved }: { wo: WorkOrderView; onClose: ()
         <Field label={bi('العنوان', 'Title')}><Input value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
         <Field label={bi('المكان', 'Location')}><LocationPicker siteId={wo.siteId} value={locationId} onChange={setLocationId} /></Field>
         <Field label={bi('الوصف', 'Description')}><Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+        <Checkbox label={bi('عمل خارجي (يسري حظر الظهيرة صيفًا)', 'Outdoor work (summer midday ban applies)')} checked={outdoor} onChange={setOutdoor} />
       </div>
     </Dialog>
   );

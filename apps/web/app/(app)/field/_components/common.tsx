@@ -1,10 +1,11 @@
 'use client';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { clsx, Select } from '@/components/ui';
+import type { ScheduleWarning } from './types';
 
 /** value → [Arabic, English, chip classes] */
 type L = Record<string, [string, string, string?]>;
@@ -202,4 +203,23 @@ export function Info({ label, children }: { label: ReactNode; children: ReactNod
       <span className="text-end">{children}</span>
     </div>
   );
+}
+
+/** Soft KSA scheduling warnings (FSM-27) — amber list; never blocks the booking. */
+export function ScheduleWarnings({ warnings, className }: { warnings: ScheduleWarning[] | null | undefined; className?: string }) {
+  const { bi, locale } = useI18n();
+  if (!warnings?.length) return null;
+  return (
+    <div className={clsx('rounded-xl border border-amber-200 bg-amber-50 px-4 py-3', className)}>
+      <div className="mb-1 flex items-center gap-2 text-sm font-extrabold text-amber-900"><AlertTriangle className="size-4" />{bi('تنبيهات الجدولة', 'Scheduling warnings')}</div>
+      <ul className="list-disc space-y-0.5 ps-5 text-xs leading-relaxed text-amber-900">
+        {warnings.map((w) => <li key={w.key}>{locale === 'en' ? w.en : w.ar}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** Tooltip text for a ⚠ marker. */
+export function warningsTitle(warnings: ScheduleWarning[] | null | undefined, locale: string): string {
+  return (warnings ?? []).map((w) => `⚠ ${locale === 'en' ? w.en : w.ar}`).join('\n');
 }

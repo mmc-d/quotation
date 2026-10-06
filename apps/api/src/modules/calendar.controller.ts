@@ -6,7 +6,7 @@ import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { audit } from '../common/audit.js';
 import { loadCompany } from '../common/company.js';
-import { conflict, notFound } from '../common/errors.js';
+import { badRequest, conflict, notFound } from '../common/errors.js';
 import { ZodPipe, zDate } from '../common/zod.js';
 
 /**
@@ -37,7 +37,7 @@ export class CalendarController {
       const co = await loadCompany(tx);
       const year = Number(riyadhDate().slice(0, 4));
       const holidays = await tx.select().from(businessHoliday).where(and(gte(businessHoliday.date, `${year}-01-01`), lte(businessHoliday.date, `${year + 1}-12-31`))).orderBy(asc(businessHoliday.date));
-      return { workingDays: co.workingDays?.length ? co.workingDays : DEFAULT_WORKING_DAYS, holidays, years: [year, year + 1] };
+      return { workingDays: co.workingDays?.length ? co.workingDays : DEFAULT_WORKING_DAYS, holidays, years: [year, year + 1], ramadanRanges: co.ramadanRanges ?? [] };
     });
   }
 
@@ -50,6 +50,20 @@ export class CalendarController {
       await tx.update(company).set({ workingDays: days, updatedAt: new Date(), updatedBy: actor.userId }).where(eq(company.id, co.id));
       await audit(tx, actor, 'update_working_days', 'company', co.id, { workingDays: co.workingDays }, { workingDays: days });
       return { workingDays: days };
+    }, actor.userId);
+  }
+
+  /** Ramadan date ranges (one per year, from the Umm al-Qura calendar) for the 6-hour booking rule. */
+  @Put('ramadan')
+  @Perm('admin.settings')
+  async ramadan(@Actor() actor: RequestActor, @Body(new ZodPipe(z.object({ ranges: z.array(z.object({ from: zDate, to: zDate })).max(20) }))) b: { ranges: { from: string; to: string }[] }) {
+    if (b.ranges.some((r) => r.from > r.to)) throw badRequest('each range must start on or before its end');
+    return tenantTx(actor.tenantId, async (tx) => {
+      const co = await loadCompany(tx);
+      const ranges = [...b.ranges].sort((x, y) => x.from.localeCompare(y.from));
+      await tx.update(company).set({ ramadanRanges: ranges, updatedAt: new Date(), updatedBy: actor.userId }).where(eq(company.id, co.id));
+      await audit(tx, actor, 'update_ramadan', 'company', co.id, { ramadanRanges: co.ramadanRanges }, { ramadanRanges: ranges });
+      return { ramadanRanges: ranges };
     }, actor.userId);
   }
 

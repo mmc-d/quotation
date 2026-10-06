@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { date, today } from '@/lib/format';
 import { Button, clsx, Dialog, Empty, Field, Input, Table, Td, Textarea, Th } from '@/components/ui';
 import { UserSelect } from '@/components/user-select';
+import { AttachmentList, AttachmentPicker, type AttachmentMeta } from '@/components/attachments';
 import { ReasonDialog } from '../../quotes/_components/common';
 import { MapChip, type useProjectAction } from './kit';
 import { SNAG_STATUS, type ProjectView, type Snag } from './types';
@@ -15,14 +16,14 @@ export function SnagsTab({ p, action }: { p: ProjectView; action: ReturnType<typ
   const { bi } = useI18n();
   const { me, can } = useMe();
   const canWrite = can('project.write');
-  const [adding, setAdding] = useState<null | { description: string; assigneeId: string | null; dueDate: string }>(null);
+  const [adding, setAdding] = useState<null | { description: string; assigneeId: string | null; dueDate: string; photos: AttachmentMeta[] }>(null);
   const [reopen, setReopen] = useState<Snag | null>(null);
   const todayStr = today();
   const canFix = (s: Snag) => canWrite || (can('asset.write') && !!me && s.assigneeId === me.user.id);
 
   const add = async () => {
     if (!adding) return;
-    const r = await action.run('add-snag', () => api.post(`/projects/${p.id}/snags`, { description: adding.description.trim(), assigneeId: adding.assigneeId, dueDate: adding.dueDate || null }), bi('أُضيفت الملاحظة', 'Snag added'));
+    const r = await action.run('add-snag', () => api.post(`/projects/${p.id}/snags`, { description: adding.description.trim(), assigneeId: adding.assigneeId, dueDate: adding.dueDate || null, photoFileIds: adding.photos.map((f) => f.id) }), bi('أُضيفت الملاحظة', 'Snag added'));
     if (r) setAdding(null);
   };
   const step = (s: Snag, what: 'fix' | 'verify' | 'reopen', body?: unknown, msg?: string) => action.run(`${what}:${s.id}`, () => api.post(`/projects/snags/${s.id}/${what}`, body ?? {}), msg);
@@ -31,7 +32,7 @@ export function SnagsTab({ p, action }: { p: ProjectView; action: ReturnType<typ
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted">{bi('يجب التحقق من إغلاق جميع الملاحظات قبل إتمام التسليم.', 'Every snag must be verified closed before handover is complete.')}</p>
-        {canWrite && <Button size="sm" variant="outline" icon={<Plus className="size-3.5" />} onClick={() => setAdding({ description: '', assigneeId: null, dueDate: '' })}>{bi('إضافة ملاحظة', 'Add snag')}</Button>}
+        {canWrite && <Button size="sm" variant="outline" icon={<Plus className="size-3.5" />} onClick={() => setAdding({ description: '', assigneeId: null, dueDate: '', photos: [] })}>{bi('إضافة ملاحظة', 'Add snag')}</Button>}
       </div>
       {p.snags.length === 0 ? <Empty title={bi('لا توجد ملاحظات', 'No snags')} /> : (
         <Table>
@@ -39,7 +40,10 @@ export function SnagsTab({ p, action }: { p: ProjectView; action: ReturnType<typ
           <tbody>
             {p.snags.map((s) => (
               <tr key={s.id} className="align-top">
-                <Td><div className="whitespace-pre-line text-sm">{s.description}</div><div className="num text-[11px] text-muted">{date(s.createdAt)}</div></Td>
+                <Td>
+                  <div className="whitespace-pre-line text-sm">{s.description}</div><div className="num text-[11px] text-muted">{date(s.createdAt)}</div>
+                  <AttachmentList ids={s.photoFileIds ?? []} files={p.files} size="sm" className="mt-1" />
+                </Td>
                 <Td className="text-xs">{s.locationPath ?? '—'}</Td>
                 <Td className="text-xs">{s.assigneeName ?? '—'}</Td>
                 <Td className={clsx('num whitespace-nowrap text-xs', s.status === 'open' && s.dueDate && s.dueDate < todayStr && 'font-bold text-danger')}>{date(s.dueDate)}</Td>
@@ -67,6 +71,9 @@ export function SnagsTab({ p, action }: { p: ProjectView; action: ReturnType<typ
             <Field label={bi('الوصف *', 'Description *')} className="sm:col-span-2"><Textarea rows={3} autoFocus value={adding.description} onChange={(e) => setAdding({ ...adding, description: e.target.value })} /></Field>
             <Field label={bi('المسؤول', 'Assignee')}><UserSelect value={adding.assigneeId} onChange={(v) => setAdding({ ...adding, assigneeId: v })} /></Field>
             <Field label={bi('تاريخ الاستحقاق', 'Due date')}><Input type="date" value={adding.dueDate} onChange={(e) => setAdding({ ...adding, dueDate: e.target.value })} /></Field>
+            <Field label={bi('الصور', 'Photos')} className="sm:col-span-2">
+              <AttachmentPicker value={adding.photos} onChange={(photos) => setAdding((a) => (a ? { ...a, photos } : a))} label={bi('إرفاق صور', 'Attach photos')} />
+            </Field>
           </div>
         )}
       </Dialog>

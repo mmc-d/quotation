@@ -37,6 +37,8 @@ export const company = pgTable('company', {
   quoteDefaults: jsonb('quote_defaults').$type<{ validityDays?: number; notesAr?: string; termsAr?: string; termsEn?: string; warrantyText?: string }>().notNull().default({}),
   /** company calendar: working weekdays (0 = Sunday … 6 = Saturday); KSA default Sun–Thu */
   workingDays: jsonb('working_days').$type<number[]>().notNull().default([0, 1, 2, 3, 4]),
+  /** Ramadan date ranges (Umm al-Qura, entered per year) — 6-hour day rule for bookings (module 05 §4) */
+  ramadanRanges: jsonb('ramadan_ranges').$type<{ from: string; to: string }[]>().notNull().default([]),
   approvalPolicy: jsonb('approval_policy').$type<{ maxDiscountPercent: number; minMarginPercent: number }>().notNull().default({ maxDiscountPercent: 10, minMarginPercent: 20 }),
   ...audit,
 });

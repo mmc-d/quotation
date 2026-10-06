@@ -1,5 +1,5 @@
 import {
-  and, appUser, asc, billingMilestone, contract, desc, emit, eq, inArray, installedAsset, isNull, ne, nextNumber, or, party, paymentMirror, paymentRequest,
+  and, appUser, asc, billingMilestone, contract, desc, emit, eq, file, inArray, installedAsset, isNull, ne, nextNumber, or, party, paymentMirror, paymentRequest,
   project, projectApproval, projectClockPause, projectStageLog, projectTask, quote, site, siteLocation, snag, sql, workOrder, type SQL, type Tx,
 } from '@mmc/db';
 import {
@@ -247,6 +247,10 @@ export async function projectView(tx: Tx, actor: RequestActor, id: string) {
   const assetRows = canAssets ? await projectAssets(tx, p) : [];
   const path = await locationPaths(tx, [...new Set([p.siteId, ...assetRows.map((a) => a.siteId)].filter((x): x is string => !!x))]);
   const name = await userNames(tx, [p.managerId, p.ownerId, ...tasks.map((t) => t.assigneeId), ...snags.map((s) => s.assigneeId), ...snags.map((s) => s.verifiedBy), ...stageLog.map((l) => l.by)]);
+  // attachments (approval packages, snag photos, signed acceptance) — names and types for the cockpit
+  const fileIds = [...new Set([...approvals.flatMap((a) => a.fileIds ?? []), ...snags.flatMap((s) => s.photoFileIds ?? []), p.acceptanceFileId].filter((x): x is string => !!x))];
+  const fileRows = fileIds.length ? await tx.select({ id: file.id, filename: file.filename, mime: file.mime, size: file.size }).from(file).where(inArray(file.id, fileIds)) : [];
+  const files = Object.fromEntries(fileRows.map((f) => [f.id, { ...f, url: `/api/files/${f.id}` }]));
   return {
     ...p,
     stageLabel: PROJECT_STAGE_LABELS[p.stage as ProjectStage] ?? null,
@@ -269,6 +273,7 @@ export async function projectView(tx: Tx, actor: RequestActor, id: string) {
     assetsHidden: !canAssets,
     workOrders,
     stageLog: stageLog.map((l) => ({ ...l, byName: name(l.by) })),
+    files,
   };
 }
 

@@ -29,6 +29,8 @@ export async function createApp() {
     if (!origin && req.headers.cookie?.includes('mmc.session_token')) return res.status(403).json({ error: 'forbidden', message: 'missing Origin header' });
     return next();
   });
+  // file uploads arrive as base64 JSON (≤ 8 MB of data ≈ 10.7 MB encoded)
+  server.use(['/api/files', '/api/field/work-orders/:id/photos'], express.json({ limit: '12mb' }));
   server.use(express.json({ limit: '5mb', verify: (req, _res, buf) => { (req as unknown as { rawBody: Buffer }).rawBody = buf; } }));
   server.use(express.urlencoded({ extended: false, limit: '1mb' }));
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), { bodyParser: false, logger: ['error', 'warn', 'log'] });

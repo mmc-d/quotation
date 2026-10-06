@@ -33,6 +33,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'المشتريات والمخزون', en: 'Purchasing & stock', items: [
+      { href: '/inventory', label: 'المخزون', en: 'Stock', icon: 'Warehouse', perm: 'inventory.read' },
+      { href: '/purchasing/requests', label: 'طلبات المواد', en: 'Material requests', icon: 'ClipboardCheck', perm: 'purchase.read' },
+      { href: '/purchasing/orders', label: 'أوامر الشراء', en: 'Purchase orders', icon: 'ShoppingCart', perm: 'purchase.read' },
+      { href: '/purchasing/shipments', label: 'الشحنات المستوردة', en: 'Import shipments', icon: 'Ship', perm: 'purchase.read' },
+      { href: '/inventory/transfers', label: 'التحويلات المخزنية', en: 'Stock transfers', icon: 'ArrowLeftRight', perm: 'inventory.write' },
+      { href: '/inventory/counts', label: 'الجرد', en: 'Stock counts', icon: 'ListOrdered', perm: 'inventory.count' },
+    ],
+  },
+  {
     label: 'المالية', en: 'Finance', items: [
       { href: '/finance/requests', label: 'طلبات الدفع', en: 'Payment requests', icon: 'HandCoins', perm: 'billing.read' },
       { href: '/finance/invoices', label: 'الفواتير', en: 'Invoices', icon: 'Receipt', perm: 'invoice.read' },

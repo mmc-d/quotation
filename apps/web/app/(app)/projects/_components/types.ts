@@ -35,10 +35,10 @@ export interface GateCheck { key: string; ok: boolean; ar: string; en: string }
 export interface Gate { from: ProjectStage; to: ProjectStage; ok: boolean; checks: GateCheck[] }
 
 export interface Pause { id: string; fromDate: string; toDate: string | null; kind: string; reason: string }
-export interface Task { id: string; stage: ProjectStage; title: string; status: 'todo' | 'doing' | 'done'; assigneeId: string | null; assigneeName: string | null; dueDate: string | null; locationPath: string | null; doneAt: string | null }
-export interface Approval { id: string; kind: string; title: string; revision: number; status: string; notes: string | null; approvedOn: string | null; approvedByName: string | null; rejectionReason: string | null; createdAt: string }
+export interface Task { id: string; stage: ProjectStage; title: string; status: 'todo' | 'doing' | 'done'; assigneeId: string | null; assigneeName: string | null; startDate: string | null; dueDate: string | null; dependsOnId: string | null; locationPath: string | null; doneAt: string | null; sort: number }
+export interface Approval { id: string; kind: string; title: string; revision: number; status: string; notes: string | null; fileIds: string[]; approvedOn: string | null; approvedByName: string | null; rejectionReason: string | null; createdAt: string }
 export interface ApprovalGroup { kind: string; label: { ar: string; en: string } | null; required: boolean; latest: Approval; history: Approval[] }
-export interface Snag { id: string; description: string; status: 'open' | 'fixed' | 'verified'; assigneeId: string | null; assigneeName: string | null; dueDate: string | null; locationPath: string | null; fixedAt: string | null; verifiedAt: string | null; verifiedByName: string | null; createdAt: string }
+export interface Snag { id: string; description: string; photoFileIds: string[]; status: 'open' | 'fixed' | 'verified'; assigneeId: string | null; assigneeName: string | null; dueDate: string | null; locationPath: string | null; fixedAt: string | null; verifiedAt: string | null; verifiedByName: string | null; createdAt: string }
 export interface Asset { id: string; code: string; description: string | null; serial: string | null; mac: string | null; ip: string | null; locationPath: string | null; testPassed: boolean | null; labourWarrantyEnd: string | null; partsWarrantyEnd: string | null; status: string }
 export interface WorkOrderRow { id: string; number: string; type: string; status: string; title: string; scheduledStart: string | null }
 export interface Milestone { id: string; sort: number; nameAr: string; nameEn: string | null; percent: string; amount: string; paidAmount: string; status: string; dueDate: string | null }
@@ -50,7 +50,7 @@ export interface ProjectView {
   managerId: string | null; managerName: string | null; ownerName: string | null;
   requiredApprovals: string[]; materialsReady: boolean;
   clockMinDays: number; clockMaxDays: number; clockExtensionDays: number; clockStartedOn: string | null;
-  deliveredOn: string | null; acceptedOn: string | null; acceptedByName: string | null;
+  deliveredOn: string | null; acceptedOn: string | null; acceptedByName: string | null; acceptanceFileId: string | null;
   warrantyLabourMonths: number; warrantyPartsMonths: number; plannedStart: string | null; notes: string | null;
   stageLabel: { ar: string; en: string } | null;
   customer: { id: string; nameAr: string; nameEn: string | null; phone: string | null } | null;
@@ -67,7 +67,11 @@ export interface ProjectView {
   assetsHidden: boolean;
   workOrders: WorkOrderRow[];
   stageLog: StageLogRow[];
+  /** attachments referenced by approvals, snags and the acceptance (id → meta) */
+  files: Record<string, ProjectFile>;
 }
+
+export interface ProjectFile { id: string; filename: string; mime: string; size: number; url: string }
 
 export const TEMPLATES: { value: string; ar: string; en: string }[] = [
   { value: 'villa_intercom', ar: 'انتركوم فيلا', en: 'Villa intercom' },

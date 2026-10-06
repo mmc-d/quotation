@@ -2,25 +2,34 @@
 import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { clsx } from '@/components/ui';
 import { errMsg, type ChecklistItem, type WOView } from './shared';
+import { useOutbox, type QueuedMutation } from './outbox';
+
+/** Server checklist with the queued (offline) toggles applied on top. */
+function withPending(list: ChecklistItem[], pending: QueuedMutation[]): ChecklistItem[] {
+  const over = new Map<string, { done: boolean; value: string | null }>();
+  for (const m of pending) if (m.kind === 'checklist') for (const it of (m.body as { items: { key: string; done: boolean; value: string | null }[] }).items) over.set(it.key, it);
+  return over.size ? list.map((i) => (over.has(i.key) ? { ...i, ...over.get(i.key)! } : i)) : list;
+}
 
 /** Large-checkbox checklist; each toggle (or value blur) is saved at once. */
-export function ChecklistStep({ wo, editable, onView }: { wo: WOView; editable: boolean; onView: (v: WOView) => void }) {
+export function ChecklistStep({ wo, editable }: { wo: WOView; editable: boolean; onView?: (v: WOView) => void }) {
   const { bi, locale } = useI18n();
-  const [items, setItems] = useState<ChecklistItem[]>(wo.checklist);
+  const outbox = useOutbox();
+  const [items, setItems] = useState<ChecklistItem[]>(() => withPending(wo.checklist, outbox.pending));
   const [saving, setSaving] = useState<string | null>(null);
-  useEffect(() => setItems(wo.checklist), [wo.checklist]);
+  useEffect(() => setItems(withPending(wo.checklist, outbox.pending)), [wo.checklist, outbox.pending]);
 
+  // saved at once, or queued on the device when offline (FSM-48)
   const save = async (it: ChecklistItem) => {
     setSaving(it.key);
     try {
-      onView(await api.put<WOView>(`/field/work-orders/${wo.id}/checklist`, { items: [{ key: it.key, done: !!it.done, value: it.value ?? null }] }));
+      await outbox.send({ kind: 'checklist', key: `checklist:${it.key}`, path: `/field/work-orders/${wo.id}/checklist`, body: { items: [{ key: it.key, done: !!it.done, value: it.value ?? null }] } });
     } catch (e) {
       toast.error(errMsg(e));
-      setItems(wo.checklist);
+      setItems(withPending(wo.checklist, outbox.pending));
     } finally {
       setSaving(null);
     }
@@ -55,7 +64,7 @@ export function ChecklistStep({ wo, editable, onView }: { wo: WOView; editable: 
               value={it.value ?? ''}
               disabled={!editable}
               onChange={(e) => patch(it.key, { value: e.target.value })}
-              onBlur={(e) => { const orig = wo.checklist.find((c) => c.key === it.key); if ((orig?.value ?? '') !== e.target.value) void save({ ...it, value: e.target.value || null }); }}
+              onBlur={(e) => { const orig = withPending(wo.checklist, outbox.pending).find((c) => c.key === it.key); if ((orig?.value ?? '') !== e.target.value) void save({ ...it, value: e.target.value || null }); }}
             />
           </li>
         );

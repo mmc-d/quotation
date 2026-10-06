@@ -6,7 +6,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { Button, Card, Field, Input, PageHeader, Select, Spinner, Textarea } from '@/components/ui';
+import { Button, Card, Checkbox, Field, Input, PageHeader, Select, Spinner, Textarea } from '@/components/ui';
 import { PartyPicker, type PickedParty } from '@/components/party-picker';
 import { CoverageBadge, SiteSelect, WO_TYPE, useLabel } from '../../_components/common';
 import { LocationPicker } from '../../_components/locations';
@@ -32,6 +32,7 @@ function NewWorkOrder() {
   const [siteId, setSiteId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [asset, setAsset] = useState<PickedAsset | null>(null);
+  const [outdoor, setOutdoor] = useState(false);
 
   const project = useQuery({ queryKey: ['project-min', projectId], queryFn: () => api.get<ProjectMin>(`/projects/${projectId}`), enabled: !!projectId, retry: false });
   const ticket = useQuery({ queryKey: ['field-ticket', ticketId], queryFn: () => api.get<TicketDetail>(`/field/tickets/${ticketId}`), enabled: !!ticketId });
@@ -67,7 +68,7 @@ function NewWorkOrder() {
 
   const create = useMutation({
     mutationFn: () => api.post<WorkOrderView>('/field/work-orders', {
-      type, title: title.trim(), description: description.trim() || null, projectId, ticketId, partyId: party?.id ?? null, siteId, locationId, assetId: asset?.id ?? null,
+      type, title: title.trim(), description: description.trim() || null, projectId, ticketId, partyId: party?.id ?? null, siteId, locationId, assetId: asset?.id ?? null, outdoor,
     }),
     onSuccess: (wo) => { toast.success(bi(`تم إنشاء أمر العمل ${wo.number}`, `Work order ${wo.number} created`)); router.push(`/field/work-orders/${wo.id}`); },
     onError: (e) => toast.error((e as Error).message),
@@ -101,6 +102,7 @@ function NewWorkOrder() {
             <Field label={bi('المكان', 'Location')}><LocationPicker siteId={siteId} value={locationId} onChange={setLocationId} /></Field>
             <Field label={bi('الجهاز', 'Device')} hint={bi('اختياري — يحدد الضمان', 'Optional — decides warranty')} className="sm:col-span-2"><AssetSearch value={asset} onChange={pickAsset} siteId={siteId} partyId={party?.id} /></Field>
             <Field label={bi('الوصف', 'Description')} className="sm:col-span-2"><Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+            <div className="sm:col-span-2"><Checkbox label={bi('عمل خارجي (يسري حظر الظهيرة 12:00–15:00 من 15 يونيو إلى 15 سبتمبر)', 'Outdoor work (midday ban 12:00–15:00, 15 Jun – 15 Sep, applies)')} checked={outdoor} onChange={setOutdoor} /></div>
           </div>
           <p className="mt-3 text-xs text-muted">{bi('تُقرَّر التغطية (مشروع / ضمان / عقد صيانة / مدفوع) تلقائيًا عند الحفظ، وتُنشأ قائمة الفحص حسب النوع.', 'Coverage (project / warranty / maintenance contract / chargeable) is decided on save, and the checklist follows the type.')}</p>
           <div className="mt-4 flex justify-end gap-2">

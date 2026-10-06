@@ -6,8 +6,8 @@ import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { Button, Checkbox, Dialog, Field, Input, Select } from '@/components/ui';
 import type { StaffUser } from '@/components/user-select';
-import { fromRiyadhLocal, toRiyadhLocal } from './common';
-import type { DispatchBoard, WoSummary } from './types';
+import { ScheduleWarnings, fromRiyadhLocal, toRiyadhLocal } from './common';
+import type { DispatchBoard, ScheduleWarning, WoSummary } from './types';
 
 export interface StaffOption { id: string; name: string; isTechnician: boolean }
 
@@ -33,7 +33,7 @@ export function useStaffOptions() {
  * (e.g. a card dropped on a lane at 10:00).
  */
 export function ScheduleDialog({ wo, preset, onClose, onDone }: {
-  wo: Pick<WoSummary, 'id' | 'number' | 'title' | 'technicianId' | 'crewIds' | 'scheduledStart' | 'scheduledEnd'> | null;
+  wo: Pick<WoSummary, 'id' | 'number' | 'title' | 'technicianId' | 'crewIds' | 'scheduledStart' | 'scheduledEnd' | 'outdoor'> | null;
   preset?: { technicianId?: string | null; start?: string | null } | null;
   onClose: () => void;
   onDone?: () => void;
@@ -45,9 +45,14 @@ export function ScheduleDialog({ wo, preset, onClose, onDone }: {
   const [crew, setCrew] = useState<string[]>([]);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [outdoor, setOutdoor] = useState(false);
+  /** warnings of the booking just saved — the dialog stays open to show them */
+  const [warnings, setWarnings] = useState<ScheduleWarning[] | null>(null);
 
   useEffect(() => {
     if (!wo) return;
+    setOutdoor(!!wo.outdoor);
+    setWarnings(null);
     setTech(preset?.technicianId ?? wo.technicianId ?? '');
     setCrew(wo.crewIds ?? []);
     const s = preset?.start ?? toRiyadhLocal(wo.scheduledStart) ?? '';
@@ -68,13 +73,19 @@ export function ScheduleDialog({ wo, preset, onClose, onDone }: {
 
   const valid = !!tech && !!start && !!end && end > start;
   const save = useMutation({
-    mutationFn: () => api.post(`/field/work-orders/${wo!.id}/schedule`, { technicianId: tech, crewIds: crew.filter((c) => c !== tech), scheduledStart: fromRiyadhLocal(start), scheduledEnd: fromRiyadhLocal(end) }),
-    onSuccess: () => {
-      toast.success(bi('تمت الجدولة', 'Scheduled'));
+    mutationFn: () => api.post<WoSummary>(`/field/work-orders/${wo!.id}/schedule`, { technicianId: tech, crewIds: crew.filter((c) => c !== tech), scheduledStart: fromRiyadhLocal(start), scheduledEnd: fromRiyadhLocal(end), outdoor }),
+    onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['field-board'] });
       qc.invalidateQueries({ queryKey: ['field-wo'] });
       qc.invalidateQueries({ queryKey: ['field-wos'] });
       onDone?.();
+      if (r?.scheduleWarnings?.length) {
+        // soft rules: booked anyway, but keep the dialog open so the dispatcher reads them
+        toast.warning(bi('تمت الجدولة مع تنبيهات', 'Scheduled with warnings'));
+        setWarnings(r.scheduleWarnings);
+        return;
+      }
+      toast.success(bi('تمت الجدولة', 'Scheduled'));
       onClose();
     },
     onError: (e) => toast.error((e as Error).message),
@@ -85,8 +96,16 @@ export function ScheduleDialog({ wo, preset, onClose, onDone }: {
 
   return (
     <Dialog open={!!wo} onClose={onClose} title={<>{bi('جدولة أمر العمل', 'Schedule work order')} <span dir="ltr" className="num">{wo?.number}</span></>}
-      footer={<><Button variant="outline" onClick={onClose}>{bi('إلغاء', 'Cancel')}</Button><Button loading={save.isPending} disabled={!valid} onClick={() => save.mutate()}>{bi('جدولة', 'Schedule')}</Button></>}>
+      footer={warnings
+        ? <><Button variant="outline" onClick={() => setWarnings(null)}>{bi('تعديل الموعد', 'Change the booking')}</Button><Button onClick={onClose}>{bi('تم', 'Done')}</Button></>
+        : <><Button variant="outline" onClick={onClose}>{bi('إلغاء', 'Cancel')}</Button><Button loading={save.isPending} disabled={!valid} onClick={() => save.mutate()}>{bi('جدولة', 'Schedule')}</Button></>}>
       {wo && <p className="mb-3 text-sm font-bold">{wo.title}</p>}
+      {warnings && (
+        <>
+          <p className="mb-2 text-sm text-ok">{bi('تم حفظ الموعد. راجع التنبيهات التالية:', 'The booking was saved. Please review:')}</p>
+          <ScheduleWarnings warnings={warnings} className="mb-3" />
+        </>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={bi('الفني المسؤول', 'Lead technician')} className="sm:col-span-2">
           <Select value={tech} onChange={(e) => setTech(e.target.value)}>
@@ -97,6 +116,13 @@ export function ScheduleDialog({ wo, preset, onClose, onDone }: {
         </Field>
         <Field label={bi('البداية (توقيت الرياض)', 'Start (Riyadh time)')}><Input type="datetime-local" dir="ltr" value={start} onChange={(e) => changeStart(e.target.value)} /></Field>
         <Field label={bi('النهاية', 'End')} error={start && end && end <= start ? bi('النهاية يجب أن تكون بعد البداية', 'End must be after start') : null}><Input type="datetime-local" dir="ltr" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></Field>
+      </div>
+      <div className="mt-3">
+        <Checkbox
+          label={<span>{bi('عمل خارجي (تحت الشمس)', 'Outdoor work')} <span className="text-xs text-muted">— {bi('يسري حظر العمل وقت الظهيرة 12:00–15:00 من 15 يونيو إلى 15 سبتمبر', 'the midday ban 12:00–15:00, 15 Jun – 15 Sep, applies')}</span></span>}
+          checked={outdoor}
+          onChange={setOutdoor}
+        />
       </div>
       <div className="mt-3">
         <span className="mb-1 block text-xs font-bold text-gold-dark">{bi('الفريق المساعد', 'Crew')}</span>

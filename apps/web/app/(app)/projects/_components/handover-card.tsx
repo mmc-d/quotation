@@ -6,6 +6,7 @@ import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { date, today } from '@/lib/format';
 import { Button, Card, Field, Input } from '@/components/ui';
+import { AttachmentList, AttachmentPicker, type AttachmentMeta } from '@/components/attachments';
 import type { useProjectAction } from './kit';
 import type { ProjectView } from './types';
 
@@ -15,8 +16,10 @@ export function HandoverCard({ p, action }: { p: ProjectView; action: ReturnType
   const [form, setForm] = useState({ acceptedOn: p.acceptedOn ?? today(), acceptedByName: p.acceptedByName ?? p.customer?.nameAr ?? '' });
   const canAccept = can('project.write') && p.stage === 'handover';
   const minDate = p.deliveredOn ?? undefined;
+  const current = p.acceptanceFileId ? p.files?.[p.acceptanceFileId] : undefined;
+  const [doc, setDoc] = useState<AttachmentMeta[]>(p.acceptanceFileId ? [{ id: p.acceptanceFileId, url: current?.url ?? `/api/files/${p.acceptanceFileId}`, filename: current?.filename ?? '', mime: current?.mime ?? '' }] : []);
 
-  const accept = () => action.run('accept', () => api.post<ProjectView>(`/projects/${p.id}/accept`, { acceptedOn: form.acceptedOn, acceptedByName: form.acceptedByName.trim() }), bi('سُجّل محضر الاستلام', 'Acceptance recorded'));
+  const accept = () => action.run('accept', () => api.post<ProjectView>(`/projects/${p.id}/accept`, { acceptedOn: form.acceptedOn, acceptedByName: form.acceptedByName.trim(), fileId: doc[0]?.id ?? null }), bi('سُجّل محضر الاستلام', 'Acceptance recorded'));
 
   return (
     <Card title={bi('التسليم والاستلام', 'Handover & acceptance')}
@@ -27,7 +30,8 @@ export function HandoverCard({ p, action }: { p: ProjectView; action: ReturnType
       {p.acceptedOn && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           <Stamp className="mt-0.5 size-4 shrink-0" />
-          <span>{bi('استلم العميل المشروع بتاريخ', 'The client accepted the project on')} <b className="num">{date(p.acceptedOn)}</b> — {p.acceptedByName}. {bi(`يبدأ الضمان من هذا التاريخ (عمالة ${p.warrantyLabourMonths} شهرًا، قطع ${p.warrantyPartsMonths} شهرًا).`, `The warranty starts on this date (labour ${p.warrantyLabourMonths} months, parts ${p.warrantyPartsMonths} months).`)}</span>
+          <span className="min-w-0 flex-1">{bi('استلم العميل المشروع بتاريخ', 'The client accepted the project on')} <b className="num">{date(p.acceptedOn)}</b> — {p.acceptedByName}. {bi(`يبدأ الضمان من هذا التاريخ (عمالة ${p.warrantyLabourMonths} شهرًا، قطع ${p.warrantyPartsMonths} شهرًا).`, `The warranty starts on this date (labour ${p.warrantyLabourMonths} months, parts ${p.warrantyPartsMonths} months).`)}</span>
+          {p.acceptanceFileId && <AttachmentList ids={[p.acceptanceFileId]} files={p.files} size="sm" />}
         </div>
       )}
       {canAccept ? (
@@ -35,6 +39,10 @@ export function HandoverCard({ p, action }: { p: ProjectView; action: ReturnType
           <Field label={bi('تاريخ الاستلام *', 'Acceptance date *')}><Input type="date" min={minDate} max={today()} value={form.acceptedOn} onChange={(e) => setForm({ ...form, acceptedOn: e.target.value })} /></Field>
           <Field label={bi('استلمه (اسم ممثل العميل) *', 'Accepted by (client representative) *')}><Input value={form.acceptedByName} onChange={(e) => setForm({ ...form, acceptedByName: e.target.value })} /></Field>
           <Button loading={action.busy === 'accept'} disabled={!form.acceptedOn || !form.acceptedByName.trim()} onClick={() => void accept()}>{p.acceptedOn ? bi('تحديث المحضر', 'Update acceptance') : bi('تسجيل الاستلام', 'Record acceptance')}</Button>
+          <div className="sm:col-span-3">
+            <span className="mb-1 block text-xs font-bold text-gold-dark">{bi('محضر الاستلام الموقّع (صورة أو PDF)', 'Signed acceptance certificate (photo or PDF)')}</span>
+            <AttachmentPicker value={doc} onChange={setDoc} multiple={false} label={doc.length ? bi('استبدال الملف', 'Replace file') : bi('إرفاق المحضر', 'Attach the certificate')} />
+          </div>
         </div>
       ) : !p.acceptedOn && <p className="text-sm text-muted">{bi('يُسجَّل محضر الاستلام في مرحلة التسليم.', 'Acceptance is recorded in the handover stage.')}</p>}
       {p.assetsHidden && <p className="mt-2 text-xs text-muted">{bi('ملف التسليم يحتاج صلاحية عرض الأجهزة.', 'The handover package needs permission to view devices.')}</p>}

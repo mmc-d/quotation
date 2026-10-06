@@ -1,0 +1,1 @@
+ALTER TABLE "company" ADD COLUMN "ramadan_ranges" jsonb DEFAULT '[]'::jsonb NOT NULL;

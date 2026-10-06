@@ -235,6 +235,9 @@ describe('work orders — dispatch and the technician flow (FSM-22, 40..47)', ()
     const ci = await tech.post(`/api/field/work-orders/${S.wo.id}/check-in`, { lat: 21.5001, lng: 39.2001 });
     expect(ci.status).toBe('on_site');
     expect(ci.checkInLat).toBe('21.5001');
+    // geofence (FSM-49): ~15 m from the site pin → inside
+    expect(ci.checkInDistanceM).toBeLessThan(300);
+    expect(ci.checkInOutsideGeofence).toBe(false);
     expect(ci.timeEntries.find((t: any) => t.kind === 'travel').endedAt).toBeTruthy();
     expect(ci.timeEntries.find((t: any) => t.kind === 'work').endedAt).toBeNull();
 
@@ -334,6 +337,71 @@ describe('work orders — dispatch and the technician flow (FSM-22, 40..47)', ()
     expect(d.workOrders.map((w: any) => w.id)).toContain(S.wo.id);
     expect(d.timeline.some((x: any) => x.kind === 'ticket' && x.id === S.ticket.id)).toBe(true);
     expect(d.timeline.some((x: any) => x.kind === 'test' && x.passed === true)).toBe(true);
+  });
+});
+
+describe('KSA scheduling rules and geofence (FSM-27, FSM-49)', () => {
+  it('stores soft warnings with the booking: Friday → non-business day; outdoor July 13:00 → heat ban', async () => {
+    const wo = await owner.post('/api/field/work-orders', { type: 'installation', title: 'تركيب وحدة خارجية', siteId: S.site.id });
+    expect(wo.outdoor).toBe(false);
+    expect(wo.scheduleWarnings).toEqual([]);
+    // 2026-10-16 is a Friday
+    const fri = await owner.post(`/api/field/work-orders/${wo.id}/schedule`, { technicianId: S.tech1, scheduledStart: '2026-10-16T09:00:00+03:00', scheduledEnd: '2026-10-16T10:00:00+03:00' });
+    expect(fri.status).toBe('scheduled');
+    expect(fri.scheduleWarnings.map((w: any) => w.key)).toContain('non_business_day');
+    expect(fri.scheduleWarnings[0].ar).toBeTruthy();
+    expect(fri.scheduleWarnings[0].en).toBeTruthy();
+    // re-book outdoors on Monday 2027-07-12 13:00–14:00 (inside the 15 Jun–15 Sep midday ban)
+    const july = await owner.post(`/api/field/work-orders/${wo.id}/schedule`, { technicianId: S.tech1, scheduledStart: '2027-07-12T13:00:00+03:00', scheduledEnd: '2027-07-12T14:00:00+03:00', outdoor: true });
+    const keys = july.scheduleWarnings.map((w: any) => w.key);
+    expect(july.outdoor).toBe(true);
+    expect(keys).toContain('heat_ban');
+    expect(keys).not.toContain('non_business_day');
+    // the same slot indoors → no heat warning (re-computed when the outdoor flag changes)
+    const indoor = await owner.put(`/api/field/work-orders/${wo.id}`, { title: wo.title, siteId: S.site.id, outdoor: false });
+    expect(indoor.scheduleWarnings.map((w: any) => w.key)).not.toContain('heat_ban');
+    await owner.put(`/api/field/work-orders/${wo.id}`, { title: wo.title, siteId: S.site.id, outdoor: true });
+    const board = await owner.get('/api/field/dispatch-board?from=2027-07-12&to=2027-07-12');
+    const card = board.technicians.find((t: any) => t.id === S.tech1).workOrders.find((w: any) => w.id === wo.id);
+    expect(card.scheduleWarnings.map((w: any) => w.key)).toContain('heat_ban');
+    S.ksa = wo;
+  });
+
+  it('flags a check-in far from the site pin without blocking it', async () => {
+    await owner.post(`/api/field/work-orders/${S.ksa.id}/dispatch`, {});
+    const ci = await tech.post(`/api/field/work-orders/${S.ksa.id}/check-in`, { lat: 21.51, lng: 39.2 }); // ≈ 1.1 km north
+    expect(ci.status).toBe('on_site');
+    expect(ci.checkInDistanceM).toBeGreaterThan(1000);
+    expect(ci.checkInDistanceM).toBeLessThan(1200);
+    expect(ci.checkInOutsideGeofence).toBe(true);
+    // no GPS → nothing to compare, nothing flagged
+    const other = await owner.post('/api/field/work-orders', { type: 'inspection', title: 'فحص بدون موقع', siteId: S.site.id });
+    await owner.post(`/api/field/work-orders/${other.id}/schedule`, { technicianId: S.tech1, scheduledStart: '2027-07-13T08:00:00+03:00', scheduledEnd: '2027-07-13T09:00:00+03:00' });
+    await owner.post(`/api/field/work-orders/${other.id}/dispatch`, {});
+    const none = await tech.post(`/api/field/work-orders/${other.id}/check-in`, {});
+    expect(none.checkInDistanceM).toBeNull();
+    expect(none.checkInOutsideGeofence).toBeNull();
+  });
+});
+
+describe('staff file upload (POST /api/files)', () => {
+  it('stores images and PDFs for any signed-in user and serves them back', async () => {
+    const img = await tech.post('/api/files', { name: 'snag.png', contentType: 'image/png', data: PNG_1PX });
+    expect(img.id).toBeTruthy();
+    expect(img.url).toBe(`/api/files/${img.id}`);
+    const back = await tech.get(img.url, { raw: true }) as Buffer;
+    expect(back.equals(Buffer.from(PNG_1PX, 'base64'))).toBe(true);
+    const pdf = await owner.post('/api/files', { name: 'acceptance.pdf', contentType: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF\n').toString('base64') });
+    expect(pdf.mime).toBe('application/pdf');
+  });
+
+  it('refuses other types, mismatched content, oversize files and anonymous callers', async () => {
+    await owner.post('/api/files', { name: 'x.txt', contentType: 'text/plain', data: Buffer.from('hello').toString('base64') }, { expect: 400 });
+    await owner.post('/api/files', { name: 'fake.png', contentType: 'image/png', data: Buffer.from('MZ not a png').toString('base64') }, { expect: 400 });
+    const big = Buffer.alloc(8 * 1024 * 1024 + 10);
+    big.write('%PDF-1.4');
+    await owner.post('/api/files', { name: 'big.pdf', contentType: 'application/pdf', data: big.toString('base64') }, { expect: 400 });
+    await new Client(base).post('/api/files', { name: 'a.png', contentType: 'image/png', data: PNG_1PX }, { expect: 401 });
   });
 });
 

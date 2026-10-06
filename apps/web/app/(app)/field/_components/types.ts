@@ -21,7 +21,16 @@ export interface WoSummary {
   technicianId: string | null; crewIds: string[]; scheduledStart: string | null; scheduledEnd: string | null; checkInAt: string | null; completedAt: string | null;
   partyName: string | null; siteName: string | null; siteCity: string | null; navUrl: string | null; locationPath: string | null;
   technicianName: string | null; crewNames: string[];
+  /** outdoor work (summer midday ban applies) */
+  outdoor?: boolean;
+  /** KSA scheduling warnings computed at booking (prayer / heat / Ramadan / holiday) */
+  scheduleWarnings?: ScheduleWarning[];
+  /** metres from the site pin at check-in; null when either point is unknown */
+  checkInDistanceM?: number | null;
+  checkInOutsideGeofence?: boolean | null;
 }
+
+export interface ScheduleWarning { key: string; ar: string; en: string }
 
 export interface AssetDetail extends AssetRow {
   site: { id: string; name: string; city: string | null; partyId: string | null } | null;

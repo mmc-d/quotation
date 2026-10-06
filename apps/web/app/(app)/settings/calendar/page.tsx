@@ -11,7 +11,7 @@ import { Button, Card, clsx, Dialog, Empty, ErrorBox, Field, Input, PageHeader, 
 import { InfoNote, RequirePerm } from '../_components/common';
 
 interface Holiday { id: string; date: string; nameAr: string; nameEn: string | null }
-interface CalendarData { workingDays: number[]; holidays: Holiday[]; years: number[] }
+interface CalendarData { workingDays: number[]; holidays: Holiday[]; years: number[]; ramadanRanges?: { from: string; to: string }[] }
 
 const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const DAYS_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -90,6 +90,8 @@ function CalendarSettings() {
           <p className="mt-3 text-xs text-muted">{bi('الافتراضي في المملكة: من الأحد إلى الخميس. عند إنشاء طلب دفع دون تاريخ استحقاق، يكون الاستحقاق اليوم + مدة السداد للعميل، ويُرحّل إلى أول يوم عمل إذا وقع في عطلة. ولا تُرسل تذكيرات الدفع إلا في أيام العمل.', 'The Saudi default is Sunday to Thursday. When a payment request is created without a due date, it is due today + the customer’s payment terms, moved to the next working day if it falls on a holiday. Payment reminders are sent on working days only.')}</p>
         </Card>
 
+        <RamadanCard ranges={cal.ramadanRanges ?? []} onSaved={() => void qc.invalidateQueries({ queryKey: ['calendar'] })} />
+
         <Card title={bi('العطلات الرسمية', 'Public holidays')} padded={false}
           actions={<>
             {cal.years.map((y) => <Button key={y} size="sm" variant="outline" icon={<CalendarPlus className="size-4" />} loading={busy === `seed${y}`} onClick={() => void seedFixed(y)}>{bi(`إضافة العطلات الثابتة ${y}`, `Add fixed holidays ${y}`)}</Button>)}
@@ -152,5 +154,39 @@ function HolidayDialog({ holiday, onClose, onSaved }: { holiday: Holiday | null;
         <ErrorBox error={error} />
       </div>
     </Dialog>
+  );
+}
+
+/** Ramadan dates per year (Umm al-Qura) — bookings longer than 6 hours a day are flagged inside them. */
+function RamadanCard({ ranges, onSaved }: { ranges: { from: string; to: string }[]; onSaved: () => void }) {
+  const { bi } = useI18n();
+  const [rows, setRows] = useState<{ from: string; to: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const list = rows ?? ranges;
+  const valid = list.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.from) && /^\d{4}-\d{2}-\d{2}$/.test(r.to) && r.from <= r.to);
+  const set = (i: number, patch: Partial<{ from: string; to: string }>) => setRows(list.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put('/calendar/ramadan', { ranges: list });
+      toast.success(bi('تم حفظ تواريخ رمضان', 'Ramadan dates saved'));
+      setRows(null);
+      onSaved();
+    } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <Card title={bi('شهر رمضان', 'Ramadan')} actions={<Button size="sm" icon={<Save className="size-4" />} disabled={rows === null || !valid} loading={busy} onClick={() => void save()}>{bi('حفظ', 'Save')}</Button>}>
+      <div className="space-y-2">
+        {list.map((r, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2">
+            <Field label={bi('من', 'From')}><Input type="date" value={r.from} onChange={(e) => set(i, { from: e.target.value })} /></Field>
+            <Field label={bi('إلى', 'To')}><Input type="date" value={r.to} onChange={(e) => set(i, { to: e.target.value })} /></Field>
+            <Button variant="outline" size="sm" icon={<Trash2 className="size-4" />} onClick={() => setRows(list.filter((_, j) => j !== i))}>{bi('حذف', 'Remove')}</Button>
+          </div>
+        ))}
+        <Button variant="outline" size="sm" icon={<Plus className="size-4" />} onClick={() => setRows([...list, { from: '', to: '' }])}>{bi('إضافة رمضان سنة', 'Add a Ramadan year')}</Button>
+      </div>
+      <p className="mt-3 text-xs text-muted">{bi('أدخل بداية رمضان ونهايته حسب تقويم أم القرى لكل سنة. خلاله يُنبَّه عند جدولة أكثر من 6 ساعات عمل في اليوم، ويُحسب العشاء بعد المغرب بساعتين.', 'Enter the start and end of Ramadan for each year from the Umm al-Qura calendar. Inside it, bookings of more than 6 working hours a day are flagged, and Isha is counted two hours after Maghrib.')}</p>
+    </Card>
   );
 }
