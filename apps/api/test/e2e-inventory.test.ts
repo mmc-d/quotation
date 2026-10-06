@@ -412,11 +412,8 @@ describe('stock count, 3-way match, ledger and cost visibility', () => {
     const list = await buyer.get(`/api/inventory/bills?orderId=${S.po.id}&matchStatus=exception`);
     expect(list.total).toBe(1);
   });
-
-  // GAP: packages/db/src/migrate.ts re-runs `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES … TO mmc_app`
-  // after the migrations and only revokes UPDATE/DELETE on audit_log and issued_document, which undoes the
-  // insert-only grant of 0010_inventory_procurement_rls.sql. Un-skip once stock_move is added to that REVOKE.
-  it.skip('stock_move is append-only for the application role', async () => {
+  // migrate.ts revokes UPDATE/DELETE on stock_move after the global grant, keeping the ledger append-only.
+  it('stock_move is append-only for the application role', async () => {
     const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
     try {
       const [tn] = await sql`select id from tenant limit 1`.catch(() => [] as any[]);
