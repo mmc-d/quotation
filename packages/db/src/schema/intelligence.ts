@@ -108,3 +108,21 @@ export const commissionEntry = pgTable('commission_entry', {
   status: text('status').notNull().default('open'),
   ...audit,
 }, (t) => [uniqueIndex('commission_entry_uq').on(t.tenantId, t.userId, t.invoiceId, t.planId), index('commission_entry_user_idx').on(t.tenantId, t.userId, t.status)]);
+
+/**
+ * Personal access tokens for the read-only MCP server (AI-06): an assistant acts as the user, with the
+ * user's own permissions. Only the SHA-256 of the token is stored; the token is shown once.
+ */
+export const apiToken = pgTable('api_token', {
+  id: id(),
+  tenantId: tenantId(),
+  userId: uuid('user_id').notNull().references(() => appUser.id),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  /** e.g. ["mcp:read"] */
+  scopes: jsonb('scopes').$type<string[]>().notNull().default(['mcp:read']),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('api_token_hash_uq').on(t.tokenHash), index('api_token_user_idx').on(t.tenantId, t.userId)]);
