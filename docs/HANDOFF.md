@@ -70,12 +70,9 @@ Production-style run: `cd infra/prod && ./mmc.sh init && ./mmc.sh build && ./mmc
 ## Pending (code work, next candidates)
 
 1. **Translation:** translate the remaining pages to English (pattern in the `lib/i18n.tsx` header; reference: `app/(app)/customers/**`). This covers new strings from the latest features and the public pages.
-2. **Quote gaps:**
-   - Excel export does not show sections.
-   - Changing a quote's customer doesn't re-price existing lines.
-   - The quote page's «إنشاء عقد» always starts a `supply_install` contract; add a template choice there.
+2. ~~**Quote gaps**~~ — done 2026-10-06 (Excel sections, re-price on customer change, contract-type choice + link to the existing contract).
 3. **Credit-note netting:** when a reduction is credited against a 386 before the final 388 exists, the final payment request should net the credit (today it shows only on the statement).
-4. **Status label:** `StatusBadge` has no `billed` label (change orders use their own badge).
+4. ~~**Status label** `billed`~~ — done 2026-10-06.
 5. **Integration work, blocked on accounts:**
    - Google Workspace mail/calendar sync, Wathq CR and national-address lookup;
    - direct Meta/Snapchat/TikTok adapters (a signed intake exists);
