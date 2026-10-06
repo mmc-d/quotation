@@ -69,7 +69,7 @@ Production-style run: `cd infra/prod && ./mmc.sh init && ./mmc.sh build && ./mmc
 
 ## Pending (code work, next candidates)
 
-1. **Translation:** translate the remaining pages to English (pattern in the `lib/i18n.tsx` header; reference: `app/(app)/customers/**`). This covers new strings from the latest features and the public pages.
+1. ~~**Translation**~~ — done 2026-10-06: every staff page and the public pages have English (`bi(ar, en)` inline; public pages got a language toggle). Stored data (names, clause text, amount in words) stays as entered.
 2. ~~**Quote gaps**~~ — done 2026-10-06 (Excel sections, re-price on customer change, contract-type choice + link to the existing contract).
 3. ~~**Credit-note netting**~~ — done 2026-10-06 (final request nets 381s on 386s; the ledger still needs the credit reconciled against the 388 in ERPNext).
 4. ~~**Status label** `billed`~~ — done 2026-10-06.

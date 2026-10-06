@@ -6,18 +6,19 @@ import { useQuery } from '@tanstack/react-query';
 import { FileSignature } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { date } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import { Button, Card, clsx, Empty, ErrorBox, LinkButton, Money, PageHeader, SearchBox, Spinner, StatusBadge, Table, Td, Th } from '@/components/ui';
 
 interface ContractRow { id: string; number: string; title: string; subtitle: string | null; status: string; contractDate: string; total: string; partyId: string | null; partyName: string | null; clientName: string | null; ownerName: string | null }
 
-const STATUSES: { value: string; label: string }[] = [
-  { value: 'draft', label: 'مسودة' },
-  { value: 'sent_for_signature', label: 'بانتظار التوقيع' },
-  { value: 'signed', label: 'موقّع' },
-  { value: 'active', label: 'ساري' },
-  { value: 'completed', label: 'مكتمل' },
-  { value: 'terminated', label: 'منتهٍ' },
-  { value: 'cancelled', label: 'ملغى' },
+const STATUSES: { value: string; label: string; labelEn: string }[] = [
+  { value: 'draft', label: 'مسودة', labelEn: 'Draft' },
+  { value: 'sent_for_signature', label: 'بانتظار التوقيع', labelEn: 'Awaiting signature' },
+  { value: 'signed', label: 'موقّع', labelEn: 'Signed' },
+  { value: 'active', label: 'ساري', labelEn: 'Active' },
+  { value: 'completed', label: 'مكتمل', labelEn: 'Completed' },
+  { value: 'terminated', label: 'منتهٍ', labelEn: 'Terminated' },
+  { value: 'cancelled', label: 'ملغى', labelEn: 'Cancelled' },
 ];
 
 const PAGE = 50;
@@ -26,6 +27,7 @@ function ContractsList() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const { bi, locale } = useI18n();
   const [q, setQ] = useState(sp.get('q') ?? '');
   const [statuses, setStatuses] = useState<string[]>(() => (sp.get('status') ?? '').split(',').filter(Boolean));
   const [limit, setLimit] = useState(PAGE);
@@ -50,27 +52,27 @@ function ContractsList() {
   return (
     <>
       <PageHeader
-        title="العقود"
-        subtitle={list.data ? `${list.data.total} عقد` : 'Contracts'}
-        actions={<LinkButton href="/quotes?status=accepted,approved,sent,viewed" icon={<FileSignature className="size-4" />}>عقد من عرض سعر</LinkButton>}
+        title={bi('العقود', 'Contracts')}
+        subtitle={list.data ? bi(`${list.data.total} عقد`, `${list.data.total} contracts`) : 'Contracts'}
+        actions={<LinkButton href="/quotes?status=accepted,approved,sent,viewed" icon={<FileSignature className="size-4" />}>{bi('عقد من عرض سعر', 'Contract from a quote')}</LinkButton>}
       />
       <Card padded={false}>
         <div className="space-y-2 border-b border-line p-3">
-          <SearchBox value={q} onChange={setQ} placeholder="رقم العقد، العنوان، اسم العميل…" />
+          <SearchBox value={q} onChange={setQ} placeholder={bi('رقم العقد، العنوان، اسم العميل…', 'Contract number, title, customer name…')} />
           <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" onClick={() => setStatuses([])} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.length === 0 ? 'border-primary bg-primary text-white' : 'border-line text-muted hover:bg-tint')}>الكل</button>
+            <button type="button" onClick={() => setStatuses([])} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.length === 0 ? 'border-primary bg-primary text-white' : 'border-line text-muted hover:bg-tint')}>{bi('الكل', 'All')}</button>
             {STATUSES.map((s) => (
-              <button key={s.value} type="button" onClick={() => toggle(s.value)} aria-pressed={statuses.includes(s.value)} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.includes(s.value) ? 'border-gold bg-tint text-primary' : 'border-line text-muted hover:bg-tint/60')}>{s.label}</button>
+              <button key={s.value} type="button" onClick={() => toggle(s.value)} aria-pressed={statuses.includes(s.value)} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.includes(s.value) ? 'border-gold bg-tint text-primary' : 'border-line text-muted hover:bg-tint/60')}>{locale === 'en' ? s.labelEn : s.label}</button>
             ))}
           </div>
         </div>
         <ErrorBox error={list.error} />
         {list.isLoading ? <Spinner /> : rows.length === 0 ? (
-          <Empty icon={<FileSignature className="size-8" />} title={term || status ? 'لا توجد عقود مطابقة' : 'لا توجد عقود بعد'} hint={term || status ? 'جرّب تغيير البحث أو الفلاتر.' : 'تُنشأ العقود من عروض الأسعار المعتمدة أو المقبولة عبر زر «إنشاء عقد».'} />
+          <Empty icon={<FileSignature className="size-8" />} title={term || status ? bi('لا توجد عقود مطابقة', 'No matching contracts') : bi('لا توجد عقود بعد', 'No contracts yet')} hint={term || status ? bi('جرّب تغيير البحث أو الفلاتر.', 'Try changing the search or filters.') : bi('تُنشأ العقود من عروض الأسعار المعتمدة أو المقبولة عبر زر «إنشاء عقد».', 'Contracts are created from approved or accepted quotes via the “Create contract” button.')} />
         ) : (
           <>
             <Table>
-              <thead><tr><Th>الرقم</Th><Th>العنوان</Th><Th>العميل</Th><Th>الحالة</Th><Th className="text-end">القيمة</Th><Th>التاريخ</Th></tr></thead>
+              <thead><tr><Th>{bi('الرقم', 'Number')}</Th><Th>{bi('العنوان', 'Title')}</Th><Th>{bi('العميل', 'Customer')}</Th><Th>{bi('الحالة', 'Status')}</Th><Th className="text-end">{bi('القيمة', 'Value')}</Th><Th>{bi('التاريخ', 'Date')}</Th></tr></thead>
               <tbody className={clsx(list.isFetching && 'opacity-70')}>
                 {rows.map((r) => (
                   <tr key={r.id} className="cursor-pointer hover:bg-tint/50" onClick={() => router.push(`/contracts/${r.id}`)}>
@@ -86,7 +88,7 @@ function ContractsList() {
             </Table>
             {list.data && list.data.total > rows.length && limit < 200 && (
               <div className="flex justify-center border-t border-line p-3">
-                <Button variant="outline" size="sm" loading={list.isFetching} onClick={() => setLimit((l) => Math.min(200, l + PAGE))}>عرض المزيد ({list.data.total - rows.length})</Button>
+                <Button variant="outline" size="sm" loading={list.isFetching} onClick={() => setLimit((l) => Math.min(200, l + PAGE))}>{bi('عرض المزيد', 'Show more')} ({list.data.total - rows.length})</Button>
               </div>
             )}
           </>

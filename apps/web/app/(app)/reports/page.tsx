@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Download, FileText } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
+import { useI18n } from '@/lib/i18n';
 import { date, h, money, today } from '@/lib/format';
 import { Button, Card, Empty, ErrorBox, Field, Input, Money, PageHeader, Spinner, Stat, StatusBadge, Table, Td, Th, clsx } from '@/components/ui';
 import { downloadCsv } from './_components/csv';
@@ -18,12 +19,16 @@ interface LostRow { reason: string; count: number; amount: string }
 
 const REASON_AR: Record<string, string> = { price: 'السعر', competitor: 'منافس', timing: 'التوقيت', no_response: 'لا يوجد رد', scope: 'خارج النطاق', other: 'أخرى' };
 const STATUS_AR: Record<string, string> = { draft: 'مسودة', pending_approval: 'بانتظار الموافقة', approved: 'معتمد', sent: 'مُرسل', viewed: 'تمت المشاهدة', accepted: 'مقبول', rejected: 'مرفوض', expired: 'منتهي', lost: 'خسارة' };
+const REASON_EN: Record<string, string> = { price: 'Price', competitor: 'Competitor', timing: 'Timing', no_response: 'No response', scope: 'Out of scope', other: 'Other' };
+const STATUS_EN: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending approval', approved: 'Approved', sent: 'Sent', viewed: 'Viewed', accepted: 'Accepted', rejected: 'Rejected', expired: 'Expired', lost: 'Lost' };
 
 function monthStart(d: string) { return `${d.slice(0, 8)}01`; }
 const sar = (halalas: number) => (halalas / 100).toFixed(2);
 
 export default function ReportsPage() {
   const { can, me } = useMe();
+  const { bi, locale } = useI18n();
+  const en = locale === 'en';
   const t = today();
   const [from, setFrom] = useState(monthStart(t));
   const [to, setTo] = useState(t);
@@ -56,18 +61,20 @@ export default function ReportsPage() {
   }, [rows]);
 
   const exportCsv = () => {
-    const header = ['رقم العرض', 'المراجعة', 'التاريخ', 'الحالة', 'العميل', 'المسؤول', 'الإجمالي قبل الخصم', 'الخصم', 'نسبة الخصم %', 'الإجمالي', ...(hasMargin ? ['التكلفة', 'الهامش', 'نسبة الهامش %'] : [])];
+    const header = en
+      ? ['Quote no.', 'Revision', 'Date', 'Status', 'Customer', 'Owner', 'Total before discount', 'Discount', 'Discount %', 'Total', ...(hasMargin ? ['Cost', 'Margin', 'Margin %'] : [])]
+      : ['رقم العرض', 'المراجعة', 'التاريخ', 'الحالة', 'العميل', 'المسؤول', 'الإجمالي قبل الخصم', 'الخصم', 'نسبة الخصم %', 'الإجمالي', ...(hasMargin ? ['التكلفة', 'الهامش', 'نسبة الهامش %'] : [])];
     const body = rows.map((r) => [
-      r.number, `R${r.revision}`, date(r.quote_date), STATUS_AR[r.status] ?? r.status, r.client ?? '', r.owner ?? '',
+      r.number, `R${r.revision}`, date(r.quote_date), (en ? STATUS_EN : STATUS_AR)[r.status] ?? r.status, r.client ?? '', r.owner ?? '',
       sar(h(r.subtotal)), sar(h(r.discount_amount)), r.discount_percent ?? '', sar(h(r.total)),
       ...(hasMargin ? [r.cost_total ? sar(h(r.cost_total)) : '', r.margin_total ? sar(h(r.margin_total)) : '', r.margin_percent ?? ''] : []),
     ]);
-    body.push(['الإجمالي', '', '', `${rows.length} عرض`, '', '', sar(totals.subtotal), sar(totals.discount), totals.discountPct != null ? totals.discountPct.toFixed(1) : '', sar(totals.total), ...(hasMargin ? [sar(totals.cost), sar(totals.margin), totals.marginPct != null ? totals.marginPct.toFixed(1) : ''] : [])]);
+    body.push([bi('الإجمالي', 'Total'), '', '', bi(`${rows.length} عرض`, `${rows.length} quotes`), '', '', sar(totals.subtotal), sar(totals.discount), totals.discountPct != null ? totals.discountPct.toFixed(1) : '', sar(totals.total), ...(hasMargin ? [sar(totals.cost), sar(totals.margin), totals.marginPct != null ? totals.marginPct.toFixed(1) : ''] : [])]);
     downloadCsv(`quote-register_${from}_${to}.csv`, header, body);
   };
 
   if (me && !can('report.sales')) {
-    return <><PageHeader title="تقارير المبيعات" /><Card><Empty title="لا تملك صلاحية تقارير المبيعات" /></Card></>;
+    return <><PageHeader title={bi('تقارير المبيعات', 'Sales reports')} /><Card><Empty title={bi('لا تملك صلاحية تقارير المبيعات', 'You do not have permission for sales reports')} /></Card></>;
   }
 
   const lostRows = lost.data ?? [];
@@ -76,36 +83,36 @@ export default function ReportsPage() {
 
   return (
     <>
-      <PageHeader title="تقارير المبيعات" subtitle="سجل العروض وأسباب الخسارة" />
+      <PageHeader title={bi('تقارير المبيعات', 'Sales reports')} subtitle={bi('سجل العروض وأسباب الخسارة', 'Quote register and loss reasons')} />
       <Card className="mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="من"><Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></Field>
-          <Field label="إلى"><Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
+          <Field label={bi('من', 'From')}><Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></Field>
+          <Field label={bi('إلى', 'To')}><Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
           <div className="flex flex-wrap gap-1 pb-0.5">
-            <Button size="sm" variant="ghost" onClick={() => { setFrom(monthStart(t)); setTo(t); }}>هذا الشهر</Button>
-            <Button size="sm" variant="ghost" onClick={() => { const d = new Date(`${monthStart(t)}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); const s = d.toISOString().slice(0, 10); const e = new Date(`${monthStart(t)}T12:00:00Z`); e.setUTCDate(0); setFrom(s); setTo(e.toISOString().slice(0, 10)); }}>الشهر الماضي</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setFrom(`${t.slice(0, 4)}-01-01`); setTo(t); }}>منذ بداية السنة</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setFrom(monthStart(t)); setTo(t); }}>{bi('هذا الشهر', 'This month')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { const d = new Date(`${monthStart(t)}T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); const s = d.toISOString().slice(0, 10); const e = new Date(`${monthStart(t)}T12:00:00Z`); e.setUTCDate(0); setFrom(s); setTo(e.toISOString().slice(0, 10)); }}>{bi('الشهر الماضي', 'Last month')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setFrom(`${t.slice(0, 4)}-01-01`); setTo(t); }}>{bi('منذ بداية السنة', 'Year to date')}</Button>
           </div>
-          {!range && <span className="pb-2 text-xs text-danger">تاريخ البداية يجب أن يسبق النهاية</span>}
+          {!range && <span className="pb-2 text-xs text-danger">{bi('تاريخ البداية يجب أن يسبق النهاية', 'The start date must come before the end date')}</span>}
         </div>
       </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="عدد العروض" value={<span className="num">{rows.length}</span>} />
-        <Stat label="قيمة العروض" value={<span className="num text-xl">{money(totals.total)}</span>} hint="ر.س" />
-        <Stat label="المقبولة" tone="green" value={<span className="num">{totals.acceptedCount}</span>} hint={<span className="num">{money(totals.acceptedValue)} ر.س</span>} />
-        <Stat label="متوسط الخصم" tone="gold" value={<span className="num">{totals.discountPct != null ? `${totals.discountPct.toFixed(1)}%` : '—'}</span>} hint={hasMargin && totals.marginPct != null ? <span className="num">الهامش {totals.marginPct.toFixed(1)}%</span> : undefined} />
+        <Stat label={bi('عدد العروض', 'Quotes')} value={<span className="num">{rows.length}</span>} />
+        <Stat label={bi('قيمة العروض', 'Quotes value')} value={<span className="num text-xl">{money(totals.total)}</span>} hint={bi('ر.س', 'SAR')} />
+        <Stat label={bi('المقبولة', 'Accepted')} tone="green" value={<span className="num">{totals.acceptedCount}</span>} hint={<span className="num">{money(totals.acceptedValue)} {bi('ر.س', 'SAR')}</span>} />
+        <Stat label={bi('متوسط الخصم', 'Average discount')} tone="gold" value={<span className="num">{totals.discountPct != null ? `${totals.discountPct.toFixed(1)}%` : '—'}</span>} hint={hasMargin && totals.marginPct != null ? <span className="num">{bi('الهامش', 'Margin')} {totals.marginPct.toFixed(1)}%</span> : undefined} />
       </div>
 
-      <Card padded={false} title={<span className="inline-flex items-center gap-2"><FileText className="size-4" />سجل عروض الأسعار</span>} actions={<Button size="sm" variant="outline" icon={<Download className="size-3.5" />} disabled={!rows.length} onClick={exportCsv}>تصدير CSV</Button>}>
+      <Card padded={false} title={<span className="inline-flex items-center gap-2"><FileText className="size-4" />{bi('سجل عروض الأسعار', 'Quote register')}</span>} actions={<Button size="sm" variant="outline" icon={<Download className="size-3.5" />} disabled={!rows.length} onClick={exportCsv}>{bi('تصدير CSV', 'Export CSV')}</Button>}>
         <ErrorBox error={register.error} />
-        {register.isLoading ? <Spinner /> : rows.length === 0 ? <Empty icon={<FileText className="size-8" />} title="لا توجد عروض في هذه الفترة" /> : (
+        {register.isLoading ? <Spinner /> : rows.length === 0 ? <Empty icon={<FileText className="size-8" />} title={bi('لا توجد عروض في هذه الفترة', 'No quotes in this period')} /> : (
           <Table>
             <thead>
               <tr>
-                <Th>الرقم</Th><Th>التاريخ</Th><Th>الحالة</Th><Th>العميل</Th><Th>المسؤول</Th>
-                <Th className="text-end">قبل الخصم</Th><Th className="text-end">الخصم</Th><Th className="text-end">%</Th><Th className="text-end">الإجمالي</Th>
-                {hasMargin && <><Th className="text-end">التكلفة</Th><Th className="text-end">الهامش</Th><Th className="text-end">هامش %</Th></>}
+                <Th>{bi('الرقم', 'No.')}</Th><Th>{bi('التاريخ', 'Date')}</Th><Th>{bi('الحالة', 'Status')}</Th><Th>{bi('العميل', 'Customer')}</Th><Th>{bi('المسؤول', 'Owner')}</Th>
+                <Th className="text-end">{bi('قبل الخصم', 'Before discount')}</Th><Th className="text-end">{bi('الخصم', 'Discount')}</Th><Th className="text-end">%</Th><Th className="text-end">{bi('الإجمالي', 'Total')}</Th>
+                {hasMargin && <><Th className="text-end">{bi('التكلفة', 'Cost')}</Th><Th className="text-end">{bi('الهامش', 'Margin')}</Th><Th className="text-end">{bi('هامش %', 'Margin %')}</Th></>}
               </tr>
             </thead>
             <tbody>
@@ -130,7 +137,7 @@ export default function ReportsPage() {
             </tbody>
             <tfoot>
               <tr className="bg-tint/60 font-extrabold">
-                <Td colSpan={5}>الإجمالي ({rows.length} عرض)</Td>
+                <Td colSpan={5}>{bi(`الإجمالي (${rows.length} عرض)`, `Total (${rows.length} quotes)`)}</Td>
                 <Td className="text-end"><Money value={totals.subtotal} /></Td>
                 <Td className="text-end"><Money value={totals.discount} /></Td>
                 <Td className="num text-end text-xs">{totals.discountPct != null ? totals.discountPct.toFixed(1) : '—'}</Td>
@@ -146,15 +153,15 @@ export default function ReportsPage() {
         )}
       </Card>
 
-      <Card className="mt-4" title={<span className="inline-flex items-center gap-2"><BarChart3 className="size-4" />أسباب خسارة الفرص</span>}>
+      <Card className="mt-4" title={<span className="inline-flex items-center gap-2"><BarChart3 className="size-4" />{bi('أسباب خسارة الفرص', 'Opportunity loss reasons')}</span>}>
         <ErrorBox error={lost.error} />
-        {lost.isLoading ? <Spinner /> : lostRows.length === 0 ? <p className="text-sm text-muted">لا توجد فرص خاسرة في هذه الفترة.</p> : (
+        {lost.isLoading ? <Spinner /> : lostRows.length === 0 ? <p className="text-sm text-muted">{bi('لا توجد فرص خاسرة في هذه الفترة.', 'No lost opportunities in this period.')}</p> : (
           <ul className="space-y-2.5">
             {lostRows.map((r) => (
               <li key={r.reason}>
                 <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-bold">{REASON_AR[r.reason] ?? r.reason}</span>
-                  <span className="num text-xs text-muted"><b className="text-ink">{r.count}</b> ({Math.round((r.count / lostTotal) * 100)}%) · {money(r.amount)} ر.س</span>
+                  <span className="font-bold">{(en ? REASON_EN : REASON_AR)[r.reason] ?? r.reason}</span>
+                  <span className="num text-xs text-muted"><b className="text-ink">{r.count}</b> ({Math.round((r.count / lostTotal) * 100)}%) · {money(r.amount)} {bi('ر.س', 'SAR')}</span>
                 </div>
                 <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
                   <div className="h-full rounded-full bg-gold" style={{ width: `${(r.count / lostMax) * 100}%` }} />

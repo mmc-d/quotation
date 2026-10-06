@@ -9,13 +9,15 @@ import { useMe } from '@/lib/me';
 import { date, h } from '@/lib/format';
 import { Button, Card, clsx, Empty, ErrorBox, Money, PageHeader, SearchBox, Select, Spinner } from '@/components/ui';
 import { UserSelect } from '@/components/user-select';
-import { label, PROJECT_LABELS, type Opportunity, type Stage } from '../_components/labels';
+import { useI18n } from '@/lib/i18n';
+import { labelL, PROJECT_LABELS, PROJECT_LABELS_EN, type Opportunity, type Stage } from '../_components/labels';
 import { LostDialog, NewOpportunityDialog, useMoveStage, type PipelineData } from '../_components/opportunity';
 
 const STAGE_TONE: Record<string, string> = { won: 'border-t-ok', lost: 'border-t-danger', open: 'border-t-gold' };
 
 export default function PipelinePage() {
   const { can } = useMe();
+  const { bi, locale } = useI18n();
   const router = useRouter();
   const qc = useQueryClient();
   const [ownerId, setOwnerId] = useState<string | null>(null);
@@ -54,19 +56,19 @@ export default function PipelinePage() {
   return (
     <>
       <PageHeader
-        title="خط المبيعات"
-        subtitle={data.data ? <span>{openOpps.length} فرصة مفتوحة · <Money value={openTotal} /> · المرجّح <Money value={openWeighted} /></span> : 'Pipeline'}
-        actions={canWrite && <Button icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>فرصة جديدة</Button>}
+        title={bi('خط المبيعات', 'Pipeline')}
+        subtitle={data.data ? <span>{openOpps.length} {bi('فرصة مفتوحة', 'open opportunities')} · <Money value={openTotal} /> · {bi('المرجّح', 'weighted')} <Money value={openWeighted} /></span> : 'Pipeline'}
+        actions={canWrite && <Button icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>{bi('فرصة جديدة', 'New opportunity')}</Button>}
       />
       <Card padded={false} className="mb-4">
         <div className="flex flex-wrap items-center gap-2 p-3">
-          <SearchBox value={search} onChange={setSearch} placeholder="بحث في عناوين الفرص…" />
-          <div className="w-full max-w-[14rem]"><UserSelect value={ownerId} onChange={setOwnerId} emptyLabel="كل المسؤولين" /></div>
+          <SearchBox value={search} onChange={setSearch} placeholder={bi('بحث في عناوين الفرص…', 'Search opportunity titles…')} />
+          <div className="w-full max-w-[14rem]"><UserSelect value={ownerId} onChange={setOwnerId} emptyLabel={bi('كل المسؤولين', 'All owners')} /></div>
         </div>
       </Card>
       <ErrorBox error={data.error} />
       {data.isLoading ? <Spinner /> : !stages.length ? (
-        <Empty icon={<Target className="size-8" />} title="لا يوجد خط مبيعات مُعد" />
+        <Empty icon={<Target className="size-8" />} title={bi('لا يوجد خط مبيعات مُعد', 'No pipeline is set up')} />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4 pb-4 md:mx-0 md:px-0">
           <div className="flex gap-3" style={{ minWidth: `${stages.length * 17}rem` }}>
@@ -84,16 +86,16 @@ export default function PipelinePage() {
                 >
                   <header className="border-b border-line px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h2 className="text-sm font-extrabold text-primary">{s.nameAr}</h2>
+                      <h2 className="text-sm font-extrabold text-primary">{locale === 'en' ? s.nameEn || s.nameAr : s.nameAr}</h2>
                       <span className="rounded-full bg-white px-2 text-xs font-bold text-gold-dark num">{items.length}</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[11px] text-muted">
                       <Money value={total} className="font-bold text-ink" />
-                      <span title="القيمة المرجّحة">{s.probability}% · <Money value={weighted} /></span>
+                      <span title={bi('القيمة المرجّحة', 'Weighted value')}>{s.probability}% · <Money value={weighted} /></span>
                     </div>
                   </header>
                   <div className="flex min-h-[8rem] flex-1 flex-col gap-2 p-2">
-                    {items.length === 0 && <p className="py-6 text-center text-xs text-muted">{canWrite ? 'اسحب فرصة إلى هنا' : 'لا توجد فرص'}</p>}
+                    {items.length === 0 && <p className="py-6 text-center text-xs text-muted">{canWrite ? bi('اسحب فرصة إلى هنا', 'Drag an opportunity here') : bi('لا توجد فرص', 'No opportunities')}</p>}
                     {items.map((o) => (
                       <OppCard
                         key={o.id}
@@ -131,6 +133,8 @@ function OppCard({ o, stages, canWrite, dragging, onDragStart, onDragEnd, onMove
   o: Opportunity; stages: Stage[]; canWrite: boolean; dragging: boolean;
   onDragStart: (e: React.DragEvent) => void; onDragEnd: () => void; onMove: (stageId: string) => void;
 }) {
+  const { bi, locale } = useI18n();
+  const sn = (s: Stage) => (locale === 'en' ? s.nameEn || s.nameAr : s.nameAr);
   return (
     <article
       draggable={canWrite}
@@ -147,15 +151,15 @@ function OppCard({ o, stages, canWrite, dragging, onDragStart, onDragEnd, onMove
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs">
         <Money value={o.amount} className="font-bold" />
-        {o.projectType && <span className="rounded bg-tint px-1.5 text-[10px] text-gold-dark">{label(PROJECT_LABELS, o.projectType)}</span>}
+        {o.projectType && <span className="rounded bg-tint px-1.5 text-[10px] text-gold-dark">{labelL(locale, PROJECT_LABELS, PROJECT_LABELS_EN, o.projectType)}</span>}
       </div>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[11px] text-muted">
         <span className="inline-flex items-center gap-1"><User className="size-3" />{o.ownerName ?? '—'}</span>
         {o.expectedClose && <span className="inline-flex items-center gap-1 num"><CalendarDays className="size-3" />{date(o.expectedClose)}</span>}
       </div>
       {canWrite && (
-        <Select value={o.stageId} onChange={(e) => onMove(e.target.value)} className="mt-2 !py-1 text-xs" aria-label="نقل إلى مرحلة">
-          {stages.map((s) => <option key={s.id} value={s.id}>{s.id === o.stageId ? `المرحلة: ${s.nameAr}` : `نقل إلى: ${s.nameAr}`}</option>)}
+        <Select value={o.stageId} onChange={(e) => onMove(e.target.value)} className="mt-2 !py-1 text-xs" aria-label={bi('نقل إلى مرحلة', 'Move to stage')}>
+          {stages.map((s) => <option key={s.id} value={s.id}>{s.id === o.stageId ? bi(`المرحلة: ${s.nameAr}`, `Stage: ${sn(s)}`) : bi(`نقل إلى: ${s.nameAr}`, `Move to: ${sn(s)}`)}</option>)}
         </Select>
       )}
     </article>

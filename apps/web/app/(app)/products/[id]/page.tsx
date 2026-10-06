@@ -6,9 +6,10 @@ import { toast } from 'sonner';
 import { Archive, ExternalLink, Package, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
+import { useI18n } from '@/lib/i18n';
 import { Button, Card, Checkbox, Dialog, ErrorBox, Field, Input, PageHeader, Select, Spinner, Textarea } from '@/components/ui';
 import { KitComponentsCard } from '../_components/kit-components';
-import { CURRENCY_AR, PRODUCT_TYPES, type Product } from '../_components/types';
+import { CURRENCY_AR, CURRENCY_EN, PRODUCT_TYPES, PRODUCT_TYPES_EN, type Product } from '../_components/types';
 
 interface Form {
   code: string; nameAr: string; nameEn: string; description: string; categoryId: string;
@@ -38,6 +39,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const qc = useQueryClient();
   const { can } = useMe();
+  const { bi, locale } = useI18n();
   const canWrite = can('product.write');
   const showCost = can('product.cost.read');
 
@@ -53,11 +55,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const errs = {
-    listPrice: amountOk(f.listPrice) ? null : 'مبلغ غير صالح',
-    installCost: amountOk(f.installCost) ? null : 'مبلغ غير صالح',
-    costPrice: !f.costPrice.trim() || amountOk(f.costPrice) ? null : 'مبلغ غير صالح',
-    costRateToSar: amountOk(f.costRateToSar) ? null : 'سعر صرف غير صالح',
-    warrantyMonths: !f.warrantyMonths || /^\d+$/.test(f.warrantyMonths) ? null : 'عدد صحيح',
+    listPrice: amountOk(f.listPrice) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
+    installCost: amountOk(f.installCost) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
+    costPrice: !f.costPrice.trim() || amountOk(f.costPrice) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
+    costRateToSar: amountOk(f.costRateToSar) ? null : bi('سعر صرف غير صالح', 'Invalid exchange rate'),
+    warrantyMonths: !f.warrantyMonths || /^\d+$/.test(f.warrantyMonths) ? null : bi('عدد صحيح', 'Whole number'),
   };
   const invalid = Object.values(errs).some(Boolean);
   const costSar = f.costPrice && amountOk(f.costPrice) && amountOk(f.costRateToSar) ? Number(f.costPrice) * Number(f.costRateToSar) : null;
@@ -78,7 +80,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     else if (q.data) Object.assign(body, { costCurrency: q.data.costCurrency, ...(q.data.costRateToSar ? { costRateToSar: q.data.costRateToSar } : {}) });
     try {
       const saved = await api.put<Product>(`/products/${id}`, body);
-      toast.success(isNew ? 'تمت إضافة المنتج' : 'تم حفظ المنتج');
+      toast.success(isNew ? bi('تمت إضافة المنتج', 'Product added') : bi('تم حفظ المنتج', 'Product saved'));
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.setQueryData(['product', saved.id], saved);
       if (isNew) router.replace(`/products/${saved.id}`);
@@ -89,113 +91,113 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     setBusy('archive'); setError(null);
     try {
       await api.del(`/products/${id}`);
-      toast.success('تمت أرشفة المنتج');
+      toast.success(bi('تمت أرشفة المنتج', 'Product archived'));
       qc.invalidateQueries({ queryKey: ['products'] });
       router.push('/products');
     } catch (err) { setError(err); } finally { setBusy(null); }
   };
 
   if (!isNew && q.isLoading) return <Spinner />;
-  if (!isNew && q.error) return <><PageHeader title="المنتج" back="/products" /><ErrorBox error={q.error} /></>;
+  if (!isNew && q.error) return <><PageHeader title={bi('المنتج', 'Product')} back="/products" /><ErrorBox error={q.error} /></>;
   // Without product.cost.read the API hides the cost; never send it back as null over an existing one.
   const costHidden = !showCost && !isNew;
 
   return (
     <>
       <PageHeader
-        title={isNew ? 'منتج جديد' : f.nameAr || 'المنتج'}
+        title={isNew ? bi('منتج جديد', 'New product') : (locale === 'en' && f.nameEn) || f.nameAr || bi('المنتج', 'Product')}
         subtitle={!isNew && <span dir="ltr" className="num">{q.data?.code}</span>}
         back="/products"
-        actions={!isNew && canWrite && !q.data?.archivedAt && <Button variant="outline" icon={<Archive className="size-4" />} onClick={() => setConfirmArchive(true)}>أرشفة</Button>}
+        actions={!isNew && canWrite && !q.data?.archivedAt && <Button variant="outline" icon={<Archive className="size-4" />} onClick={() => setConfirmArchive(true)}>{bi('أرشفة', 'Archive')}</Button>}
       />
-      {q.data?.archivedAt && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">هذا المنتج مؤرشف. حفظه بحالة «نشط» لا يلغي الأرشفة؛ أعد استيراده من الشيت لإرجاعه.</div>}
+      {q.data?.archivedAt && <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{bi('هذا المنتج مؤرشف. حفظه بحالة «نشط» لا يلغي الأرشفة؛ أعد استيراده من الشيت لإرجاعه.', 'This product is archived. Saving it as “Active” does not unarchive it; re-import it from the sheet to restore it.')}</div>}
       <form onSubmit={save} className="grid gap-4 lg:grid-cols-3">
         <fieldset disabled={!canWrite} className="space-y-4 lg:col-span-2">
-          <Card title="البيانات الأساسية">
+          <Card title={bi('البيانات الأساسية', 'Basic details')}>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="رقم القطعة / الكود *"><Input required dir="ltr" maxLength={64} value={f.code} onChange={(e) => set('code', e.target.value)} /></Field>
-              <Field label="الحالة">
+              <Field label={bi('رقم القطعة / الكود *', 'Part number / code *')}><Input required dir="ltr" maxLength={64} value={f.code} onChange={(e) => set('code', e.target.value)} /></Field>
+              <Field label={bi('الحالة', 'Status')}>
                 <Select value={f.status} onChange={(e) => set('status', e.target.value as Form['status'])}>
-                  <option value="active">نشط</option><option value="discontinued">متوقف</option>
+                  <option value="active">{bi('نشط', 'Active')}</option><option value="discontinued">{bi('متوقف', 'Discontinued')}</option>
                 </Select>
               </Field>
-              <Field label="الاسم بالعربية *"><Input required value={f.nameAr} onChange={(e) => set('nameAr', e.target.value)} /></Field>
+              <Field label={bi('الاسم بالعربية *', 'Name (Arabic) *')}><Input required value={f.nameAr} onChange={(e) => set('nameAr', e.target.value)} /></Field>
               <Field label="Name (English)"><Input dir="ltr" value={f.nameEn} onChange={(e) => set('nameEn', e.target.value)} /></Field>
-              <Field label="النوع">
+              <Field label={bi('النوع', 'Type')}>
                 <Select value={f.type} onChange={(e) => set('type', e.target.value as Form['type'])}>
-                  {Object.entries(PRODUCT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {Object.entries(locale === 'en' ? PRODUCT_TYPES_EN : PRODUCT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </Select>
               </Field>
-              <Field label="وحدة القياس"><Input dir="ltr" value={f.uom} onChange={(e) => set('uom', e.target.value)} placeholder="Nos" /></Field>
+              <Field label={bi('وحدة القياس', 'Unit of measure')}><Input dir="ltr" value={f.uom} onChange={(e) => set('uom', e.target.value)} placeholder="Nos" /></Field>
               {(meta.data?.categories.length ?? 0) > 0 && (
-                <Field label="التصنيف">
+                <Field label={bi('التصنيف', 'Category')}>
                   <Select value={f.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
                     <option value="">—</option>
                     {meta.data!.categories.map((c) => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
                   </Select>
                 </Field>
               )}
-              <Field label="الضمان (شهر)" error={errs.warrantyMonths}><Input type="number" min={0} value={f.warrantyMonths} onChange={(e) => set('warrantyMonths', e.target.value)} /></Field>
+              <Field label={bi('الضمان (شهر)', 'Warranty (months)')} error={errs.warrantyMonths}><Input type="number" min={0} value={f.warrantyMonths} onChange={(e) => set('warrantyMonths', e.target.value)} /></Field>
             </div>
-            <Field label="الوصف" className="mt-3" hint="الوصف الثنائي القديم «عربي | English» يظهر في عرض السعر.">
+            <Field label={bi('الوصف', 'Description')} className="mt-3" hint={bi('الوصف الثنائي القديم «عربي | English» يظهر في عرض السعر.', 'The legacy bilingual description “Arabic | English” appears on the quotation.')}>
               <Textarea rows={3} value={f.description} onChange={(e) => set('description', e.target.value)} />
             </Field>
-            <div className="mt-3"><Checkbox label="يُتتبَّع بالرقم التسلسلي" checked={f.serialTracked} onChange={(v) => set('serialTracked', v)} /></div>
+            <div className="mt-3"><Checkbox label={bi('يُتتبَّع بالرقم التسلسلي', 'Tracked by serial number')} checked={f.serialTracked} onChange={(v) => set('serialTracked', v)} /></div>
           </Card>
 
-          <Card title="الأسعار">
+          <Card title={bi('الأسعار', 'Prices')}>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="سعر البيع (ر.س) *" error={errs.listPrice}><Input dir="ltr" inputMode="decimal" required value={f.listPrice} onChange={(e) => set('listPrice', e.target.value)} /></Field>
-              <Field label="تكلفة التركيب للوحدة (ر.س)" error={errs.installCost}><Input dir="ltr" inputMode="decimal" value={f.installCost} onChange={(e) => set('installCost', e.target.value)} /></Field>
+              <Field label={bi('سعر البيع (ر.س) *', 'Selling price (SAR) *')} error={errs.listPrice}><Input dir="ltr" inputMode="decimal" required value={f.listPrice} onChange={(e) => set('listPrice', e.target.value)} /></Field>
+              <Field label={bi('تكلفة التركيب للوحدة (ر.س)', 'Installation cost per unit (SAR)')} error={errs.installCost}><Input dir="ltr" inputMode="decimal" value={f.installCost} onChange={(e) => set('installCost', e.target.value)} /></Field>
             </div>
             {showCost && (
               <div className="mt-4 border-t border-line pt-4">
-                <p className="mb-2 text-xs font-bold text-muted">سعر الشراء (يظهر فقط لمن لديه صلاحية رؤية التكلفة)</p>
+                <p className="mb-2 text-xs font-bold text-muted">{bi('سعر الشراء (يظهر فقط لمن لديه صلاحية رؤية التكلفة)', 'Purchase price (visible only to users allowed to see cost)')}</p>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Field label="سعر الشراء" error={errs.costPrice}><Input dir="ltr" inputMode="decimal" value={f.costPrice} onChange={(e) => set('costPrice', e.target.value)} /></Field>
-                  <Field label="العملة">
+                  <Field label={bi('سعر الشراء', 'Purchase price')} error={errs.costPrice}><Input dir="ltr" inputMode="decimal" value={f.costPrice} onChange={(e) => set('costPrice', e.target.value)} /></Field>
+                  <Field label={bi('العملة', 'Currency')}>
                     <Select value={f.costCurrency} onChange={(e) => { const c = e.target.value as Form['costCurrency']; setF((x) => ({ ...x, costCurrency: c, costRateToSar: DEFAULT_RATE[c] })); }}>
-                      {Object.entries(CURRENCY_AR).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+                      {Object.entries(locale === 'en' ? CURRENCY_EN : CURRENCY_AR).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
                     </Select>
                   </Field>
-                  <Field label="سعر التحويل إلى الريال" error={errs.costRateToSar} hint={f.costCurrency === 'USD' ? 'الدولار مربوط بـ 3.75' : undefined}><Input dir="ltr" inputMode="decimal" value={f.costRateToSar} onChange={(e) => set('costRateToSar', e.target.value)} /></Field>
+                  <Field label={bi('سعر التحويل إلى الريال', 'Exchange rate to SAR')} error={errs.costRateToSar} hint={f.costCurrency === 'USD' ? bi('الدولار مربوط بـ 3.75', 'The dollar is pegged at 3.75') : undefined}><Input dir="ltr" inputMode="decimal" value={f.costRateToSar} onChange={(e) => set('costRateToSar', e.target.value)} /></Field>
                 </div>
                 {costSar !== null && (
                   <p className="mt-2 text-xs text-muted">
-                    التكلفة بالريال: <b className="num text-ink">{costSar.toFixed(2)}</b>
-                    {margin !== null && <> · هامش الربح على سعر البيع: <b className={margin < 0 ? 'num text-danger' : 'num text-ok'}>{margin.toFixed(1)}%</b></>}
+                    {bi('التكلفة بالريال:', 'Cost in SAR:')} <b className="num text-ink">{costSar.toFixed(2)}</b>
+                    {margin !== null && <> · {bi('هامش الربح على سعر البيع:', 'Margin on selling price:')} <b className={margin < 0 ? 'num text-danger' : 'num text-ok'}>{margin.toFixed(1)}%</b></>}
                   </p>
                 )}
               </div>
             )}
-            {costHidden && <p className="mt-3 text-xs text-muted">سعر الشراء مخفي حسب صلاحياتك، ولن يتغيّر عند الحفظ.</p>}
+            {costHidden && <p className="mt-3 text-xs text-muted">{bi('سعر الشراء مخفي حسب صلاحياتك، ولن يتغيّر عند الحفظ.', 'The purchase price is hidden by your permissions and will not change on save.')}</p>}
           </Card>
         </fieldset>
 
         <fieldset disabled={!canWrite} className="space-y-4">
-          <Card title="الصورة والمرفقات">
+          <Card title={bi('الصورة والمرفقات', 'Image & attachments')}>
             <div className="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-line bg-tint/40">
               {f.imageUrl && !imgBroken
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={f.imageUrl} alt={f.nameAr} className="max-h-full max-w-full object-contain" onError={() => setImgBroken(true)} />
-                : <div className="text-center text-xs text-muted"><Package className="mx-auto mb-1 size-8 text-gold" />{imgBroken ? 'تعذّر تحميل الصورة' : 'لا توجد صورة'}</div>}
+                : <div className="text-center text-xs text-muted"><Package className="mx-auto mb-1 size-8 text-gold" />{imgBroken ? bi('تعذّر تحميل الصورة', 'Could not load the image') : bi('لا توجد صورة', 'No image')}</div>}
             </div>
-            <Field label="رابط الصورة"><Input dir="ltr" type="url" value={f.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://…" /></Field>
-            <Field label="رابط النشرة الفنية (Datasheet)" className="mt-3"><Input dir="ltr" type="url" value={f.datasheetUrl} onChange={(e) => set('datasheetUrl', e.target.value)} placeholder="https://…" /></Field>
+            <Field label={bi('رابط الصورة', 'Image URL')}><Input dir="ltr" type="url" value={f.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://…" /></Field>
+            <Field label={bi('رابط النشرة الفنية (Datasheet)', 'Datasheet URL')} className="mt-3"><Input dir="ltr" type="url" value={f.datasheetUrl} onChange={(e) => set('datasheetUrl', e.target.value)} placeholder="https://…" /></Field>
             {f.datasheetUrl && /^https?:\/\//.test(f.datasheetUrl) && (
-              <a href={f.datasheetUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-gold-dark hover:underline"><ExternalLink className="size-3.5" />فتح النشرة الفنية</a>
+              <a href={f.datasheetUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-gold-dark hover:underline"><ExternalLink className="size-3.5" />{bi('فتح النشرة الفنية', 'Open datasheet')}</a>
             )}
           </Card>
           <ErrorBox error={error} />
-          {canWrite && <Button className="w-full" loading={busy === 'save'} disabled={invalid} icon={<Save className="size-4" />}>{isNew ? 'إضافة المنتج' : 'حفظ التغييرات'}</Button>}
+          {canWrite && <Button className="w-full" loading={busy === 'save'} disabled={invalid} icon={<Save className="size-4" />}>{isNew ? bi('إضافة المنتج', 'Add product') : bi('حفظ التغييرات', 'Save changes')}</Button>}
         </fieldset>
       </form>
       {!isNew && q.data && <div className="mt-4"><KitComponentsCard product={q.data} canWrite={canWrite} /></div>}
-      <Dialog open={confirmArchive} onClose={() => setConfirmArchive(false)} title="أرشفة المنتج" footer={<>
-        <Button variant="outline" onClick={() => setConfirmArchive(false)}>إلغاء</Button>
-        <Button variant="danger" loading={busy === 'archive'} onClick={archive}>أرشفة</Button>
+      <Dialog open={confirmArchive} onClose={() => setConfirmArchive(false)} title={bi('أرشفة المنتج', 'Archive product')} footer={<>
+        <Button variant="outline" onClick={() => setConfirmArchive(false)}>{bi('إلغاء', 'Cancel')}</Button>
+        <Button variant="danger" loading={busy === 'archive'} onClick={archive}>{bi('أرشفة', 'Archive')}</Button>
       </>}>
-        <p className="text-sm">سيُخفى المنتج من الكتالوج ومن عروض الأسعار الجديدة، وتبقى العروض السابقة كما هي.</p>
+        <p className="text-sm">{bi('سيُخفى المنتج من الكتالوج ومن عروض الأسعار الجديدة، وتبقى العروض السابقة كما هي.', 'The product will be hidden from the catalog and from new quotations; earlier quotations stay as they are.')}</p>
       </Dialog>
     </>
   );

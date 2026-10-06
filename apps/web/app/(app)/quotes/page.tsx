@@ -7,6 +7,7 @@ import { FilePlus2, FileText } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { date } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import { Button, Card, clsx, Empty, ErrorBox, LinkButton, Money, PageHeader, SearchBox, Spinner, StatusBadge, Table, Td, Th } from '@/components/ui';
 
 interface QuoteRow {
@@ -15,22 +16,23 @@ interface QuoteRow {
   ownerId: string | null; ownerName: string | null; sentAt: string | null; viewedAt: string | null; marginTotal?: string;
 }
 
-const STATUSES: { value: string; label: string }[] = [
-  { value: 'draft', label: 'مسودة' },
-  { value: 'pending_approval', label: 'بانتظار الموافقة' },
-  { value: 'approved', label: 'معتمد' },
-  { value: 'sent', label: 'مُرسل' },
-  { value: 'viewed', label: 'تمت المشاهدة' },
-  { value: 'accepted', label: 'مقبول' },
-  { value: 'rejected', label: 'مرفوض' },
-  { value: 'lost', label: 'خسارة' },
-  { value: 'expired', label: 'منتهي' },
+const STATUSES: { value: string; label: string; en: string }[] = [
+  { value: 'draft', label: 'مسودة', en: 'Draft' },
+  { value: 'pending_approval', label: 'بانتظار الموافقة', en: 'Pending approval' },
+  { value: 'approved', label: 'معتمد', en: 'Approved' },
+  { value: 'sent', label: 'مُرسل', en: 'Sent' },
+  { value: 'viewed', label: 'تمت المشاهدة', en: 'Viewed' },
+  { value: 'accepted', label: 'مقبول', en: 'Accepted' },
+  { value: 'rejected', label: 'مرفوض', en: 'Rejected' },
+  { value: 'lost', label: 'خسارة', en: 'Lost' },
+  { value: 'expired', label: 'منتهي', en: 'Expired' },
 ];
 
 const PAGE = 50;
 
 function QuotesList() {
   const { can } = useMe();
+  const { bi } = useI18n();
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -60,32 +62,32 @@ function QuotesList() {
   return (
     <>
       <PageHeader
-        title="عروض الأسعار"
-        subtitle={list.data ? `${list.data.total} عرض` : 'Quotations'}
-        actions={can('quote.write') && <LinkButton href="/quotes/new" variant="primary" icon={<FilePlus2 className="size-4" />}>عرض سعر جديد</LinkButton>}
+        title={bi('عروض الأسعار', 'Quotes')}
+        subtitle={list.data ? bi(`${list.data.total} عرض`, `${list.data.total} quotes`) : 'Quotations'}
+        actions={can('quote.write') && <LinkButton href="/quotes/new" variant="primary" icon={<FilePlus2 className="size-4" />}>{bi('عرض سعر جديد', 'New quote')}</LinkButton>}
       />
       <Card padded={false}>
         <div className="space-y-2 border-b border-line p-3">
-          <SearchBox value={q} onChange={setQ} placeholder="رقم العرض، العميل، المشروع، الجوال…" />
+          <SearchBox value={q} onChange={setQ} placeholder={bi('رقم العرض، العميل، المشروع، الجوال…', 'Quote no., customer, project, mobile…')} />
           <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" onClick={() => setStatuses([])} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.length === 0 ? 'border-primary bg-primary text-white' : 'border-line text-muted hover:bg-tint')}>الكل</button>
+            <button type="button" onClick={() => setStatuses([])} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.length === 0 ? 'border-primary bg-primary text-white' : 'border-line text-muted hover:bg-tint')}>{bi('الكل', 'All')}</button>
             {STATUSES.map((s) => (
               <button key={s.value} type="button" onClick={() => toggle(s.value)} aria-pressed={statuses.includes(s.value)} className={clsx('rounded-full border px-2.5 py-1 text-xs font-bold transition', statuses.includes(s.value) ? 'border-gold bg-tint text-primary' : 'border-line text-muted hover:bg-tint/60')}>
-                {s.label}
+                {bi(s.label, s.en)}
               </button>
             ))}
           </div>
         </div>
         <ErrorBox error={list.error} />
         {list.isLoading ? <Spinner /> : rows.length === 0 ? (
-          <Empty icon={<FileText className="size-8" />} title={term || status ? 'لا توجد عروض مطابقة' : 'لا توجد عروض أسعار بعد'} hint={term || status ? 'جرّب تغيير البحث أو الفلاتر.' : 'ابدأ بإنشاء أول عرض سعر.'} action={can('quote.write') && !term && !status ? <LinkButton href="/quotes/new" variant="primary">عرض سعر جديد</LinkButton> : undefined} />
+          <Empty icon={<FileText className="size-8" />} title={term || status ? bi('لا توجد عروض مطابقة', 'No matching quotes') : bi('لا توجد عروض أسعار بعد', 'No quotes yet')} hint={term || status ? bi('جرّب تغيير البحث أو الفلاتر.', 'Try changing the search or filters.') : bi('ابدأ بإنشاء أول عرض سعر.', 'Start by creating your first quote.')} action={can('quote.write') && !term && !status ? <LinkButton href="/quotes/new" variant="primary">{bi('عرض سعر جديد', 'New quote')}</LinkButton> : undefined} />
         ) : (
           <>
             <Table>
               <thead>
                 <tr>
-                  <Th>الرقم</Th><Th>التاريخ</Th><Th>العميل / المشروع</Th><Th className="hidden md:table-cell">المندوب</Th><Th>الحالة</Th><Th className="text-end">الإجمالي</Th>
-                  {showMargin && <Th className="hidden text-end lg:table-cell">الهامش</Th>}
+                  <Th>{bi('الرقم', 'No.')}</Th><Th>{bi('التاريخ', 'Date')}</Th><Th>{bi('العميل / المشروع', 'Customer / project')}</Th><Th className="hidden md:table-cell">{bi('المندوب', 'Sales rep')}</Th><Th>{bi('الحالة', 'Status')}</Th><Th className="text-end">{bi('الإجمالي', 'Total')}</Th>
+                  {showMargin && <Th className="hidden text-end lg:table-cell">{bi('الهامش', 'Margin')}</Th>}
                 </tr>
               </thead>
               <tbody className={clsx(list.isFetching && 'opacity-70')}>
@@ -107,7 +109,7 @@ function QuotesList() {
             </Table>
             {list.data && list.data.total > rows.length && limit < 200 && (
               <div className="flex justify-center border-t border-line p-3">
-                <Button variant="outline" size="sm" loading={list.isFetching} onClick={() => setLimit((l) => Math.min(200, l + PAGE))}>عرض المزيد ({list.data.total - rows.length})</Button>
+                <Button variant="outline" size="sm" loading={list.isFetching} onClick={() => setLimit((l) => Math.min(200, l + PAGE))}>{bi('عرض المزيد', 'Show more')} ({list.data.total - rows.length})</Button>
               </div>
             )}
           </>

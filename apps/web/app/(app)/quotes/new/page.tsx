@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatNationalAddress } from '@mmc/domain';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
+import { useI18n } from '@/lib/i18n';
 import { ErrorBox, PageHeader, Spinner } from '@/components/ui';
 import { QuoteEditor, type PartyDetail } from '../_components/quote-editor';
 import { emptyDraft, type QuoteDraft } from '../_components/types';
@@ -14,6 +15,7 @@ function NewQuote() {
   const partyId = sp.get('partyId');
   const opportunityId = sp.get('opportunityId');
   const { me, can } = useMe();
+  const { bi } = useI18n();
   const vatRegistered = me?.company?.vatRegistered ?? true;
   const partyQ = useQuery({
     queryKey: ['party', partyId],
@@ -40,7 +42,7 @@ function NewQuote() {
     };
   }, [partyId, opportunityId, partyQ.data, partyQ.isError, vatRegistered, can]);
 
-  if (!can('quote.write')) return <><PageHeader back="/quotes" title="عرض سعر جديد" /><ErrorBox error={new Error('لا تملك صلاحية إنشاء عروض الأسعار')} /></>;
+  if (!can('quote.write')) return <><PageHeader back="/quotes" title={bi('عرض سعر جديد', 'New quote')} /><ErrorBox error={new Error(bi('لا تملك صلاحية إنشاء عروض الأسعار', 'You do not have permission to create quotes'))} /></>;
   if (!initial) return <Spinner />;
   return (
     <>

@@ -47,6 +47,56 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
 
 export const label = (map: Record<string, string>, v: string | null | undefined) => (v ? map[v] ?? v : '—');
 
+// English twins of the label tables above (same keys). Pick with `labelL(locale, AR, EN, v)`.
+export const SOURCE_LABELS_EN: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  website: 'Website',
+  snapchat: 'Snapchat',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  google: 'Google',
+  referral: 'Referral',
+  walk_in: 'Walk-in',
+  exhibition: 'Exhibition',
+  phone: 'Phone call',
+  email: 'E-mail',
+  other: 'Other',
+};
+
+export const INTEREST_LABELS_EN: Record<string, string> = {
+  intercom: 'Intercom',
+  smart_home: 'Smart home',
+  locks: 'Locks',
+  cctv: 'CCTV',
+  iot: 'IoT',
+  networking: 'Networking',
+  access_control: 'Access control',
+  other: 'Other',
+};
+
+export const PROJECT_LABELS_EN: Record<string, string> = {
+  villa: 'Villa',
+  building: 'Building',
+  compound: 'Compound',
+  hotel: 'Hotel',
+  office: 'Office',
+  other: 'Other',
+};
+
+export const LEAD_STATUS_LABELS_EN: Record<string, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  unqualified: 'Unqualified',
+  converted: 'Converted',
+};
+
+export const ENTITY_LABELS_EN: Record<string, string> = { party: 'Customer', lead: 'Lead', opportunity: 'Opportunity', quote: 'Quote', contract: 'Contract' };
+
+/** Locale-aware `label`: the Arabic table for 'ar', the English twin for 'en' (falls back to the raw value). */
+export const labelL = (locale: string, ar: Record<string, string>, en: Record<string, string>, v: string | null | undefined) =>
+  label(locale === 'en' ? en : ar, v);
+
 /** wa.me link from any phone format (digits only, Saudi local 05… → 9665…). */
 export function waLink(mobile: string | null | undefined): string | null {
   if (!mobile) return null;

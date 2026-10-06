@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Printer, ScrollText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
+import { useI18n } from '@/lib/i18n';
 import { date, today } from '@/lib/format';
 import { Button, Card, Empty, ErrorBox, Money, PageHeader, Spinner, Table, Td, Th, clsx } from '@/components/ui';
 
@@ -14,6 +15,7 @@ interface Statement {
 }
 
 const KIND: Record<string, string> = { invoice: 'فاتورة', credit_note: 'إشعار دائن', payment: 'دفعة مستلمة' };
+const KIND_EN: Record<string, string> = { invoice: 'Invoice', credit_note: 'Credit note', payment: 'Payment received' };
 
 /** Hide the staff shell when printing — only the statement sheet is printed. */
 const PRINT_CSS = `@media print {
@@ -26,6 +28,7 @@ const PRINT_CSS = `@media print {
 export default function StatementPage({ params }: { params: Promise<{ partyId: string }> }) {
   const { partyId } = use(params);
   const { me } = useMe();
+  const { bi, locale } = useI18n();
   const q = useQuery({ queryKey: ['statement', partyId], queryFn: () => api.get<Statement>(`/finance/statement/${partyId}`) });
   const d = q.data;
   const totals = d?.entries.reduce((t, e) => ({ debit: t.debit + e.debit, credit: t.credit + e.credit }), { debit: 0, credit: 0 });
@@ -33,7 +36,7 @@ export default function StatementPage({ params }: { params: Promise<{ partyId: s
   return (
     <>
       <style>{PRINT_CSS}</style>
-      <PageHeader back="/finance/aging" title="كشف حساب عميل" subtitle={d?.party.nameAr} actions={d && <Button variant="outline" icon={<Printer className="size-4" />} onClick={() => window.print()}>طباعة</Button>} />
+      <PageHeader back="/finance/aging" title={bi('كشف حساب عميل', 'Customer statement of account')} subtitle={d?.party.nameAr} actions={d && <Button variant="outline" icon={<Printer className="size-4" />} onClick={() => window.print()}>{bi('طباعة', 'Print')}</Button>} />
       <ErrorBox error={q.error} />
       {q.isLoading ? <Spinner /> : d && (
         <div id="statement-sheet">
@@ -41,22 +44,22 @@ export default function StatementPage({ params }: { params: Promise<{ partyId: s
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
               <div>
                 <div className="hidden text-lg font-extrabold text-primary print:block">{me?.company?.legalNameAr ?? 'المدى المبارك'}</div>
-                <div className="text-base font-extrabold">كشف حساب: {d.party.nameAr}</div>
-                {d.party.vatNumber && <div className="text-xs text-muted">الرقم الضريبي: <span className="num">{d.party.vatNumber}</span></div>}
+                <div className="text-base font-extrabold">{bi('كشف حساب:', 'Statement of account:')} {d.party.nameAr}</div>
+                {d.party.vatNumber && <div className="text-xs text-muted">{bi('الرقم الضريبي:', 'VAT number:')} <span className="num">{d.party.vatNumber}</span></div>}
               </div>
               <div className="text-end text-xs text-muted">
-                <div>تاريخ الكشف: <span className="num">{today()}</span></div>
-                <div className="mt-1 text-sm">الرصيد الختامي: <b className={clsx(d.balance > 0 ? 'text-gold-dark' : 'text-ok')}><Money value={d.balance} fixed /></b></div>
+                <div>{bi('تاريخ الكشف:', 'Statement date:')} <span className="num">{today()}</span></div>
+                <div className="mt-1 text-sm">{bi('الرصيد الختامي:', 'Closing balance:')} <b className={clsx(d.balance > 0 ? 'text-gold-dark' : 'text-ok')}><Money value={d.balance} fixed /></b></div>
               </div>
             </div>
-            {!d.entries.length ? <Empty icon={<ScrollText className="size-8" />} title="لا توجد حركات على هذا العميل" /> : (
+            {!d.entries.length ? <Empty icon={<ScrollText className="size-8" />} title={bi('لا توجد حركات على هذا العميل', 'No transactions for this customer')} /> : (
               <Table className="print:overflow-visible">
-                <thead><tr><Th>التاريخ</Th><Th>البيان</Th><Th>الرقم</Th><Th className="text-end">مدين</Th><Th className="text-end">دائن</Th><Th className="text-end">الرصيد</Th></tr></thead>
+                <thead><tr><Th>{bi('التاريخ', 'Date')}</Th><Th>{bi('البيان', 'Description')}</Th><Th>{bi('الرقم', 'Number')}</Th><Th className="text-end">{bi('مدين', 'Debit')}</Th><Th className="text-end">{bi('دائن', 'Credit')}</Th><Th className="text-end">{bi('الرصيد', 'Balance')}</Th></tr></thead>
                 <tbody>
                   {d.entries.map((e, i) => (
                     <tr key={`${e.number}-${i}`} className="print:break-inside-avoid">
                       <Td className="num text-xs">{date(e.date)}</Td>
-                      <Td>{KIND[e.kind] ?? e.kind}</Td>
+                      <Td>{(locale === 'en' ? KIND_EN : KIND)[e.kind] ?? e.kind}</Td>
                       <Td className="num text-xs">{e.number}</Td>
                       <Td className="text-end">{e.debit ? <Money value={e.debit} fixed /> : <span className="text-muted">—</span>}</Td>
                       <Td className="text-end">{e.credit ? <Money value={e.credit} fixed className="text-ok" /> : <span className="text-muted">—</span>}</Td>
@@ -64,7 +67,7 @@ export default function StatementPage({ params }: { params: Promise<{ partyId: s
                     </tr>
                   ))}
                   <tr className="bg-tint/60 font-extrabold">
-                    <Td colSpan={3}>الإجمالي / الرصيد الختامي</Td>
+                    <Td colSpan={3}>{bi('الإجمالي / الرصيد الختامي', 'Total / closing balance')}</Td>
                     <Td className="text-end"><Money value={totals!.debit} fixed /></Td>
                     <Td className="text-end"><Money value={totals!.credit} fixed /></Td>
                     <Td className="text-end text-primary"><Money value={d.balance} fixed /></Td>
@@ -72,7 +75,7 @@ export default function StatementPage({ params }: { params: Promise<{ partyId: s
                 </tbody>
               </Table>
             )}
-            <p className="mt-4 text-[11px] text-muted">الفواتير تظهر بصافي المستحق بعد خصم الدفعات المقدمة. الرصيد الموجب مستحق على العميل.</p>
+            <p className="mt-4 text-[11px] text-muted">{bi('الفواتير تظهر بصافي المستحق بعد خصم الدفعات المقدمة. الرصيد الموجب مستحق على العميل.', 'Invoices show the net amount due after deducting advance payments. A positive balance is owed by the customer.')}</p>
           </Card>
         </div>
       )}

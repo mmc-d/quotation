@@ -1,7 +1,7 @@
 .DS_Store
 # Old MTQ sample contract — names a real third party; local reference only, never commit
 contract.txt
-invoices/
+/invoices/
 # Leftover folder from the pre-merge layout (holds only local Claude preview config)
 mada-quotations/
 node_modules/

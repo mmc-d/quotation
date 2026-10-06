@@ -33,7 +33,7 @@ interface PriceListOption { id: string; name: string; segment: string | null; is
 export const emptyParty: PartyInput = { kind: 'organization', nameAr: '', isCustomer: true, isSupplier: false, isPartner: false, b2b: true, paymentTermsDays: 0 };
 
 export function PartyForm({ initial, onSubmit, submitLabel, extra }: { initial: PartyInput; onSubmit: (p: PartyInput) => Promise<unknown>; submitLabel: string; extra?: React.ReactNode }) {
-  const { t, tx } = useI18n();
+  const { t, tx, bi } = useI18n();
   const [p, setP] = useState<PartyInput>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -74,10 +74,10 @@ export function PartyForm({ initial, onSubmit, submitLabel, extra }: { initial: 
         <Field label={t('common.email')}><Input dir="ltr" type="email" value={p.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
         <Field label={t('partyForm.terms')}><Input type="number" min={0} max={365} value={p.paymentTermsDays} onChange={(e) => set('paymentTermsDays', Number(e.target.value) || 0)} /></Field>
         {(priceLists.data?.length ?? 0) > 0 && (
-          <Field label={tx('partyForm.priceList', 'قائمة الأسعار')} hint={tx('partyForm.priceListHint', 'تُسعَّر البنود الجديدة في عروض هذا العميل حسب القائمة')}>
+          <Field label={bi('قائمة الأسعار', 'Price list')} hint={bi('تُسعَّر البنود الجديدة في عروض هذا العميل حسب القائمة', 'New lines in this customer\'s quotes are priced from this list')}>
             <Select value={p.priceListId ?? ''} onChange={(e) => set('priceListId', e.target.value || null)}>
-              <option value="">{tx('partyForm.priceListNone', 'أسعار الكتالوج (أو القائمة الافتراضية للشريحة)')}</option>
-              {priceLists.data!.map((l) => <option key={l.id} value={l.id}>{l.name}{l.active ? '' : ` (${tx('partyForm.priceListInactive', 'غير سارية')})`}</option>)}
+              <option value="">{bi('أسعار الكتالوج (أو القائمة الافتراضية للشريحة)', 'Catalog prices (or the segment\'s default list)')}</option>
+              {priceLists.data!.map((l) => <option key={l.id} value={l.id}>{l.name}{l.active ? '' : ` (${bi('غير سارية', 'inactive')})`}</option>)}
             </Select>
           </Field>
         )}

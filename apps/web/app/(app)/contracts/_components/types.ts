@@ -47,12 +47,16 @@ export interface ClauseTemplate { id: string; key: string; category: string; tit
 
 /** Contract template sets (each has its own clause library in Settings → Documents). */
 export type TemplateSet = 'supply_install' | 'supply_only' | 'maintenance';
-export const TEMPLATE_SETS: { value: TemplateSet; label: string; hint: string }[] = [
-  { value: 'supply_install', label: 'توريد وتركيب', hint: 'توريد المواد وتركيبها وبرمجتها — دفعات 50/40/10' },
-  { value: 'supply_only', label: 'توريد فقط', hint: 'توريد المواد دون تركيب — ضمان على المواد، دفعات 50/50' },
-  { value: 'maintenance', label: 'عقد صيانة سنوي', hint: 'زيارات وقائية وأوقات استجابة لمدة 12 شهرًا — أربعة أقساط ربع سنوية' },
+export const TEMPLATE_SETS: { value: TemplateSet; label: string; hint: string; labelEn: string; hintEn: string }[] = [
+  { value: 'supply_install', label: 'توريد وتركيب', hint: 'توريد المواد وتركيبها وبرمجتها — دفعات 50/40/10', labelEn: 'Supply & installation', hintEn: 'Supply, install and program the materials — 50/40/10 payments' },
+  { value: 'supply_only', label: 'توريد فقط', hint: 'توريد المواد دون تركيب — ضمان على المواد، دفعات 50/50', labelEn: 'Supply only', hintEn: 'Supply the materials without installation — warranty on materials, 50/50 payments' },
+  { value: 'maintenance', label: 'عقد صيانة سنوي', hint: 'زيارات وقائية وأوقات استجابة لمدة 12 شهرًا — أربعة أقساط ربع سنوية', labelEn: 'Annual maintenance contract', hintEn: 'Preventive visits and response times for 12 months — four quarterly instalments' },
 ];
-export const templateSetLabel = (v: string | null | undefined) => TEMPLATE_SETS.find((t) => t.value === v)?.label ?? v ?? '—';
+/** Template-set label; pass `locale` to get the English one. */
+export const templateSetLabel = (v: string | null | undefined, locale: 'ar' | 'en' = 'ar') => {
+  const t = TEMPLATE_SETS.find((x) => x.value === v);
+  return (t && (locale === 'en' ? t.labelEn : t.label)) ?? v ?? '—';
+};
 
 /** Change orders (GET /change-orders). Money fields are NUMERIC strings (SAR); qty may be negative (removal). */
 export interface ChangeOrderLine { code: string; description: string; qty: string; unitPrice: string }
@@ -68,14 +72,14 @@ export interface ChangeOrderView extends ChangeOrderRow {
   paymentRequests: { id: string; number: string; amount: string; paidAmount: string; status: string; dueDate: string; publicToken: string | null }[];
   invoices: { id: string; number: string; typeCode: string; total: string; balanceDue: string; issueDate: string }[];
 }
-export const CO_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: 'مسودة', cls: 'bg-gray-100 text-gray-700' },
-  pending_approval: { label: 'بانتظار الموافقة', cls: 'bg-amber-100 text-amber-800' },
-  approved: { label: 'معتمد', cls: 'bg-sky-100 text-sky-800' },
-  signed: { label: 'وافق العميل', cls: 'bg-emerald-100 text-emerald-800' },
-  billed: { label: 'مفوتر', cls: 'bg-primary-50 text-primary' },
-  rejected: { label: 'مرفوض', cls: 'bg-rose-100 text-rose-800' },
-  cancelled: { label: 'ملغى', cls: 'bg-gray-200 text-gray-600' },
+export const CO_STATUS: Record<string, { label: string; labelEn: string; cls: string }> = {
+  draft: { label: 'مسودة', labelEn: 'Draft', cls: 'bg-gray-100 text-gray-700' },
+  pending_approval: { label: 'بانتظار الموافقة', labelEn: 'Pending approval', cls: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'معتمد', labelEn: 'Approved', cls: 'bg-sky-100 text-sky-800' },
+  signed: { label: 'وافق العميل', labelEn: 'Customer approved', cls: 'bg-emerald-100 text-emerald-800' },
+  billed: { label: 'مفوتر', labelEn: 'Billed', cls: 'bg-primary-50 text-primary' },
+  rejected: { label: 'مرفوض', labelEn: 'Rejected', cls: 'bg-rose-100 text-rose-800' },
+  cancelled: { label: 'ملغى', labelEn: 'Cancelled', cls: 'bg-gray-200 text-gray-600' },
 };
 
 export interface DraftLine extends ContractLine { key: string }
@@ -98,13 +102,13 @@ export interface ContractDraft {
   milestones: DraftMilestone[];
 }
 
-export const TRIGGERS: { value: MilestoneTrigger; label: string }[] = [
-  { value: 'on_signing', label: 'عند توقيع العقد' },
-  { value: 'before_delivery', label: 'قبل توريد المواد' },
-  { value: 'after_programming', label: 'بعد البرمجة والتسليم' },
-  { value: 'on_handover', label: 'عند التسليم' },
-  { value: 'on_date', label: 'في تاريخ محدد' },
-  { value: 'manual', label: 'يدوي' },
+export const TRIGGERS: { value: MilestoneTrigger; label: string; labelEn: string }[] = [
+  { value: 'on_signing', label: 'عند توقيع العقد', labelEn: 'On contract signing' },
+  { value: 'before_delivery', label: 'قبل توريد المواد', labelEn: 'Before material delivery' },
+  { value: 'after_programming', label: 'بعد البرمجة والتسليم', labelEn: 'After programming & handover' },
+  { value: 'on_handover', label: 'عند التسليم', labelEn: 'On handover' },
+  { value: 'on_date', label: 'في تاريخ محدد', labelEn: 'On a set date' },
+  { value: 'manual', label: 'يدوي', labelEn: 'Manual' },
 ];
 
 const s = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v));
@@ -152,22 +156,22 @@ export function calcContract(d: ContractDraft, vatOn: boolean, vatRegistered: bo
 }
 
 /** Validation messages that block saving. */
-export function contractProblems(d: ContractDraft): string[] {
+export function contractProblems(d: ContractDraft, bi: (ar: string, en: string) => string = (a) => a): string[] {
   const out: string[] = [];
-  if (!d.title.trim()) out.push('عنوان العقد مطلوب');
-  if (!d.contractDate) out.push('تاريخ العقد مطلوب');
-  if (!d.lines.length) out.push('أضف بندًا واحدًا على الأقل');
-  if (d.lines.some((l) => !l.code.trim() || !l.description.trim())) out.push('كل بند يحتاج رمزًا ووصفًا');
-  if (d.clauses.some((c) => !c.titleAr.trim() || !c.bodyAr.trim())) out.push('كل بند قانوني يحتاج عنوانًا ونصًا');
-  if (!d.milestones.length) out.push('أضف دفعة واحدة على الأقل');
-  if (d.milestones.some((m) => !m.nameAr.trim())) out.push('كل دفعة تحتاج اسمًا');
-  if (d.milestones.some((m) => !(Number(m.percent) > 0) || Number(m.percent) > 100)) out.push('نسبة كل دفعة بين 0 و100');
-  if (d.milestones.some((m) => m.trigger === 'on_date' && !m.dueDate)) out.push('حدّد تاريخ الاستحقاق للدفعات «في تاريخ محدد»');
+  if (!d.title.trim()) out.push(bi('عنوان العقد مطلوب', 'Contract title is required'));
+  if (!d.contractDate) out.push(bi('تاريخ العقد مطلوب', 'Contract date is required'));
+  if (!d.lines.length) out.push(bi('أضف بندًا واحدًا على الأقل', 'Add at least one line item'));
+  if (d.lines.some((l) => !l.code.trim() || !l.description.trim())) out.push(bi('كل بند يحتاج رمزًا ووصفًا', 'Every line item needs a code and a description'));
+  if (d.clauses.some((c) => !c.titleAr.trim() || !c.bodyAr.trim())) out.push(bi('كل بند قانوني يحتاج عنوانًا ونصًا', 'Every contract clause needs a title and text'));
+  if (!d.milestones.length) out.push(bi('أضف دفعة واحدة على الأقل', 'Add at least one payment'));
+  if (d.milestones.some((m) => !m.nameAr.trim())) out.push(bi('كل دفعة تحتاج اسمًا', 'Every payment needs a name'));
+  if (d.milestones.some((m) => !(Number(m.percent) > 0) || Number(m.percent) > 100)) out.push(bi('نسبة كل دفعة بين 0 و100', 'Each payment percentage must be between 0 and 100'));
+  if (d.milestones.some((m) => m.trigger === 'on_date' && !m.dueDate)) out.push(bi('حدّد تاريخ الاستحقاق للدفعات «في تاريخ محدد»', 'Set a due date for “on a set date” payments'));
   const sum = percentSum(d.milestones);
-  if (Math.abs(sum - 100) > 1e-9) out.push(`مجموع نسب الدفعات يجب أن يساوي 100% (الحالي ${sum}%)`);
+  if (Math.abs(sum - 100) > 1e-9) out.push(bi(`مجموع نسب الدفعات يجب أن يساوي 100% (الحالي ${sum}%)`, `Payment percentages must add up to 100% (currently ${sum}%)`));
   const min = d.deliveryDaysMin ? Number(d.deliveryDaysMin) : null;
   const max = d.deliveryDaysMax ? Number(d.deliveryDaysMax) : null;
-  if (min !== null && max !== null && min > max) out.push('الحد الأدنى لمدة التوريد أكبر من الحد الأقصى');
+  if (min !== null && max !== null && min > max) out.push(bi('الحد الأدنى لمدة التوريد أكبر من الحد الأقصى', 'Minimum delivery period is greater than the maximum'));
   return out;
 }
 

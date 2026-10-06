@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Boxes, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Money, Spinner } from '@/components/ui';
 import { num, type Product } from './types';
 
@@ -19,6 +20,7 @@ const qtyOk = (v: string) => /^\d+(\.\d{1,3})?$/.test(v.trim()) && Number(v) > 0
  */
 export function KitComponentsCard({ product, canWrite }: { product: Product; canWrite: boolean }) {
   const qc = useQueryClient();
+  const { bi } = useI18n();
   const kit = useQuery({ queryKey: ['kit', product.id], queryFn: () => api.get<KitRow[]>(`/products/${product.id}/kit`) });
   const [rows, setRows] = useState<EditRow[]>([]);
   const [baseline, setBaseline] = useState('[]');
@@ -56,7 +58,7 @@ export function KitComponentsCard({ product, canWrite }: { product: Product; can
     setBusy(true); setError(null);
     try {
       await api.put(`/products/${product.id}/kit`, { components: rows.map((r) => ({ componentId: r.componentId, qty: r.qty.trim(), optional: r.optional })) });
-      toast.success(rows.length ? 'تم حفظ مكونات الباقة' : 'أُزيلت مكونات الباقة');
+      toast.success(rows.length ? bi('تم حفظ مكونات الباقة', 'Package components saved') : bi('أُزيلت مكونات الباقة', 'Package components removed'));
       setBaseline(JSON.stringify(rows));
       qc.invalidateQueries({ queryKey: ['kit', product.id] });
       qc.invalidateQueries({ queryKey: ['product', product.id] });
@@ -67,35 +69,35 @@ export function KitComponentsCard({ product, canWrite }: { product: Product; can
 
   return (
     <Card
-      title={<span className="flex items-center gap-2"><Boxes className="size-4 text-gold" />مكونات الباقة {product.type === 'kit' && <Badge tone="gold">باقة</Badge>}</span>}
-      actions={canWrite && <Button size="sm" icon={<Save className="size-3.5" />} loading={busy} disabled={!dirty || invalid} onClick={save}>حفظ المكونات</Button>}
+      title={<span className="flex items-center gap-2"><Boxes className="size-4 text-gold" />{bi('مكونات الباقة', 'Package components')} {product.type === 'kit' && <Badge tone="gold">{bi('باقة', 'Package')}</Badge>}</span>}
+      actions={canWrite && <Button size="sm" icon={<Save className="size-3.5" />} loading={busy} disabled={!dirty || invalid} onClick={save}>{bi('حفظ المكونات', 'Save components')}</Button>}
     >
-      <p className="mb-3 text-xs text-muted">أضف الأصناف التي تتكوّن منها الباقة وكمياتها. عند إضافة الباقة لعرض سعر يمكن تفصيلها إلى مكوناتها (كل مكوّن بسعره) أو إضافتها كبند واحد بسعر الباقة. حفظ مكونات لأي منتج يحوّله إلى «باقة».</p>
+      <p className="mb-3 text-xs text-muted">{bi('أضف الأصناف التي تتكوّن منها الباقة وكمياتها. عند إضافة الباقة لعرض سعر يمكن تفصيلها إلى مكوناتها (كل مكوّن بسعره) أو إضافتها كبند واحد بسعر الباقة. حفظ مكونات لأي منتج يحوّله إلى «باقة».', 'Add the items that make up the package and their quantities. When the package is added to a quotation it can be expanded into its components (each at its own price) or added as one line at the package price. Saving components on any product turns it into a “package”.')}</p>
       {kit.isLoading ? <Spinner /> : (
         <>
           {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-sm text-muted">لا توجد مكونات — هذا المنتج ليس باقة بعد.</div>
+            <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-sm text-muted">{bi('لا توجد مكونات — هذا المنتج ليس باقة بعد.', 'No components — this product is not a package yet.')}</div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
                 <thead className="bg-tint/60 text-xs text-gold-dark">
-                  <tr><th className="px-3 py-2 text-start">المكوّن</th><th className="px-2 py-2 text-start">سعر القائمة</th><th className="w-24 px-2 py-2 text-start">الكمية</th><th className="px-2 py-2 text-start">اختياري</th><th className="w-10" /></tr>
+                  <tr><th className="px-3 py-2 text-start">{bi('المكوّن', 'Component')}</th><th className="px-2 py-2 text-start">{bi('سعر القائمة', 'List price')}</th><th className="w-24 px-2 py-2 text-start">{bi('الكمية', 'Qty')}</th><th className="px-2 py-2 text-start">{bi('اختياري', 'Optional')}</th><th className="w-10" /></tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={r.componentId} className="border-t border-line/70">
                       <td className="px-3 py-2"><span className="num font-bold text-primary" dir="ltr">{r.code}</span><div className="text-xs text-muted">{r.nameAr}</div></td>
                       <td className="px-2 py-2"><Money value={r.listPrice} /></td>
-                      <td className="px-2 py-2"><Input dir="ltr" inputMode="decimal" value={r.qty} disabled={!canWrite} onChange={(e) => patch(i, { qty: e.target.value })} aria-label="الكمية" className={qtyOk(r.qty) ? 'text-center' : 'border-danger text-center'} /></td>
+                      <td className="px-2 py-2"><Input dir="ltr" inputMode="decimal" value={r.qty} disabled={!canWrite} onChange={(e) => patch(i, { qty: e.target.value })} aria-label={bi('الكمية', 'Qty')} className={qtyOk(r.qty) ? 'text-center' : 'border-danger text-center'} /></td>
                       <td className="px-2 py-2"><Checkbox label="" checked={r.optional} disabled={!canWrite} onChange={(v) => patch(i, { optional: v })} /></td>
-                      <td className="px-2 py-2">{canWrite && <button type="button" onClick={() => setRows((x) => x.filter((_, j) => j !== i))} className="rounded p-1 text-danger hover:bg-rose-50" aria-label="حذف"><Trash2 className="size-4" /></button>}</td>
+                      <td className="px-2 py-2">{canWrite && <button type="button" onClick={() => setRows((x) => x.filter((_, j) => j !== i))} className="rounded p-1 text-danger hover:bg-rose-50" aria-label={bi('حذف', 'Delete')}><Trash2 className="size-4" /></button>}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-gray-50/70 px-3 py-2 text-xs">
-                <span>مجموع المكونات بأسعار القائمة (بدون الاختيارية): <b className="num">{num(componentsTotal)}</b></span>
-                <span>سعر الباقة: <b className="num">{num(product.listPrice)}</b>{componentsTotal > 0 && Number(product.listPrice) > 0 && <span className="text-muted"> · فرق <span className="num">{num(componentsTotal - Number(product.listPrice))}</span></span>}</span>
+                <span>{bi('مجموع المكونات بأسعار القائمة (بدون الاختيارية):', 'Components total at list prices (excluding optional):')} <b className="num">{num(componentsTotal)}</b></span>
+                <span>{bi('سعر الباقة:', 'Package price:')} <b className="num">{num(product.listPrice)}</b>{componentsTotal > 0 && Number(product.listPrice) > 0 && <span className="text-muted"> · {bi('فرق', 'Difference')} <span className="num">{num(componentsTotal - Number(product.listPrice))}</span></span>}</span>
               </div>
             </div>
           )}
@@ -103,11 +105,11 @@ export function KitComponentsCard({ product, canWrite }: { product: Product; can
             <div className="mt-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-                <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث عن صنف لإضافته إلى الباقة…" className="ps-9" />
+                <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={bi('ابحث عن صنف لإضافته إلى الباقة…', 'Search for an item to add to the package…')} className="ps-9" />
               </div>
               {term && (
                 <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-line">
-                  {search.isLoading ? <Spinner /> : results.length === 0 ? <div className="p-3 text-center text-xs text-muted">لا توجد أصناف مطابقة</div> : (
+                  {search.isLoading ? <Spinner /> : results.length === 0 ? <div className="p-3 text-center text-xs text-muted">{bi('لا توجد أصناف مطابقة', 'No matching items')}</div> : (
                     <ul className="divide-y divide-line/70">
                       {results.map((p) => (
                         <li key={p.id}>

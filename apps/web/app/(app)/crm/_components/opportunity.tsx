@@ -7,7 +7,8 @@ import { api } from '@/lib/api';
 import { Button, Dialog, ErrorBox, Field, Input, Select, Textarea } from '@/components/ui';
 import { PartyPicker, type PickedParty } from '@/components/party-picker';
 import { UserSelect } from '@/components/user-select';
-import { PROJECT_LABELS, PROJECT_TYPES, type LostReason, type Opportunity, type Stage } from './labels';
+import { useI18n } from '@/lib/i18n';
+import { PROJECT_LABELS, PROJECT_LABELS_EN, PROJECT_TYPES, type LostReason, type Opportunity, type Stage } from './labels';
 
 export interface PipelineData {
   pipeline: { id: string; name: string };
@@ -27,13 +28,14 @@ export function useLostReasons(enabled = true): LostReason[] {
 
 /** Move an opportunity to a stage (lost stages need a reason). */
 export function useMoveStage(onDone?: () => void) {
+  const { bi } = useI18n();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { id: string; stageId: string; lostReasonKey?: string | null; lostNote?: string | null }) => api.post<Opportunity>(`/crm/opportunities/${v.id}/stage`, { stageId: v.stageId, lostReasonKey: v.lostReasonKey ?? null, lostNote: v.lostNote ?? null }),
     onSuccess: (_r, v) => {
       qc.invalidateQueries({ queryKey: ['pipeline'] });
       qc.invalidateQueries({ queryKey: ['opportunity', v.id] });
-      toast.success('تم نقل الفرصة');
+      toast.success(bi('تم نقل الفرصة', 'Opportunity moved'));
       onDone?.();
     },
     onError: (e) => {
@@ -44,29 +46,31 @@ export function useMoveStage(onDone?: () => void) {
 }
 
 export function LostDialog({ open, reasons, onClose, onConfirm, loading }: { open: boolean; reasons: LostReason[]; onClose: () => void; onConfirm: (reasonKey: string, note: string | null) => void; loading?: boolean }) {
+  const { bi, locale } = useI18n();
   const [key, setKey] = useState('');
   const [note, setNote] = useState('');
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title="تسجيل خسارة الفرصة"
-      footer={<><Button variant="outline" onClick={onClose}>إلغاء</Button><Button variant="danger" loading={loading} disabled={!key} onClick={() => onConfirm(key, note.trim() || null)}>تأكيد الخسارة</Button></>}
+      title={bi('تسجيل خسارة الفرصة', 'Mark opportunity as lost')}
+      footer={<><Button variant="outline" onClick={onClose}>{bi('إلغاء', 'Cancel')}</Button><Button variant="danger" loading={loading} disabled={!key} onClick={() => onConfirm(key, note.trim() || null)}>{bi('تأكيد الخسارة', 'Confirm loss')}</Button></>}
     >
       <div className="space-y-3">
-        <Field label="سبب الخسارة *">
+        <Field label={bi('سبب الخسارة *', 'Loss reason *')}>
           <Select value={key} onChange={(e) => setKey(e.target.value)}>
-            <option value="">— اختر السبب —</option>
-            {reasons.map((r) => <option key={r.key} value={r.key}>{r.nameAr}</option>)}
+            <option value="">{bi('— اختر السبب —', '— Choose a reason —')}</option>
+            {reasons.map((r) => <option key={r.key} value={r.key}>{locale === 'en' ? r.nameEn || r.nameAr : r.nameAr}</option>)}
           </Select>
         </Field>
-        <Field label="ملاحظة (اختياري)"><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: اختار المنافس بسعر أقل بـ 10%" /></Field>
+        <Field label={bi('ملاحظة (اختياري)', 'Note (optional)')}><Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={bi('مثال: اختار المنافس بسعر أقل بـ 10%', 'e.g. chose a competitor 10% cheaper')} /></Field>
       </div>
     </Dialog>
   );
 }
 
 export function NewOpportunityDialog({ open, onClose, onCreated, initialParty }: { open: boolean; onClose: () => void; onCreated?: (o: Opportunity) => void; initialParty?: PickedParty | null }) {
+  const { bi, locale } = useI18n();
   const qc = useQueryClient();
   const [title, setTitle] = useState('');
   const [party, setParty] = useState<PickedParty | null>(initialParty ?? null);
@@ -77,28 +81,28 @@ export function NewOpportunityDialog({ open, onClose, onCreated, initialParty }:
   const reset = () => { setTitle(''); setParty(initialParty ?? null); setAmount(''); setExpectedClose(''); setProjectType(''); setOwnerId(null); };
   const save = useMutation({
     mutationFn: () => api.put<Opportunity>('/crm/opportunities/new', { title: title.trim(), partyId: party?.id ?? null, amount: amount.trim() || '0', expectedClose: expectedClose || null, projectType: projectType || null, ownerId, competitors: [] }),
-    onSuccess: (o) => { qc.invalidateQueries({ queryKey: ['pipeline'] }); toast.success('أُضيفت الفرصة'); reset(); onClose(); onCreated?.(o); },
+    onSuccess: (o) => { qc.invalidateQueries({ queryKey: ['pipeline'] }); toast.success(bi('أُضيفت الفرصة', 'Opportunity added')); reset(); onClose(); onCreated?.(o); },
   });
   const amountOk = !amount.trim() || isMoney(amount);
   return (
     <Dialog
       open={open}
       onClose={() => { save.reset(); onClose(); }}
-      title="فرصة جديدة"
-      footer={<><Button variant="outline" onClick={() => { save.reset(); onClose(); }}>إلغاء</Button><Button loading={save.isPending} disabled={!title.trim() || !amountOk} onClick={() => save.mutate()}>حفظ</Button></>}
+      title={bi('فرصة جديدة', 'New opportunity')}
+      footer={<><Button variant="outline" onClick={() => { save.reset(); onClose(); }}>{bi('إلغاء', 'Cancel')}</Button><Button loading={save.isPending} disabled={!title.trim() || !amountOk} onClick={() => save.mutate()}>{bi('حفظ', 'Save')}</Button></>}
     >
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="عنوان الفرصة *" className="md:col-span-2"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: انتركوم عمارة حي النرجس" /></Field>
-        <Field label="العميل" className="md:col-span-2"><PartyPicker value={party} onChange={setParty} /></Field>
-        <Field label="القيمة التقديرية (ر.س)" error={amountOk ? null : 'قيمة غير صحيحة'}><Input dir="ltr" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></Field>
-        <Field label="تاريخ الإغلاق المتوقع"><Input type="date" value={expectedClose} onChange={(e) => setExpectedClose(e.target.value)} /></Field>
-        <Field label="نوع المشروع">
+        <Field label={bi('عنوان الفرصة *', 'Opportunity title *')} className="md:col-span-2"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={bi('مثال: انتركوم عمارة حي النرجس', 'e.g. Intercom for an Al-Narjis building')} /></Field>
+        <Field label={bi('العميل', 'Customer')} className="md:col-span-2"><PartyPicker value={party} onChange={setParty} /></Field>
+        <Field label={bi('القيمة التقديرية (ر.س)', 'Estimated value (SAR)')} error={amountOk ? null : bi('قيمة غير صحيحة', 'Invalid amount')}><Input dir="ltr" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></Field>
+        <Field label={bi('تاريخ الإغلاق المتوقع', 'Expected close date')}><Input type="date" value={expectedClose} onChange={(e) => setExpectedClose(e.target.value)} /></Field>
+        <Field label={bi('نوع المشروع', 'Project type')}>
           <Select value={projectType} onChange={(e) => setProjectType(e.target.value)}>
             <option value="">—</option>
-            {PROJECT_TYPES.map((p) => <option key={p} value={p}>{PROJECT_LABELS[p] ?? p}</option>)}
+            {PROJECT_TYPES.map((p) => <option key={p} value={p}>{(locale === 'en' ? PROJECT_LABELS_EN : PROJECT_LABELS)[p] ?? p}</option>)}
           </Select>
         </Field>
-        <Field label="المسؤول"><UserSelect value={ownerId} onChange={setOwnerId} emptyLabel="— أنا —" /></Field>
+        <Field label={bi('المسؤول', 'Owner')}><UserSelect value={ownerId} onChange={setOwnerId} emptyLabel={bi('— أنا —', '— Me —')} /></Field>
       </div>
       <div className="mt-3"><ErrorBox error={save.error} /></div>
     </Dialog>

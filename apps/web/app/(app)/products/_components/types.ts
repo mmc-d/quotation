@@ -29,7 +29,16 @@ export const PRODUCT_TYPES: Record<Product['type'], string> = {
   kit: 'باقة (مجموعة أصناف)',
 };
 
+export const PRODUCT_TYPES_EN: Record<Product['type'], string> = {
+  stock: 'Stock item',
+  non_stock: 'Non-stock item',
+  service: 'Service',
+  labor: 'Labor / installation',
+  kit: 'Package (kit of items)',
+};
+
 export const CURRENCY_AR: Record<Product['costCurrency'], string> = { USD: 'دولار', SAR: 'ريال', CNY: 'يوان' };
+export const CURRENCY_EN: Record<Product['costCurrency'], string> = { USD: 'US dollar', SAR: 'Riyal', CNY: 'Yuan' };
 
 /** Plain decimal display (no currency) for NUMERIC strings. */
 export function num(v: string | number | null | undefined, digits = 2): string {

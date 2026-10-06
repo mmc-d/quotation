@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Boxes, ListTree, Package } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
+import { useI18n } from '@/lib/i18n';
 import { Badge, Button, clsx, Dialog, ErrorBox, Field, Money, Spinner } from '@/components/ui';
 import { NumInput } from './common';
 import { cleanQty, newKey, productUnitCost, trimNum, type EditLine, type KitComponent, type Product, type ResolvedPrices } from './types';
@@ -25,6 +26,7 @@ export function productLine(p: Product, qty: string, opts: { price?: string; opt
  */
 export function KitDialog({ kit, kitPrice, partyId, sectionKey, onClose, onAdd }: { kit: Product; kitPrice?: string; partyId?: string | null; sectionKey: string | null; onClose: () => void; onAdd: (lines: EditLine[], mode: Mode) => void }) {
   const { can } = useMe();
+  const { bi } = useI18n();
   const [mode, setMode] = useState<Mode>('expand');
   const [qty, setQty] = useState('1');
   const comps = useQuery({ queryKey: ['kit', kit.id], queryFn: () => api.get<KitComponent[]>(`/products/${kit.id}/kit`), staleTime: 30_000 });
@@ -49,25 +51,25 @@ export function KitDialog({ kit, kitPrice, partyId, sectionKey, onClose, onAdd }
   };
 
   return (
-    <Dialog open onClose={onClose} wide title={<span className="flex items-center gap-2"><Boxes className="size-5 text-gold" />إضافة الباقة <span className="num" dir="ltr">{kit.code}</span></span>}
-      footer={<><Button variant="outline" onClick={onClose}>إلغاء</Button><Button onClick={confirm} disabled={comps.isLoading}>إضافة إلى العرض</Button></>}>
+    <Dialog open onClose={onClose} wide title={<span className="flex items-center gap-2"><Boxes className="size-5 text-gold" />{bi('إضافة الباقة', 'Add package')} <span className="num" dir="ltr">{kit.code}</span></span>}
+      footer={<><Button variant="outline" onClick={onClose}>{bi('إلغاء', 'Cancel')}</Button><Button onClick={confirm} disabled={comps.isLoading}>{bi('إضافة إلى العرض', 'Add to quote')}</Button></>}>
       <p className="mb-3 text-sm text-muted">{kit.description || kit.nameAr}</p>
       <ErrorBox error={comps.error} />
       {comps.isLoading ? <Spinner /> : (
         <>
           <div className="mb-3 grid gap-2 sm:grid-cols-2">
-            <ModeCard active={effMode === 'expand'} disabled={!canExpand} onClick={() => setMode('expand')} icon={<ListTree className="size-5" />} title="تفصيل المكونات" hint={canExpand ? `${list.length} بند — كل مكوّن بسعره` : 'لا توجد مكونات معرّفة لهذه الباقة'} />
-            <ModeCard active={effMode === 'single'} onClick={() => setMode('single')} icon={<Package className="size-5" />} title="بند واحد" hint={<>بسعر الباقة <Money value={kitPrice ?? kit.listPrice} /></>} />
+            <ModeCard active={effMode === 'expand'} disabled={!canExpand} onClick={() => setMode('expand')} icon={<ListTree className="size-5" />} title={bi('تفصيل المكونات', 'Itemize components')} hint={canExpand ? bi(`${list.length} بند — كل مكوّن بسعره`, `${list.length} lines — each component at its own price`) : bi('لا توجد مكونات معرّفة لهذه الباقة', 'This package has no components defined')} />
+            <ModeCard active={effMode === 'single'} onClick={() => setMode('single')} icon={<Package className="size-5" />} title={bi('بند واحد', 'Single line')} hint={<>{bi('بسعر الباقة', 'At package price')} <Money value={kitPrice ?? kit.listPrice} /></>} />
           </div>
-          <Field label="عدد الباقات" className="mb-3 max-w-[10rem]"><NumInput value={qty} onChange={setQty} min={0} ariaLabel="عدد الباقات" className="text-center" /></Field>
+          <Field label={bi('عدد الباقات', 'Number of packages')} className="mb-3 max-w-[10rem]"><NumInput value={qty} onChange={setQty} min={0} ariaLabel={bi('عدد الباقات', 'Number of packages')} className="text-center" /></Field>
           {effMode === 'expand' && (
             <div className="rounded-lg border border-line">
-              <div className="grid grid-cols-[minmax(0,1fr)_4rem_6.5rem] gap-2 border-b border-line bg-tint/60 px-3 py-1.5 text-[11px] font-extrabold text-gold-dark"><span>المكوّن</span><span className="text-center">الكمية</span><span className="text-end">سعر الوحدة</span></div>
+              <div className="grid grid-cols-[minmax(0,1fr)_4rem_6.5rem] gap-2 border-b border-line bg-tint/60 px-3 py-1.5 text-[11px] font-extrabold text-gold-dark"><span>{bi('المكوّن', 'Component')}</span><span className="text-center">{bi('الكمية', 'Qty')}</span><span className="text-end">{bi('سعر الوحدة', 'Unit price')}</span></div>
               {list.map((c) => {
                 const special = priceOf(c.product);
                 return (
                   <div key={c.id} className={clsx('grid grid-cols-[minmax(0,1fr)_4rem_6.5rem] items-center gap-2 border-b border-line/60 px-3 py-1.5 text-xs last:border-b-0', c.optional && 'bg-gray-50 text-muted')}>
-                    <span className="min-w-0"><span className="num font-extrabold text-primary" dir="ltr">{c.product.code}</span> {c.optional && <Badge>اختياري</Badge>}<span className="block truncate">{c.product.nameAr}</span></span>
+                    <span className="min-w-0"><span className="num font-extrabold text-primary" dir="ltr">{c.product.code}</span> {c.optional && <Badge>{bi('اختياري', 'Optional')}</Badge>}<span className="block truncate">{c.product.nameAr}</span></span>
                     <span className="num text-center">{trimNum(Number(c.qty) * k)}</span>
                     <span className="text-end">
                       <Money value={special ?? c.product.listPrice} className={clsx(special !== undefined && 'font-extrabold text-primary')} />
@@ -76,10 +78,10 @@ export function KitDialog({ kit, kitPrice, partyId, sectionKey, onClose, onAdd }
                   </div>
                 );
               })}
-              <div className="flex items-center justify-between bg-tint/40 px-3 py-1.5 text-xs font-bold"><span>إجمالي المكونات (بدون الاختيارية)</span><Money value={Math.round(expandedTotal * 100)} /></div>
+              <div className="flex items-center justify-between bg-tint/40 px-3 py-1.5 text-xs font-bold"><span>{bi('إجمالي المكونات (بدون الاختيارية)', 'Components total (excluding optional)')}</span><Money value={Math.round(expandedTotal * 100)} /></div>
             </div>
           )}
-          {effMode === 'expand' && <p className="mt-2 text-[11px] text-muted">المكونات الموجودة مسبقًا في العرض تُزاد كميتها بدل تكرارها.</p>}
+          {effMode === 'expand' && <p className="mt-2 text-[11px] text-muted">{bi('المكونات الموجودة مسبقًا في العرض تُزاد كميتها بدل تكرارها.', 'Components already in the quote get their quantity increased instead of being duplicated.')}</p>}
         </>
       )}
     </Dialog>
