@@ -2701,7 +2701,7 @@ async function openContract(){
       <div class="ct-sig-line"></div>
       <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem">التوقيع والختم / Signature &amp; Stamp</div>
       <!-- Filled by fillContractStamp() from the Drive stamp file in Settings -->
-      <div id="ctStampSlot" style="width:166px;height:166px;margin:0 auto;"></div>
+      <div id="ctStampSlot" style="width:183px;height:183px;margin:0 auto;"></div>
     </div>
   </div>
 
@@ -2734,7 +2734,9 @@ function fillContractStamp(){
   const img = document.createElement('img');
   img.src = url;
   img.alt = 'ختم الشركة';
-  img.style.cssText = 'width:166px;height:166px;object-fit:contain;opacity:.92;transform:rotate(-7deg)';
+  // Drive serves the thumbnail as a JPEG with a light-grey (#F7F7F7) background in place of the
+  // PNG's transparency: brighten that grey to white, then multiply so white drops out on the page.
+  img.style.cssText = 'width:183px;height:183px;object-fit:contain;opacity:.92;transform:rotate(-7deg);filter:brightness(1.04);mix-blend-mode:multiply';
   img.addEventListener('error', ()=>{ img.style.display='none'; });
   slot.appendChild(img);
 }
