@@ -12,6 +12,7 @@ import { Button, Card, clsx, Empty, ErrorBox, PageHeader, SearchBox, Spinner, Ta
 import { CHANNEL, COVERAGE, CoverageBadge, DeviceRef, PriorityBadge, TICKET_STATUS, TicketStatusBadge, useLabel } from '../_components/common';
 import { NewTicketDialog } from '../_components/ticket-dialog';
 import type { TicketRow } from '../_components/types';
+import { SLA_STATE, SlaBadges } from '../../service/_components/common';
 
 const PAGE = 50;
 
@@ -30,6 +31,7 @@ function TicketsList() {
   const term = useDeferredValue(q.trim());
   const [statuses, setStatuses] = useState<string[]>(() => (sp.get('status') ?? 'open,in_progress').split(',').filter(Boolean));
   const [coverage, setCoverage] = useState<string[]>(() => (sp.get('coverage') ?? '').split(',').filter(Boolean));
+  const [sla, setSla] = useState<string>(() => (['at_risk', 'breached'].includes(sp.get('sla') ?? '') ? sp.get('sla')! : ''));
   const [limit, setLimit] = useState(PAGE);
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const presetAsset = sp.get('assetId');
@@ -37,15 +39,15 @@ function TicketsList() {
   const cov = coverage.join(',');
 
   useEffect(() => {
-    const next = qs({ q: term, status, coverage: cov, new: creating ? '1' : undefined, assetId: creating ? presetAsset : undefined });
+    const next = qs({ q: term, status, coverage: cov, sla, new: creating ? '1' : undefined, assetId: creating ? presetAsset : undefined });
     if (next !== (sp.toString() ? `?${sp.toString()}` : '')) router.replace(`${pathname}${next}`, { scroll: false });
     setLimit(PAGE);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [term, status, cov, creating]);
+  }, [term, status, cov, sla, creating]);
 
   const list = useQuery({
-    queryKey: ['field-tickets', term, status, cov, limit],
-    queryFn: () => api.get<{ rows: TicketRow[]; total: number }>(`/field/tickets${qs({ q: term, status, coverage: cov, limit })}`),
+    queryKey: ['field-tickets', term, status, cov, sla, limit],
+    queryFn: () => api.get<{ rows: TicketRow[]; total: number }>(`/field/tickets${qs({ q: term, status, coverage: cov, sla, limit })}`),
     placeholderData: (prev) => prev,
   });
   const rows = list.data?.rows ?? [];
@@ -71,6 +73,11 @@ function TicketsList() {
             <button type="button" onClick={() => setCoverage([])} className={chipCls(coverage.length === 0)}>{bi('الكل', 'All')}</button>
             {Object.keys(COVERAGE).map((s) => <button key={s} type="button" aria-pressed={coverage.includes(s)} onClick={() => toggle(setCoverage)(s)} className={chipCls(coverage.includes(s))}>{label(COVERAGE, s)}</button>)}
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-muted">{bi('مستوى الخدمة', 'SLA')}:</span>
+            <button type="button" onClick={() => setSla('')} className={chipCls(!sla)}>{bi('الكل', 'All')}</button>
+            {['at_risk', 'breached'].map((s) => <button key={s} type="button" aria-pressed={sla === s} onClick={() => setSla(sla === s ? '' : s)} className={chipCls(sla === s)}>{label(SLA_STATE, s)}</button>)}
+          </div>
         </div>
         <ErrorBox error={list.error} />
         {list.isLoading ? <Spinner /> : rows.length === 0 ? (
@@ -80,7 +87,7 @@ function TicketsList() {
             <Table>
               <thead><tr>
                 <Th>{bi('الرقم', 'Number')}</Th><Th>{bi('الموضوع', 'Subject')}</Th><Th>{bi('العميل / الموقع', 'Customer / site')}</Th><Th>{bi('الجهاز', 'Device')}</Th>
-                <Th>{bi('الأولوية', 'Priority')}</Th><Th>{bi('الحالة', 'Status')}</Th><Th>{bi('التغطية', 'Coverage')}</Th><Th>{bi('القناة', 'Channel')}</Th><Th>{bi('التاريخ', 'Date')}</Th>
+                <Th>{bi('الأولوية', 'Priority')}</Th><Th>{bi('الحالة', 'Status')}</Th><Th>{bi('التغطية', 'Coverage')}</Th><Th>{bi('مستوى الخدمة', 'SLA')}</Th><Th>{bi('القناة', 'Channel')}</Th><Th>{bi('التاريخ', 'Date')}</Th>
               </tr></thead>
               <tbody className={clsx(list.isFetching && 'opacity-70')}>
                 {rows.map((t) => (
@@ -91,7 +98,8 @@ function TicketsList() {
                     <Td className="text-xs">{t.asset ? <DeviceRef code={t.asset.code} serial={t.asset.serial} /> : '—'}</Td>
                     <Td><PriorityBadge priority={t.priority} /></Td>
                     <Td><TicketStatusBadge status={t.status} /></Td>
-                    <Td><CoverageBadge coverage={t.coverage} reason={t.coverageReason} /></Td>
+                    <Td><CoverageBadge coverage={t.coverage} reason={t.coverageReason} />{t.agreementNumber && <div dir="ltr" className="num mt-0.5 text-[11px] text-muted">{t.agreementNumber}</div>}</Td>
+                    <Td><SlaBadges sla={t.sla} /></Td>
                     <Td className="whitespace-nowrap text-xs">{label(CHANNEL, t.channel)}</Td>
                     <Td className="num whitespace-nowrap text-xs">{dateTime(t.createdAt)}</Td>
                   </tr>

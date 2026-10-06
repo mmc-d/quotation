@@ -1,4 +1,5 @@
 /** Shapes returned by /api/field/* (see apps/api/src/modules/field-service.controller.ts). */
+import type { TicketSla } from '../../service/_components/types';
 
 export interface LocationNode { id: string; siteId: string; parentId: string | null; kind: string; name: string; sort: number; assetCount: number; children: LocationNode[] }
 export interface LocationTreeResponse { site: { id: string; name: string; partyId: string | null; city: string | null }; tree: LocationNode[] }
@@ -50,6 +51,9 @@ export interface TicketRow {
   contactName: string | null; contactPhone: string | null; subject: string; description: string | null; priority: string; status: string;
   coverage: string; coverageReason: string; createdAt: string; resolvedAt: string | null; version: number;
   partyName: string | null; siteName: string | null; asset: { id: string; code: string; serial: string | null } | null; locationPath: string | null;
+  /** Phase 7b: service agreement + SLA clocks */
+  agreementId?: string | null; agreementNumber?: string | null; firstResponseAt?: string | null;
+  sla?: TicketSla;
 }
 export interface TicketDetail extends TicketRow { workOrders: WoSummary[]; matchedBy?: 'phone' | null; coverageReasonEn?: string }
 

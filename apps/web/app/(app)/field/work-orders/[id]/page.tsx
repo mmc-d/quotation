@@ -14,6 +14,7 @@ import { CoverageBadge, Info, Ltr, ScheduleWarnings, TIME_KIND, WoStatusBadge, W
 import { LocationPicker } from '../../_components/locations';
 import { ScheduleDialog } from '../../_components/schedule-dialog';
 import type { WorkOrderView } from '../../_components/types';
+import { CsatCard } from '../../../service/_components/csat-card';
 
 const EDITABLE = ['new', 'scheduled', 'dispatched', 'en_route', 'on_site', 'awaiting_parts'];
 
@@ -225,6 +226,8 @@ export default function WorkOrderPage({ params }: { params: Promise<{ id: string
               </div>
             )}
           </Card>
+
+          {finished && <CsatCard woId={wo.id} canSend={canWrite} />}
         </div>
       </div>
 

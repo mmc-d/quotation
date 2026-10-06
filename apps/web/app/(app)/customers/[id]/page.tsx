@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import { Badge, Button, Card, Dialog, Empty, ErrorBox, Field, Input, LinkButton, Money, PageHeader, Select, Spinner, StatusBadge, Table, Tabs, Td, Th } from '@/components/ui';
 import { Timeline, type Activity } from '@/components/timeline';
 import { PartyForm, type PartyInput } from '../party-form';
+import { PortalAccountsCard } from './portal-accounts';
 
 interface Contact { id: string; name: string; jobTitle: string | null; mobile: string | null; whatsapp: string | null; email: string | null; isPrimary: boolean; preferredChannel: string }
 interface Site { id: string; type: string; name: string; buildingNumber: string | null; street: string | null; district: string | null; city: string | null; postalCode: string | null; additionalNumber: string | null; mapLink: string | null }
@@ -129,6 +130,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               </ul>
             )}
           </Card>
+          {can('portal.manage') && <PortalAccountsCard partyId={p.id} contacts={p.contacts} />}
           {p.opportunities.length > 0 && (
             <Card title={t('customers.opportunities')}>
               <ul className="divide-y divide-line">{p.opportunities.map((o) => <li key={o.id} className="flex justify-between py-2"><Link className="font-bold text-primary hover:underline" href={`/crm/opportunities/${o.id}`}>{o.title}</Link><span><Money value={o.amount} /> · {o.probability}%</span></li>)}</ul>
