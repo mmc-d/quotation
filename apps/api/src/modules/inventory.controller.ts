@@ -22,7 +22,7 @@ import {
   postMove, quantities, reserve, syncReserved, takeReservation, userNameMap, visibleWarehouseIds,
 } from './inventory.service.js';
 import {
-  approverRank, createBill, defaultRate, insertPoLines, landedMoves, loadPo, loadSupplier, poView, postLandedCost, purchaseOrderDoc, receiptView, receiptsOfShipment, receive, unlinkPoLines, writePoTotals,
+  approverRank, approveBill, createBill, defaultRate, insertPoLines, landedMoves, loadPo, loadSupplier, poView, postLandedCost, purchaseOrderDoc, receiptView, receiptsOfShipment, receive, unlinkPoLines, writePoTotals,
 } from './purchasing.service.js';
 
 /**
@@ -1351,6 +1351,12 @@ export class InventoryController {
         total: n,
       };
     }, actor.userId);
+  }
+
+  @Post('bills/:id/approve')
+  @Perm('purchase.approve')
+  async approveBill(@Actor() actor: RequestActor, @Param('id') id: string) {
+    return tenantTx(actor.tenantId, (tx) => approveBill(tx, actor, id), actor.userId);
   }
 
   @Post('bills')

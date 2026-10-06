@@ -427,3 +427,18 @@ export async function landedMoves(tx: Tx, shipmentId: string) {
   return tx.select().from(stockMove).where(and(eq(stockMove.refType, 'landed_cost'), eq(stockMove.refId, shipmentId)));
 }
 
+/** Accept a draft bill held as a 3-way-match exception (purchase.approve; not by the user who entered it). */
+export async function approveBill(tx: Tx, actor: RequestActor, id: string) {
+  if (!actor.grants['purchase.approve']) throw forbidden('accepting a 3-way-match exception needs purchase.approve');
+  const [bill] = await tx.select().from(supplierBill).where(eq(supplierBill.id, id));
+  if (!bill) throw notFound('supplier bill');
+  if (bill.status !== 'draft') throw badRequest(`bill ${bill.number} is ${bill.status}`);
+  if (bill.createdBy === actor.userId) throw forbidden('the user who entered the bill cannot accept its exception');
+  for (const l of bill.lines) {
+    const [line] = await tx.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.id, l.orderLineId));
+    if (line) await tx.update(purchaseOrderLine).set({ billedQty: fq(dec(line.billedQty).plus(l.qty)), updatedAt: new Date(), updatedBy: actor.userId }).where(eq(purchaseOrderLine.id, line.id));
+  }
+  const [row] = await tx.update(supplierBill).set({ status: 'approved', updatedAt: new Date(), updatedBy: actor.userId }).where(eq(supplierBill.id, id)).returning();
+  await audit(tx, actor, 'accept_exception', 'supplier_bill', id, { status: bill.status }, { status: 'approved', matchIssues: bill.matchIssues });
+  return row!;
+}
