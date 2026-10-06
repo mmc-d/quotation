@@ -12,6 +12,7 @@ import { ApprovalsTab } from '../_components/approvals-tab';
 import { ClockCard } from '../_components/clock-card';
 import { GateCard } from '../_components/gate-card';
 import { HandoverCard } from '../_components/handover-card';
+import { MaterialsTab } from '../_components/materials-tab';
 import { Chip, MapChip, StageStepper, stageLabel, useProjectAction } from '../_components/kit';
 import { DevicesTab, PaymentsTab, WorkOrdersTab } from '../_components/other-tabs';
 import { SettingsDialog } from '../_components/settings-dialog';
@@ -19,7 +20,7 @@ import { SnagsTab } from '../_components/snags-tab';
 import { TasksTab } from '../_components/tasks-tab';
 import { PROJECT_STATUS, type ProjectView } from '../_components/types';
 
-type Tab = 'approvals' | 'payments' | 'tasks' | 'snags' | 'devices' | 'workorders';
+type Tab = 'approvals' | 'payments' | 'tasks' | 'snags' | 'devices' | 'workorders' | 'materials';
 
 function Info({ label, children }: { label: ReactNode; children: ReactNode }) {
   return <div className="min-w-0"><div className="text-[11px] font-bold text-muted">{label}</div><div className="truncate text-sm font-bold">{children}</div></div>;
@@ -51,6 +52,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     { value: 'snags', label: bi('الملاحظات', 'Snags'), count: openSnags || undefined, alert: openSnags > 0 },
     { value: 'devices', label: bi('الأجهزة', 'Devices'), count: p.assetsHidden ? undefined : p.assets.length },
     { value: 'workorders', label: bi('أوامر العمل', 'Work orders'), count: p.workOrders.length || undefined },
+    ...(can('inventory.read') ? [{ value: 'materials' as Tab, label: bi('المواد', 'Materials') }] : []),
   ];
 
   return (
@@ -103,6 +105,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {tab === 'snags' && <SnagsTab p={p} action={action} />}
         {tab === 'devices' && <DevicesTab p={p} />}
         {tab === 'workorders' && <WorkOrdersTab p={p} />}
+        {tab === 'materials' && <MaterialsTab p={p} />}
       </Card>
 
       <Card title={bi('سجل المراحل', 'Stage history')}>
