@@ -13,6 +13,7 @@ import { readStoredFile, storeFile } from '../common/files.js';
 import { sendTemplate } from '../common/messaging.js';
 import { ZodPipe, zDate, zPage, zQty, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
+import { consumeForWorkOrder } from './inventory.service.js';
 import {
   EDITABLE, LocationResolver, bookingWarnings, checkInGeofence, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
   loadLocation, loadSite, loadTicket, loadWo, locationPaths, matchPartyByPhone, missingError, parseCsv, parseReportToken, productByCode, renderServiceReport, reportToken, riyadhDayRange,
@@ -923,6 +924,13 @@ export class FieldServiceController {
         }
       }
       if (wo.ownerId && wo.ownerId !== actor.userId) await tx.insert(notification).values({ userId: wo.ownerId, kind: 'work_order', titleAr: `✅ اكتمل أمر العمل ${wo.number} — ${wo.title}`, link: `/field/work-orders/${wo.id}` });
+      // Phase 5: post parts / installed serials as stock consumption (own savepoint — never blocks completion)
+      try {
+        const used = await tx.transaction((sp) => consumeForWorkOrder(sp, actor, id));
+        if (used.warnings.length) console.warn(`[inventory] ${wo.number}: ${used.warnings.join('; ')}`);
+      } catch (e) {
+        console.warn(`[inventory] ${wo.number}: stock consumption not posted — ${(e as Error).message}`);
+      }
       let reportError: string | null = null;
       try {
         await renderServiceReport(tx, actor, id);
