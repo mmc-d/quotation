@@ -50,11 +50,12 @@ test('editing a contract line recalculates totals and tafqit live', async ({ pag
   expect(grand).toBeGreaterThan(1000);
 });
 
-test('every contract carries the Drive stamp once a stamp file is set', async ({ page }) => {
+test('an admin can stamp-and-print only on demand — the stamp never appears by default', async ({ page }) => {
   await openApp(page, { rows: rows(), seller: { ...ADMIN_SELLER, stampFileId: 'FAKE-STAMP-ID' }, cfg: { userId: '92' } });
   await addProduct(page, PRODUCTS.GATEWAY[0]);
   await page.click('.topnav button:has-text("⚙️ الإعدادات")');
   await page.click('#ctcBtn');
 
-  await expect(page.locator('#ctStampSlot img')).toHaveAttribute('src', /thumbnail\?id=FAKE-STAMP-ID/);
+  await expect(page.locator('#ctStampSlot')).toBeEmpty();
+  await expect(page.locator('#ctStampBtn')).toBeVisible();
 });

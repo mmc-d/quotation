@@ -22,7 +22,7 @@ exercises the real `index.html` — no build step, same as production.
   real network access, no real credentials or company data anywhere in the suite.
 - **`e2e/`** — one spec per Phase 0 concern: catalog/INS/FREE/strike-through, discounts and VAT
   (including "not registered for VAT"), save/load (including the Drive-archive round trip and the
-  "لم يُرفع" offline marker), contracts (totals, tafqit, the stamp from Settings on every contract), invoices
+  "لم يُرفع" offline marker), contracts (totals, tafqit, the stamp staying off by default), invoices
   (server-issued number and Asia/Riyadh time, decoding and checking the ZATCA QR TLV, create-only
   numbering), XSS probes (`<img src=x onerror=…>` in a product description, client name, quote
   number, and a Drive file name — plus a tampered saved contract run through DOMPurify), and that
