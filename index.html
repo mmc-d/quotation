@@ -2975,6 +2975,11 @@ async function loadContractFromDrive(fileId, name){
     document.getElementById('ctContent').innerHTML = (typeof DOMPurify!=='undefined')
       ? DOMPurify.sanitize(state.html, {ADD_ATTR:['contenteditable']})
       : state.html;
+    // Saved contracts may carry a stamp (pre-R9 files embedded it; files saved while it was automatic
+    // hold the Drive one) — a reloaded contract always opens unstamped, like a new one.
+    document.querySelectorAll('#ctContent .ct-signature img[alt*="ختم"]').forEach(img=>img.remove());
+    const stampSlot = document.getElementById('ctStampSlot');
+    if(stampSlot) stampSlot.innerHTML = '';
     closeLoadContract();
     document.getElementById('contractOverlay').style.display='block';
     document.body.classList.add('contract-mode');

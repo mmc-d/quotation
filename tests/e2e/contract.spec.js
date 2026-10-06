@@ -59,3 +59,24 @@ test('an admin can stamp-and-print only on demand — the stamp never appears by
   await expect(page.locator('#ctStampSlot')).toBeEmpty();
   await expect(page.locator('#ctStampBtn')).toBeVisible();
 });
+
+test('a saved contract that carries a stamp reopens without it', async ({ page }) => {
+  const { google } = await openApp(page, { rows: rows(), seller: ADMIN_SELLER, cfg: { userId: '92' } });
+  // Both stamp shapes found in saved files: the old embedded one and the Drive one in the slot.
+  const html = '<div class="ct-page">نص العقد<div class="ct-signature"><div class="ct-sig-col">'
+    + '<div><img src="data:image/png;base64,iVBORw0KGgo=" alt="ختم المدى المبارك"></div>'
+    + '<div id="ctStampSlot"><img src="https://drive.google.com/thumbnail?id=X&sz=w400" alt="ختم الشركة"></div>'
+    + '</div></div></div>';
+  google.drive[google.contractsFolder].set('stamped', {
+    id: 'stamped', name: 'MMCT-998.json',
+    content: JSON.stringify({ html, contractNo: 'MMCT-998', quoteNo: '' }),
+    modifiedTime: new Date().toISOString(),
+  });
+
+  await page.click('.topnav button:has-text("⚙️ الإعدادات")');
+  await page.click('#lcBtn');
+  await page.click('#loadContractOverlay [data-file-id="stamped"]');
+  await expect(page.locator('#contractOverlay')).toContainText('نص العقد');
+  await expect(page.locator('#ctContent img[alt*="ختم"]')).toHaveCount(0);
+  await expect(page.locator('#ctStampSlot')).toBeEmpty();
+});
