@@ -2,12 +2,14 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Package, Plus, Tags, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, Package, Plus, Tags, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { Badge, Button, Card, Checkbox, Empty, ErrorBox, LinkButton, Money, PageHeader, SearchBox, Spinner, Table, Td, Th } from '@/components/ui';
 import { ImportDialog } from './_components/import-dialog';
+import { ExcelImportDialog, downloadProductsExcel } from './_components/excel-dialog';
 import { CURRENCY_AR, CURRENCY_EN, num, type Product } from './_components/types';
 
 const PAGE = 100;
@@ -19,6 +21,12 @@ export default function ProductsPage() {
   const [archived, setArchived] = useState(false);
   const [offset, setOffset] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  const [excelOpen, setExcelOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const download = async () => {
+    setDownloading(true);
+    try { await downloadProductsExcel(); } catch (e) { toast.error((e as Error).message); } finally { setDownloading(false); }
+  };
   const showCost = can('product.cost.read');
   const list = useQuery({
     queryKey: ['products', q, archived, offset],
@@ -30,10 +38,14 @@ export default function ProductsPage() {
       <PageHeader
         title={bi('المنتجات', 'Products')}
         subtitle={list.data ? bi(`${total} صنف`, `${total} items`) : 'Products catalog'}
-        actions={can('product.write') && <>
-          <Button variant="outline" icon={<Upload className="size-4" />} onClick={() => setImportOpen(true)}>{bi('استيراد من الشيت', 'Import from sheet')}</Button>
+        actions={<>
+          <Button variant="outline" icon={<Download className="size-4" />} loading={downloading} onClick={download}>{bi('تنزيل Excel (القالب)', 'Download Excel (template)')}</Button>
+          {can('product.write') && <>
+          <Button variant="outline" icon={<FileSpreadsheet className="size-4" />} onClick={() => setExcelOpen(true)}>{bi('رفع ملف Excel', 'Upload Excel')}</Button>
+          <Button variant="ghost" icon={<Upload className="size-4" />} onClick={() => setImportOpen(true)}>{bi('استيراد من الشيت', 'Import from sheet')}</Button>
           <LinkButton href="/products/price-lists" icon={<Tags className="size-4" />}>{bi('قوائم الأسعار', 'Price lists')}</LinkButton>
           <LinkButton href="/products/new" variant="primary" icon={<Plus className="size-4" />}>{bi('منتج جديد', 'New product')}</LinkButton>
+          </>}
         </>}
       />
       <Card padded={false}>
@@ -90,7 +102,8 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
-      {can('product.write') && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />}
+      {can("product.write") && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />}
+      {can("product.write") && <ExcelImportDialog open={excelOpen} onClose={() => setExcelOpen(false)} />}
     </>
   );
 }

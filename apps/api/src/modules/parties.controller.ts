@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import {
   activity, and, asc, brand, consent, contact, contract, desc, eq, exchangeRate, ilike, inArray, invoiceMirror, isNull, kitComponent, or, party, priceList, product, productCategory, quote, site, sql, opportunity, type Tx,
@@ -7,6 +8,7 @@ import { isValidUnifiedNumber, isValidVatNumber, normalizeArabic, normalizePhone
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { PRODUCT_IMAGE_PREFIX, storeFile } from '../common/files.js';
+import { exportProductsXlsx, importProductsXlsx } from './products-excel.js';
 import { audit, diff } from '../common/audit.js';
 import { badRequest, conflict, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
@@ -348,6 +350,25 @@ export class ProductsController {
       await audit(tx, actor, 'archive', 'product', id);
     });
     return { ok: true };
+  }
+
+  /** Every product as an Excel workbook — also the template for adding / editing products in bulk. */
+  @Get('excel/export')
+  @Perm('product.read')
+  async exportExcel(@Actor() actor: RequestActor, @Res() res: Response) {
+    const buf = await tenantTx(actor.tenantId, (tx) => exportProductsXlsx(tx, actor), actor.userId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="mmc-products-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(buf);
+  }
+
+  /** Upload the edited workbook: `apply: false` previews (new / changed / errors), `apply: true` writes it. */
+  @Post('excel/import')
+  @Perm('product.write')
+  async importExcel(@Actor() actor: RequestActor, @Body(new ZodPipe(z.object({ data: z.string().min(1).max(14_000_000), apply: z.boolean().default(false) }))) b: { data: string; apply: boolean }) {
+    const buf = Buffer.from(b.data, 'base64');
+    if (buf.length > 10 * 1024 * 1024) throw badRequest('file larger than 10 MB');
+    return tenantTx(actor.tenantId, (tx) => importProductsXlsx(tx, actor, buf, b.apply), actor.userId);
   }
 
   /**

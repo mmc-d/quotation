@@ -222,7 +222,7 @@ export function BillingPanel({ contractId }: { contractId: string }) {
                   <Td className="font-bold text-ok"><Money value={p.amount} fixed /></Td>
                   <Td>{paymentMethodLabel(p.method, locale)}</Td>
                   <Td className="num text-xs">{(p.paymentRequestId && reqNumber.get(p.paymentRequestId)) ?? '—'}</Td>
-                  <Td className="num max-w-[14rem] truncate text-xs text-muted" title={p.reference ?? undefined}>{displayRef(p.reference)}</Td>
+                  <Td className="num max-w-[14rem] truncate text-xs text-muted">{displayRef(p.reference)}</Td>
                   <Td className="num text-xs text-muted">{p.erpName}</Td>
                 </tr>
               ))}
