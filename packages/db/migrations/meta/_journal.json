@@ -134,6 +134,13 @@
       "when": 1791361798155,
       "tag": "0018_kb_rfq_commission_extras_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791362612749,
+      "tag": "0019_company_tech_incentive_rules",
+      "breakpoints": true
     }
   ]
 }

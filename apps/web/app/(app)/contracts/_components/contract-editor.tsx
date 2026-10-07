@@ -12,6 +12,7 @@ import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
 import { date, dateTime } from '@/lib/format';
 import { BillingPanel } from '@/components/billing-panel';
+import { CommissionSplitCard } from '@/components/commission-split-card';
 import { Badge, Button, Card, clsx, Field, Input, Money, PageHeader, Select, StatusBadge, Table, Td, Textarea, Th } from '@/components/ui';
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from '../../quotes/_components/common';
 import { Menu } from '../../quotes/_components/menu';
@@ -388,6 +389,8 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
             {t.total > 0 && <p className="mt-2 rounded-lg bg-tint/60 px-3 py-2 text-xs leading-relaxed text-gold-dark" dir="rtl">فقط {tafqitHalalas(t.total)} لا غير</p>}
             {!vatRegistered && <p className="mt-2 text-xs font-bold text-amber-800">{tr('shell.vatNotRegistered')}</p>}
           </Card>
+
+          {contract.status !== 'draft' && <CommissionSplitCard contractId={contract.id} />}
 
           {contract.esignRequests.length > 0 && (
             <Card title={bi('طلبات التوقيع الإلكتروني', 'E-signature requests')}>

@@ -39,6 +39,8 @@ export const company = pgTable('company', {
   workingDays: jsonb('working_days').$type<number[]>().notNull().default([0, 1, 2, 3, 4]),
   /** Ramadan date ranges (Umm al-Qura, entered per year) — 6-hour day rule for bookings (module 05 §4) */
   ramadanRanges: jsonb('ramadan_ranges').$type<{ from: string; to: string }[]>().notNull().default([]),
+  /** technician incentive rules (module 09 HR-55); null = DEFAULT_TECH_INCENTIVES */
+  techIncentiveRules: jsonb('tech_incentive_rules').$type<{ perDeviceHalalas: number; firstTimeFixHalalas: number; callbackPenaltyHalalas: number; callbackWindowDays: number; happyCustomerHalalas: number }>(),
   approvalPolicy: jsonb('approval_policy').$type<{ maxDiscountPercent: number; minMarginPercent: number }>().notNull().default({ maxDiscountPercent: 10, minMarginPercent: 20 }),
   ...audit,
 });

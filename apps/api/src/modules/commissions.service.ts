@@ -1,9 +1,10 @@
 import {
-  and, appUser, commissionEntry, commissionPlan, contract, eq, inArray, installedAsset, invoiceMirror, paymentRequest, product, quoteLine, serviceAgreement, sql, workOrder, type AnyPgColumn, type SQL, type Tx,
+  and, appUser, commissionEntry, commissionPlan, commissionSplit, contract, eq, inArray, installedAsset, invoiceMirror, paymentRequest, product, quoteLine, salesQuota, serviceAgreement, sql, workOrder, type AnyPgColumn, type SQL, type Tx,
 } from '@mmc/db';
 import {
-  commissionEarned, commissionPayable, dec, DEFAULT_TECH_INCENTIVES, riyadhDate, technicianIncentive, toHalalas, halalasToFixed,
-  type CommissionLine, type CommissionPlan, type TechnicianIncentiveRules,
+  applyMultiplier, commissionEarned, commissionPayable, dec, DEFAULT_TECH_INCENTIVES, quotaAttainment, riyadhDate, sortTiers, splitCommission, splitSharesError,
+  technicianIncentive, tierMultiplier, tierStatus, toHalalas, halalasToFixed,
+  type CommissionLine, type CommissionPlan, type CommissionTier, type SplitShare, type TechnicianIncentiveRules,
 } from '@mmc/domain';
 import type { RequestActor } from '../auth/actor.js';
 import { forbidden } from '../common/errors.js';
@@ -36,11 +37,18 @@ export function repFilter(actor: RequestActor, col: AnyPgColumn = commissionEntr
   return eq(col, actor.userId);
 }
 
+/** Month bounds of a YYYY-MM period: [first day, first day of next month). */
+export function monthRange(period: string): [string, string] {
+  const [y, m] = period.split('-').map(Number) as [number, number];
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  return [`${period}-01`, `${next}-01`];
+}
+
 /** The rep credited with an invoice: contract owner, else the AMC agreement owner; credit notes follow their original. */
-async function repFor(tx: Tx, inv: typeof invoiceMirror.$inferSelect, depth = 0): Promise<{ userId: string; contractId: string | null } | null> {
+async function repFor(tx: Tx, inv: typeof invoiceMirror.$inferSelect, depth = 0): Promise<{ userId: string | null; contractId: string | null } | null> {
   if (inv.contractId) {
     const [c] = await tx.select({ ownerId: contract.ownerId }).from(contract).where(eq(contract.id, inv.contractId));
-    return c?.ownerId ? { userId: c.ownerId, contractId: inv.contractId } : null;
+    return c ? { userId: c.ownerId ?? null, contractId: inv.contractId } : null;
   }
   if (inv.paymentRequestId) {
     const [pr] = await tx.select({ agreementId: paymentRequest.agreementId, contractId: paymentRequest.contractId }).from(paymentRequest).where(eq(paymentRequest.id, inv.paymentRequestId));
@@ -50,7 +58,7 @@ async function repFor(tx: Tx, inv: typeof invoiceMirror.$inferSelect, depth = 0)
     }
     if (pr?.contractId) {
       const [c] = await tx.select({ ownerId: contract.ownerId }).from(contract).where(eq(contract.id, pr.contractId));
-      if (c?.ownerId) return { userId: c.ownerId, contractId: pr.contractId };
+      if (c) return { userId: c.ownerId ?? null, contractId: pr.contractId };
     }
   }
   if (inv.originalInvoiceId && depth < 2) {
@@ -60,15 +68,35 @@ async function repFor(tx: Tx, inv: typeof invoiceMirror.$inferSelect, depth = 0)
   return null;
 }
 
+export interface Attribution { contractId: string | null; shares: SplitShare[] }
+
+/** Valid split rows of a contract (sum = 100), else null. */
+export async function contractSplits(tx: Tx, contractId: string): Promise<SplitShare[] | null> {
+  const rows = await tx.select({ userId: commissionSplit.userId, sharePercent: commissionSplit.sharePercent }).from(commissionSplit)
+    .where(eq(commissionSplit.contractId, contractId)).orderBy(commissionSplit.createdAt, commissionSplit.userId);
+  return rows.length && !splitSharesError(rows) ? rows : null;
+}
+
+/** Who shares an invoice: the contract's commission split (HR-53) when set, else 100 % to the owner. */
+async function attributionFor(tx: Tx, inv: typeof invoiceMirror.$inferSelect): Promise<Attribution | null> {
+  const rep = await repFor(tx, inv);
+  if (!rep) return null;
+  const split = rep.contractId ? await contractSplits(tx, rep.contractId) : null;
+  if (split) return { contractId: rep.contractId, shares: split };
+  return rep.userId ? { contractId: rep.contractId, shares: [{ userId: rep.userId, sharePercent: '100' }] } : null;
+}
+
+type PlanWithTiers = CommissionPlan & { tiers: CommissionTier[]; name: string };
+
 /** Plans in force on the invoice date for this rep (empty userIds = every contract owner), in sort order. */
-async function plansFor(tx: Tx, userId: string, onDate: string): Promise<CommissionPlan[]> {
+export async function plansFor(tx: Tx, userId: string, onDate: string): Promise<PlanWithTiers[]> {
   const rows = await tx.select().from(commissionPlan).where(and(
     eq(commissionPlan.active, true),
     sql`(${commissionPlan.validFrom} is null or ${commissionPlan.validFrom} <= ${onDate})`,
     sql`(${commissionPlan.validTo} is null or ${commissionPlan.validTo} >= ${onDate})`,
     sql`(jsonb_array_length(${commissionPlan.userIds}) = 0 or ${commissionPlan.userIds} @> ${JSON.stringify([userId])}::jsonb)`,
   )).orderBy(commissionPlan.sort, commissionPlan.createdAt);
-  return rows.map((p) => ({ id: p.id, basis: p.basis === 'margin' ? 'margin' : 'revenue', ratePercent: p.ratePercent, categoryIds: p.categoryIds }));
+  return rows.map((p) => ({ id: p.id, name: p.name, basis: p.basis === 'margin' ? 'margin' : 'revenue', ratePercent: p.ratePercent, categoryIds: p.categoryIds, tiers: sortTiers(p.tiers ?? []) }));
 }
 
 /** Invoice lines (VAT excluded) with the quote's cost snapshot and the product category. */
@@ -112,46 +140,162 @@ function statusOf(payable: number, paid: number) {
   return payable - paid !== 0 ? 'payable' : paid !== 0 ? 'paid' : 'open';
 }
 
+// ───────────────────────── quota attainment (HR-53) ─────────────────────────
+
+export interface RepMonth { userId: string; revenue: number; quota: number; attainment: number | null }
+
 /**
- * (Re)compute the commission entries of one invoice: earned per plan for the rep, and the payable
- * share. Paid amounts are never touched; entries no plan applies to any more are removed unless paid.
+ * Per rep for one month: invoiced revenue (388 net excl. VAT minus 381, by invoice date, split per
+ * the contract's commission split) against the rep's sales_quota.
  */
-export async function recomputeCommissions(tx: Tx, invoiceId: string) {
-  const [inv] = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.id, invoiceId));
-  if (!inv) return { entries: 0 };
-  const existing = await tx.select().from(commissionEntry).where(eq(commissionEntry.invoiceId, invoiceId));
-  const rep = EARNING_TYPES.includes(inv.typeCode) && inv.status !== 'cancelled' ? await repFor(tx, inv) : null;
-  const earned = rep ? commissionEarned(await commissionLines(tx, inv, rep.contractId), await plansFor(tx, rep.userId, inv.issueDate)) : [];
+export async function periodStats(tx: Tx, period: string): Promise<Map<string, RepMonth>> {
+  const [from, to] = monthRange(period);
+  const invs = await tx.select().from(invoiceMirror).where(and(
+    inArray(invoiceMirror.typeCode, EARNING_TYPES), sql`${invoiceMirror.status} <> 'cancelled'`,
+    sql`${invoiceMirror.issueDate} >= ${from}`, sql`${invoiceMirror.issueDate} < ${to}`,
+  ));
+  const out = new Map<string, RepMonth>();
+  const get = (userId: string) => {
+    let r = out.get(userId);
+    if (!r) { r = { userId, revenue: 0, quota: 0, attainment: null }; out.set(userId, r); }
+    return r;
+  };
+  for (const inv of invs) {
+    const att = await attributionFor(tx, inv);
+    if (!att) continue;
+    const net = Math.abs(toHalalas(inv.taxable)) * (inv.typeCode === '381' ? -1 : 1);
+    for (const s of splitCommission(net, att.shares)) get(s.userId).revenue += s.halalas;
+  }
+  const quotas = await tx.select().from(salesQuota).where(eq(salesQuota.period, period));
+  for (const q of quotas) get(q.userId).quota = toHalalas(q.amount);
+  for (const r of out.values()) r.attainment = quotaAttainment(r.revenue, r.quota);
+  return out;
+}
+
+/** True when any active plan carries tiers — only then do invoices of a month depend on each other. */
+export async function tiersInUse(tx: Tx): Promise<boolean> {
+  const [r] = await tx.select({ n: sql<number>`count(*)::int` }).from(commissionPlan).where(and(eq(commissionPlan.active, true), sql`jsonb_array_length(${commissionPlan.tiers}) > 0`));
+  return (r?.n ?? 0) > 0;
+}
+
+type Ctx = Map<string, Map<string, RepMonth>>;
+async function statsOf(tx: Tx, ctx: Ctx, period: string) {
+  let m = ctx.get(period);
+  if (!m) { m = await periodStats(tx, period); ctx.set(period, m); }
+  return m;
+}
+
+/**
+ * (Re)compute the commission entries of one invoice: for each rep sharing it (split or owner), the
+ * earned amount per plan, split to the halala, times the rep's accelerator for the invoice month;
+ * then the payable share. Paid amounts are never touched; entries no plan applies to any more are
+ * removed unless paid.
+ */
+async function computeInvoice(tx: Tx, inv: typeof invoiceMirror.$inferSelect, ctx: Ctx) {
+  const existing = await tx.select().from(commissionEntry).where(eq(commissionEntry.invoiceId, inv.id));
+  const att = EARNING_TYPES.includes(inv.typeCode) && inv.status !== 'cancelled' ? await attributionFor(tx, inv) : null;
+  const target: { userId: string; planId: string; halalas: number }[] = [];
+  if (att) {
+    const lines = await commissionLines(tx, inv, att.contractId);
+    const month = inv.issueDate.slice(0, 7);
+    for (const s of att.shares) {
+      const plans = await plansFor(tx, s.userId, inv.issueDate);
+      for (const e of commissionEarned(lines, plans)) {
+        const slice = splitCommission(e.halalas, att.shares).find((x) => x.userId === s.userId)!.halalas;
+        const plan = plans.find((p) => p.id === e.planId)!;
+        const mult = plan.tiers.length ? tierMultiplier((await statsOf(tx, ctx, month)).get(s.userId)?.attainment ?? null, plan.tiers) : 1;
+        target.push({ userId: s.userId, planId: e.planId, halalas: applyMultiplier(slice, mult) });
+      }
+    }
+  }
   const total = toHalalas(inv.total);
-  const collected = earned.length ? await collectedFor(tx, inv) : 0;
+  const collected = target.length ? await collectedFor(tx, inv) : 0;
   const period = currentPeriod();
   const keep = new Set<string>();
-  for (const e of earned) {
+  for (const e of target) {
     const payable = commissionPayable(e.halalas, total, collected);
-    const prev = existing.find((x) => x.userId === rep!.userId && x.planId === e.planId);
+    const prev = existing.find((x) => x.userId === e.userId && x.planId === e.planId);
     if (prev) {
       keep.add(prev.id);
       const paid = toHalalas(prev.paid);
-      const changed = toHalalas(prev.earned) !== e.halalas || toHalalas(prev.payable) !== payable;
+      const changed = toHalalas(prev.earned) !== e.halalas || toHalalas(prev.payable) !== payable || prev.contractId !== att!.contractId;
       if (!changed && prev.status === statusOf(payable, paid)) continue;
       await tx.update(commissionEntry).set({
-        earned: halalasToFixed(e.halalas), payable: halalasToFixed(payable), status: statusOf(payable, paid), contractId: rep!.contractId,
+        earned: halalasToFixed(e.halalas), payable: halalasToFixed(payable), status: statusOf(payable, paid), contractId: att!.contractId,
         ...(toHalalas(prev.payable) !== payable ? { period } : {}), updatedAt: new Date(), version: prev.version + 1,
       }).where(eq(commissionEntry.id, prev.id));
     } else {
       const [row] = await tx.insert(commissionEntry).values({
-        userId: rep!.userId, planId: e.planId, invoiceId, contractId: rep!.contractId, earned: halalasToFixed(e.halalas), payable: halalasToFixed(payable), period, status: statusOf(payable, 0),
+        userId: e.userId, planId: e.planId, invoiceId: inv.id, contractId: att!.contractId, earned: halalasToFixed(e.halalas), payable: halalasToFixed(payable), period, status: statusOf(payable, 0),
       }).returning({ id: commissionEntry.id });
       keep.add(row!.id);
     }
   }
   const stale = existing.filter((x) => !keep.has(x.id) && toHalalas(x.paid) === 0).map((x) => x.id);
   if (stale.length) await tx.delete(commissionEntry).where(inArray(commissionEntry.id, stale));
-  return { entries: keep.size };
+  return keep.size;
 }
 
-/** Nightly: refresh the payable share of every entry that is not fully paid (collections since). */
+/** Recompute every earning invoice dated in a month (tiers depend on the rep's whole month). */
+export async function recomputePeriod(tx: Tx, period: string, ctx: Ctx = new Map()) {
+  const [from, to] = monthRange(period);
+  const invs = await tx.select().from(invoiceMirror).where(and(inArray(invoiceMirror.typeCode, EARNING_TYPES), sql`${invoiceMirror.issueDate} >= ${from}`, sql`${invoiceMirror.issueDate} < ${to}`))
+    .orderBy(invoiceMirror.issueDate, invoiceMirror.createdAt);
+  let entries = 0;
+  for (const inv of invs) entries += await computeInvoice(tx, inv, ctx);
+  return { period, invoices: invs.length, entries };
+}
+
+/**
+ * (Re)compute the commission entries of one invoice. With tiered plans in force, the whole month of
+ * the invoice is recomputed — a new invoice can move the rep into a higher tier for every invoice of
+ * that month.
+ */
+export async function recomputeCommissions(tx: Tx, invoiceId: string) {
+  const [inv] = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.id, invoiceId));
+  if (!inv) return { entries: 0 };
+  if (EARNING_TYPES.includes(inv.typeCode) && await tiersInUse(tx)) {
+    await recomputePeriod(tx, inv.issueDate.slice(0, 7));
+    const [{ n }] = (await tx.select({ n: sql<number>`count(*)::int` }).from(commissionEntry).where(eq(commissionEntry.invoiceId, invoiceId))) as [{ n: number }];
+    return { entries: n };
+  }
+  return { entries: await computeInvoice(tx, inv, new Map()) };
+}
+
+/** Recompute the invoices of a contract (after its commission split changed), month-wide when tiers apply. */
+export async function recomputeContract(tx: Tx, contractId: string) {
+  const invs = await tx.select({ id: invoiceMirror.id, issueDate: invoiceMirror.issueDate }).from(invoiceMirror).where(sql`(
+    ${invoiceMirror.contractId} = ${contractId}
+    or ${invoiceMirror.paymentRequestId} in (select id from payment_request where contract_id = ${contractId})
+    or ${invoiceMirror.originalInvoiceId} in (select id from invoice_mirror where contract_id = ${contractId}))`);
+  const ctx: Ctx = new Map();
+  if (await tiersInUse(tx)) {
+    for (const p of new Set(invs.map((i) => i.issueDate.slice(0, 7)))) await recomputePeriod(tx, p, ctx);
+  } else {
+    for (const { id } of invs) {
+      const [inv] = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.id, id));
+      if (inv) await computeInvoice(tx, inv, ctx);
+    }
+  }
+  return { invoices: invs.length };
+}
+
+/** Previous YYYY-MM. */
+export function prevPeriod(period: string) {
+  const [y, m] = period.split('-').map(Number) as [number, number];
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/**
+ * Nightly: with tiered plans, recompute this and last month (quotas or late invoices may have moved
+ * a tier); then refresh the payable share of every entry that is not fully paid (collections since).
+ */
 export async function recalcOpenCommissions(tx: Tx) {
+  if (await tiersInUse(tx)) {
+    const cur = currentPeriod();
+    await recomputePeriod(tx, prevPeriod(cur));
+    await recomputePeriod(tx, cur);
+  }
   const rows = await tx.selectDistinct({ invoiceId: commissionEntry.invoiceId }).from(commissionEntry).where(inArray(commissionEntry.status, ['open', 'payable']));
   const period = currentPeriod();
   let updated = 0;
@@ -170,6 +314,44 @@ export async function recalcOpenCommissions(tx: Tx) {
     }
   }
   return { invoices: rows.length, updated };
+}
+
+// ───────────────────────── rep dashboard (HR-54) ─────────────────────────
+
+/** The rep's month: revenue vs quota, tier ladder, earned/payable/paid for the month (by invoice date) and YTD, entries. */
+export async function repDashboard(tx: Tx, userId: string, period: string) {
+  const stats = (await periodStats(tx, period)).get(userId) ?? { userId, revenue: 0, quota: 0, attainment: null };
+  const [from, to] = monthRange(period);
+  const lastDay = new Date(new Date(`${to}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10);
+  const plans = await plansFor(tx, userId, lastDay);
+  const tiered = plans.find((p) => p.tiers.length);
+  const tier = tierStatus(stats.attainment, tiered?.tiers ?? []);
+  const sums = async (start: string) => {
+    const [r] = await tx.select({
+      earned: sql<string>`coalesce(sum(${commissionEntry.earned}), 0)::text`, payable: sql<string>`coalesce(sum(${commissionEntry.payable}), 0)::text`, paid: sql<string>`coalesce(sum(${commissionEntry.paid}), 0)::text`,
+    }).from(commissionEntry).innerJoin(invoiceMirror, eq(invoiceMirror.id, commissionEntry.invoiceId))
+      .where(and(eq(commissionEntry.userId, userId), sql`${invoiceMirror.issueDate} >= ${start}`, sql`${invoiceMirror.issueDate} < ${to}`));
+    const e = toHalalas(r?.earned ?? '0'); const p = toHalalas(r?.payable ?? '0'); const d = toHalalas(r?.paid ?? '0');
+    return { earned: halalasToFixed(e), payable: halalasToFixed(p), paid: halalasToFixed(d), outstanding: halalasToFixed(p - d) };
+  };
+  const entries = await tx.select({
+    e: commissionEntry, invoiceNumber: invoiceMirror.number, invoiceType: invoiceMirror.typeCode, invoiceDate: invoiceMirror.issueDate,
+    contractNumber: contract.number, planName: commissionPlan.name,
+  }).from(commissionEntry).innerJoin(invoiceMirror, eq(invoiceMirror.id, commissionEntry.invoiceId))
+    .leftJoin(contract, eq(contract.id, commissionEntry.contractId)).leftJoin(commissionPlan, eq(commissionPlan.id, commissionEntry.planId))
+    .where(and(eq(commissionEntry.userId, userId), sql`${invoiceMirror.issueDate} >= ${from}`, sql`${invoiceMirror.issueDate} < ${to}`))
+    .orderBy(invoiceMirror.issueDate, commissionEntry.createdAt);
+  return {
+    userId, period,
+    revenue: halalasToFixed(stats.revenue), quota: stats.quota ? halalasToFixed(stats.quota) : null, attainment: stats.attainment,
+    planName: tiered?.name ?? null, tiers: tiered?.tiers ?? [], currentTier: tier.current, nextTier: tier.next, multiplier: tier.multiplier,
+    toNextTier: tier.next && stats.quota ? halalasToFixed(Math.max(0, Math.ceil((stats.quota * tier.next.fromPercent) / 100) - stats.revenue)) : null,
+    month: await sums(from), ytd: await sums(`${period.slice(0, 4)}-01-01`),
+    entries: entries.map((r) => ({
+      ...r.e, outstanding: halalasToFixed(toHalalas(r.e.payable) - toHalalas(r.e.paid)),
+      invoiceNumber: r.invoiceNumber, invoiceType: r.invoiceType, invoiceDate: r.invoiceDate, contractNumber: r.contractNumber, planName: r.planName,
+    })),
+  };
 }
 
 // ───────────────────────── technician incentives ─────────────────────────

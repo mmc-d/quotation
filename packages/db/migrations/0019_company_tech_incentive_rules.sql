@@ -1,0 +1,1 @@
+ALTER TABLE "company" ADD COLUMN "tech_incentive_rules" jsonb;
