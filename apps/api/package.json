@@ -26,6 +26,7 @@
     "better-auth": "^1.7.7",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "fast-xml-parser": "^5.11.2",
     "helmet": "^8.3.0",
     "nodemailer": "^7.0.10",
     "pg-boss": "^12.36.0",

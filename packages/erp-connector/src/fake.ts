@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { computeInvoiceLines, dec, finalInvoiceWithPrepayments, halalasToFixed, phase1QrPayload, prepaymentInvoice, riyadhTime, toHalalas } from '@mmc/domain';
 import {
   BackOfficeError, type BackOfficePort, type CreateInvoicePayload, type CustomerPayload, type DocResult, type InvoiceResult, type ItemPayload, type LandedCostPayload, type PaymentResult,
-  type PurchaseOrderPayload, type ReceiptPayload, type RecordPaymentPayload, type StockEntryPayload, type SupplierBillPayload, type SupplierPayload, type WarehousePayload,
+  type ProjectPayload, type PurchaseOrderPayload, type ReceiptPayload, type RecordPaymentPayload, type StockEntryPayload, type SupplierBillPayload, type SupplierPayload, type WarehousePayload,
 } from './port.js';
 
 /** Storage kinds of the fake (one folder each in the API's file store). */
-export type FakeKind = 'invoice' | 'payment' | 'customer' | 'item' | 'supplier' | 'warehouse' | 'purchase_order' | 'purchase_receipt' | 'purchase_invoice' | 'stock_entry' | 'landed_cost' | 'seq';
+export type FakeKind = 'invoice' | 'payment' | 'customer' | 'item' | 'supplier' | 'warehouse' | 'purchase_order' | 'purchase_receipt' | 'purchase_invoice' | 'stock_entry' | 'landed_cost' | 'project' | 'seq';
 
 /** Deterministic fake document names: PO-FAKE-0001 … (development only). */
 const DOC_PREFIX = {
@@ -172,6 +172,12 @@ export class FakeBackOffice implements BackOfficePort {
   async upsertWarehouse(w: WarehousePayload) {
     const erpName = `${w.code} - FAKE`;
     await this.save('warehouse', erpName, w);
+    return { erpName };
+  }
+
+  async upsertProject(p: ProjectPayload) {
+    const erpName = p.name;
+    await this.save('project', erpName, p);
     return { erpName };
   }
 

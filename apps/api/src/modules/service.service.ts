@@ -118,6 +118,9 @@ export const SERVICE_TEMPLATES = [
     body: 'مرحبًا {{name}}، ينتهي عقد الصيانة رقم {{number}} بتاريخ {{end}}. لتجديد العقد واستمرار التغطية تواصلوا معنا أو تابعوا عبر البوابة: {{link}}' },
   { key: 'amc_visit_due', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_amc_visit_due', variables: ['name', 'number', 'date'],
     body: 'مرحبًا {{name}}، زيارة الصيانة الوقائية ضمن عقد الصيانة {{number}} مستحقة بتاريخ {{date}}. سنتواصل معكم لتحديد الموعد المناسب.' },
+  // FSM-84 ticket conversation: a staff reply on a service call
+  { key: 'ticket_reply', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_ticket_reply', variables: ['name', 'number', 'reply', 'link'],
+    body: 'مرحبًا {{name}}، رد فريق خدمة المدى المبارك على طلبكم رقم {{number}}: {{reply}} — للمتابعة: {{link}}' },
 ];
 
 /** Tenants seeded before Phase 7b get the templates on first use (same values as the seed). */
@@ -132,6 +135,32 @@ export async function customerPhone(tx: Tx, partyId: string | null | undefined, 
   const c = contacts.sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary))[0];
   const raw = preferred || c?.whatsapp || c?.mobile || p?.phone;
   return { to: raw ? normalizePhone(raw) : null, name: c?.name || p?.nameAr || '', contactId: c?.id ?? null };
+}
+
+/**
+ * Deliver a staff reply on a ticket: portal tickets show it in the portal conversation; the customer also
+ * gets it by WhatsApp when the `ticket_reply` utility template exists and a number is known (sandbox
+ * without credentials). Never blocks the reply. Returns where it went: "portal", "whatsapp", "portal,whatsapp" or "none".
+ */
+export async function deliverTicketReply(tx: Tx, actor: RequestActor | null, t: typeof ticket.$inferSelect, reply: string): Promise<string> {
+  const via: string[] = [];
+  if (t.portalAccountId) via.push('portal');
+  // savepoint: a messaging failure must never abort the reply itself
+  const sent = await tx.transaction(async (sp) => {
+    await ensureServiceTemplates(sp);
+    const [tpl] = await sp.select({ id: messageTemplate.id }).from(messageTemplate)
+      .where(and(eq(messageTemplate.key, 'ticket_reply'), eq(messageTemplate.channel, 'whatsapp'), eq(messageTemplate.category, 'utility'), eq(messageTemplate.language, 'ar')));
+    const c = await customerPhone(sp, t.partyId, t.contactPhone);
+    if (!tpl || !c.to) return false;
+    const text = reply.replace(/\s+/g, ' ').trim().slice(0, 900); // template parameters cannot hold new lines
+    const r = await sendTemplate(sp, {
+      channel: 'whatsapp', to: c.to, templateKey: 'ticket_reply', vars: { name: t.contactName || c.name, number: t.number, reply: text, link: `${config.publicBaseUrl}/portal/requests/${t.id}` },
+      related: { type: 'ticket', id: t.id }, link: { partyId: t.partyId, contactId: c.contactId }, sentBy: actor?.userId ?? null,
+    });
+    return r.result.status !== 'failed';
+  }).catch((e: Error) => { console.warn(`[ticket_reply] ${t.number}: ${e.message}`); return false; });
+  if (sent) via.push('whatsapp');
+  return via.length ? via.join(',') : 'none';
 }
 
 // ───────────────────────── notifications ─────────────────────────

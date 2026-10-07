@@ -2,8 +2,8 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto
 import { UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import {
-  agreementVisit, and, asc, attachment, auditLog, desc, emit, eq, file, gte, inArray, installedAsset, invoiceMirror, isNull, nextNumber, or, party, paymentRequest, portalAccount, portalOtp, portalSession,
-  project, projectApproval, serviceAgreement, site, sql, ticket, withTenant, workOrder, type Tx,
+  agreementVisit, and, asc, attachment, auditLog, desc, emit, eq, file, gte, inArray, installedAsset, invoiceMirror, isNull, kbArticle, nextNumber, or, party, paymentRequest, portalAccount, portalOtp, portalSession,
+  project, projectApproval, serviceAgreement, site, sql, ticket, ticketMessage, withTenant, workOrder, type Tx,
 } from '@mmc/db';
 import { APPROVAL_LABELS, halalasToFixed, OTP_MAX_ATTEMPTS, toHalalas, OTP_TTL_MINUTES, PROJECT_STAGE_LABELS, gateFor, normalizeSaudiMobile, riyadhDate, type ApprovalKind, type ProjectStage } from '@mmc/domain';
 import { audit } from '../common/audit.js';
@@ -14,6 +14,7 @@ import { sendTemplate } from '../common/messaging.js';
 import { config } from '../config.js';
 import { coverageFor, locationPaths, reportToken, userNames } from './field-service.service.js';
 import { decideApproval, loadFacts, projectClock } from './projects.service.js';
+import { articleFeedback, bumpViews, portalMessages, productIdsOfAsset, publicArticle, publicSummary, searchArticles } from './kb.service.js';
 import { csatUrl, dispatcherIds, ensureServiceTemplates, notifyUsers, slaDue, ticketSla, tierInfo } from './service.service.js';
 
 /**
@@ -343,7 +344,85 @@ export async function ticketDetail(tx: Tx, c: PortalCtx, id: string) {
     timeline,
     workOrders: wos.map((w) => workOrderPublic(c, w, w.technicianId ? names.get(w.technicianId) ?? null : null)),
     photos: photos.map((f) => ({ ...f, url: portalFileUrl(f.id) })),
+    messages: await portalMessages(tx, id),
+    canMessage: t.status !== 'closed' && !(t.status === 'resolved' && !reopenable(t)),
   };
+}
+
+const REOPEN_DAYS = 7;
+const reopenable = (t: typeof ticket.$inferSelect) => t.status !== 'resolved' || (!!t.resolvedAt && Date.now() - t.resolvedAt.getTime() <= REOPEN_DAYS * 86_400_000);
+
+export interface PortalMessageInput { body: string; photos?: { name: string; contentType: string; data: string }[] }
+
+/** Customer message on their ticket; a ticket resolved within 7 days goes back to open (owner + dispatchers notified). */
+export async function addTicketMessage(tx: Tx, c: PortalCtx, id: string, b: PortalMessageInput) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('ticket');
+  const [t] = await tx.select().from(ticket).where(and(eq(ticket.id, id), eq(ticket.partyId, c.partyId)));
+  if (!t) throw notFound('ticket');
+  if (t.status === 'closed') throw badRequest('the request is closed — please open a new request');
+  if (!reopenable(t)) throw badRequest(`the request was resolved more than ${REOPEN_DAYS} days ago — please open a new request`);
+  const photos = (b.photos ?? []).map((p) => ({ ...p, buf: Buffer.from(p.data, 'base64') }));
+  for (const p of photos) if (!p.buf.length || p.buf.length > 1_500_000) throw badRequest('each photo must be an image of at most 1.5 MB');
+  const fileIds: string[] = [];
+  for (const p of photos) {
+    const f = await storeFile(tx, c.tenantId, p.buf, p.name, p.contentType, null);
+    await tx.insert(attachment).values({ fileId: f.id, entityType: 'ticket', entityId: t.id, label: 'portal_message' });
+    fileIds.push(f.id);
+  }
+  await tx.insert(ticketMessage).values({ ticketId: t.id, author: 'customer', portalAccountId: c.account.id, body: b.body, internal: false, fileIds, deliveredVia: 'portal' });
+  const reopened = t.status === 'resolved';
+  await tx.update(ticket).set({ ...(reopened ? { status: 'open', resolvedAt: null } : {}), updatedAt: new Date(), version: t.version + 1 }).where(eq(ticket.id, t.id));
+  await audit(tx, null, 'customer_message', 'ticket', t.id, null, { via: 'portal', portalAccountId: c.account.id, photos: fileIds.length });
+  if (reopened) {
+    await audit(tx, null, 'status_open', 'ticket', t.id, { status: 'resolved' }, { status: 'open', via: 'portal_message' });
+    await emit(tx, 'ticket', t.id, 'ticket.open', { number: t.number, reopenedBy: 'customer' });
+  }
+  const recipients = reopened ? [t.ownerId, ...(await dispatcherIds(tx))] : [t.ownerId ?? null].concat(t.ownerId ? [] : await dispatcherIds(tx));
+  await notifyUsers(tx, recipients, {
+    kind: 'ticket',
+    titleAr: reopened ? `↩️ أعاد العميل فتح البلاغ ${t.number} — ${c.partyName}: ${b.body}` : `💬 رسالة من العميل على البلاغ ${t.number} — ${c.partyName}: ${b.body}`,
+    titleEn: reopened ? `Customer reopened ${t.number}` : `Customer message on ${t.number}`,
+    link: `/field/tickets/${t.id}`,
+  });
+  return ticketDetail(tx, c, t.id);
+}
+
+// knowledge base (published + public only)
+
+const publicKb = and(eq(kbArticle.status, 'published'), eq(kbArticle.visibility, 'public'));
+
+export async function kbList(tx: Tx, q?: string, productId?: string) {
+  const rows = await searchArticles(tx, { q, productIds: productId ? [productId] : undefined, publishedOnly: true, publicOnly: true, limit: 100 });
+  return { rows: rows.map(publicSummary) };
+}
+
+async function kbBySlug(tx: Tx, slug: string) {
+  if (!slug || slug.length > 120) throw notFound('article');
+  const [a] = await tx.select().from(kbArticle).where(and(eq(kbArticle.slug, slug), publicKb));
+  if (!a) throw notFound('article');
+  return a;
+}
+
+export async function kbArticleBySlug(tx: Tx, slug: string) {
+  const a = await kbBySlug(tx, slug);
+  await bumpViews(tx, a.id);
+  return publicArticle(tx, a);
+}
+
+export async function kbFeedback(tx: Tx, slug: string, helpful: boolean) {
+  const a = await kbBySlug(tx, slug);
+  await articleFeedback(tx, a.id, helpful);
+  return { ok: true as const };
+}
+
+/** Up to 3 public how-to articles for the customer's device (shown before they open a request). */
+export async function kbSuggest(tx: Tx, c: PortalCtx, assetId: string) {
+  const a = await loadDevice(tx, c, assetId);
+  const productIds = await productIdsOfAsset(tx, a.id);
+  if (!productIds.length) return { rows: [] };
+  const rows = await searchArticles(tx, { productIds, publishedOnly: true, publicOnly: true, limit: 50 });
+  const best = [...rows].sort((x, y) => (y.helpfulYes - y.helpfulNo) - (x.helpfulYes - x.helpfulNo) || y.views - x.views).slice(0, 3);
+  return { rows: best.map(publicSummary) };
 }
 
 export interface PortalTicketInput { siteId?: string | null; assetId?: string | null; subject: string; description?: string | null; photos?: { name: string; contentType: string; data: string }[] }
@@ -435,6 +514,7 @@ export async function portalFile(tx: Tx, c: PortalCtx, id: string): Promise<bool
     select 1 as ok where
       exists (select 1 from project_approval a join project p on p.id = a.project_id where p.party_id = ${c.partyId}::uuid and a.status <> 'draft' and a.file_ids @> ${JSON.stringify([id])}::jsonb)
       or exists (select 1 from attachment x join ticket t on t.id = x.entity_id where x.entity_type = 'ticket' and x.file_id = ${id}::uuid and t.party_id = ${c.partyId}::uuid)
-      or exists (select 1 from invoice_mirror i where i.party_id = ${c.partyId}::uuid and i.pdf_file_id = ${id}::uuid)`);
+      or exists (select 1 from invoice_mirror i where i.party_id = ${c.partyId}::uuid and i.pdf_file_id = ${id}::uuid)
+      or exists (select 1 from kb_article k where k.status = 'published' and k.visibility = 'public' and k.file_ids @> ${JSON.stringify([id])}::jsonb)`);
   return !!hit;
 }

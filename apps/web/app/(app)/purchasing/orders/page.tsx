@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { Suspense, useDeferredValue, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Plus, ShoppingCart } from 'lucide-react';
+import { BookOpen, FileCode2, Plus, ShoppingCart } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { date } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useMe } from '@/lib/me';
 import { Button, Card, clsx, Empty, ErrorBox, LinkButton, Money, PageHeader, SearchBox, Spinner, Table, Td, Th } from '@/components/ui';
 import { Amount, PO_STATUS, PoStatusBadge, chipCls, useLabel } from '../_components/common';
+import { EInvoiceImportDialog } from '../_components/po-dialogs';
 import type { PoRow } from '../_components/types';
 
 const PAGE = 50;
@@ -25,6 +26,7 @@ function OrdersList() {
   const term = useDeferredValue(q.trim());
   const [statuses, setStatuses] = useState<string[]>(() => (sp.get('status') ?? OPEN.join(',')).split(',').filter(Boolean));
   const [limit, setLimit] = useState(PAGE);
+  const [importing, setImporting] = useState(false);
   const filters = { q: term, status: statuses.join(','), supplierId: sp.get('supplierId'), projectId: sp.get('projectId'), limit };
   const list = useQuery({
     queryKey: ['po-list', filters],
@@ -41,6 +43,7 @@ function OrdersList() {
         title={bi('أوامر الشراء', 'Purchase orders')}
         subtitle={list.data ? bi(`${list.data.total} أمر شراء`, `${list.data.total} purchase orders`) : undefined}
         actions={<>
+          {can('purchase.write') && <Button variant="outline" icon={<FileCode2 className="size-4" />} onClick={() => setImporting(true)}>{bi('استيراد فاتورة إلكترونية', 'Import e-invoice')}</Button>}
           <LinkButton href="/purchasing/suppliers" icon={<BookOpen className="size-4" />}>{bi('كتالوج الموردين', 'Supplier catalogue')}</LinkButton>
           {can('purchase.write') && <LinkButton variant="primary" href="/purchasing/orders/new" icon={<Plus className="size-4" />}>{bi('أمر شراء جديد', 'New purchase order')}</LinkButton>}
         </>}
@@ -88,6 +91,7 @@ function OrdersList() {
           </>
         )}
       </Card>
+      {importing && <EInvoiceImportDialog open onClose={() => setImporting(false)} onDone={(b) => { setImporting(false); if (b.orderId) router.push(`/purchasing/orders/${b.orderId}`); }} />}
     </>
   );
 }

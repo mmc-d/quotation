@@ -4,6 +4,8 @@ import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardList, MessageSquareReply, Phone } from 'lucide-react';
+import { DeviceArticles } from '../../../kb/_components/common';
+import { TicketConversation, type TicketMessage } from './conversation';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
@@ -28,21 +30,14 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
   const label = useLabel();
   const { can } = useMe();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['field-ticket', id], queryFn: () => api.get<TicketDetail>(`/field/tickets/${id}`) });
+  const q = useQuery({ queryKey: ['field-ticket', id], queryFn: () => api.get<TicketDetail & { messages?: TicketMessage[] }>(`/field/tickets/${id}`) });
   const [pending, setPending] = useState<string | null>(null);
   const [creatingWo, setCreatingWo] = useState(false);
-  const [responding, setResponding] = useState(false);
   const canWrite = can('ticket.write');
 
   const setStatus = useMutation({
     mutationFn: ({ status, note }: { status: string; note?: string }) => api.post<TicketDetail>(`/field/tickets/${id}/status`, { status, note: note || null }),
     onSuccess: (t) => { qc.setQueryData(['field-ticket', id], t); qc.invalidateQueries({ queryKey: ['field-tickets'] }); setPending(null); toast.success(bi('تم تحديث الحالة', 'Status updated')); },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const respond = useMutation({
-    mutationFn: (note: string) => api.post<TicketDetail>(`/field/tickets/${id}/respond`, { note }),
-    onSuccess: (t) => { qc.setQueryData(['field-ticket', id], t); qc.invalidateQueries({ queryKey: ['field-tickets'] }); setResponding(false); toast.success(bi('تم تسجيل الرد', 'Response logged')); },
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -59,7 +54,7 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
         title={<span className="flex flex-wrap items-center gap-2"><span dir="ltr" className="num">{t.number}</span><TicketStatusBadge status={t.status} /><PriorityBadge priority={t.priority} /></span>}
         subtitle={t.subject}
         actions={<>
-          {canWrite && t.status !== 'closed' && <Button variant="outline" icon={<MessageSquareReply className="size-4" />} onClick={() => setResponding(true)}>{bi('رد / تسجيل استجابة', 'Reply / log response')}</Button>}
+          {canWrite && t.status !== 'closed' && <Button variant="outline" icon={<MessageSquareReply className="size-4" />} onClick={() => document.getElementById('ticket-conversation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{bi('رد على العميل', 'Reply to the customer')}</Button>}
           {canWrite && nextFor.map((n) => <Button key={n.to} variant={n.variant ?? 'primary'} onClick={() => setPending(n.to)}>{locale === 'en' ? n.en : n.ar}</Button>)}
           {canWrite && can('workorder.write') && !['resolved', 'closed'].includes(t.status) && <Button variant="gold" icon={<ClipboardList className="size-4" />} onClick={() => setCreatingWo(true)}>{bi('إنشاء أمر عمل', 'Create work order')}</Button>}
         </>}
@@ -69,6 +64,9 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
           <Card title={bi('البلاغ', 'Service call')}>
             {t.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.description}</p> : <p className="text-sm text-muted">{bi('بدون وصف', 'No description')}</p>}
           </Card>
+          <div id="ticket-conversation" className="scroll-mt-4">
+            <TicketConversation ticketId={t.id} status={t.status} messages={t.messages ?? []} canWrite={canWrite} onUpdated={(n) => qc.setQueryData(['field-ticket', id], n)} />
+          </div>
           <Card padded={false} title={bi('أوامر العمل المرتبطة', 'Linked work orders')}>
             {t.workOrders.length === 0 ? <p className="p-4 text-sm text-muted">{bi('لا توجد أوامر عمل بعد', 'No work orders yet')}</p> : (
               <Table>
@@ -114,6 +112,11 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
               })}
             </Card>
           )}
+          {t.asset && can('kb.read') && (
+            <Card>
+              <DeviceArticles assetId={t.asset.id} title={bi('مقالات مقترحة للجهاز', 'Suggested articles')} />
+            </Card>
+          )}
           <Card title={bi('التفاصيل', 'Details')}>
             <Info label={bi('القناة', 'Channel')}>{label(CHANNEL, t.channel)}</Info>
             <Info label={bi('المتصل', 'Caller')}>{t.contactName ?? '—'}</Info>
@@ -135,17 +138,6 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
         loading={setStatus.isPending}
         onConfirm={(note) => pending && setStatus.mutate({ status: pending, note })}
         onClose={() => setPending(null)}
-      />
-      <ReasonDialog
-        open={responding}
-        required
-        title={bi('رد على العميل / تسجيل استجابة', 'Reply to the customer / log a response')}
-        label={bi('الرد', 'Reply')}
-        hint={bi('يظهر الرد في بوابة العميل، وأول رد يوقف عدّاد زمن الاستجابة.', 'The reply shows on the customer portal; the first one stops the response clock.')}
-        confirmLabel={bi('تسجيل', 'Log')}
-        loading={respond.isPending}
-        onConfirm={(note) => respond.mutate(note)}
-        onClose={() => setResponding(false)}
       />
       {creatingWo && <CreateWoDialog ticket={t} onClose={() => setCreatingWo(false)} />}
     </>

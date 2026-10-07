@@ -100,6 +100,33 @@ export async function insertPoLines(tx: Tx, actor: RequestActor, po: PoRow, line
   await syncMrStatus(tx, lines.map((l) => l.materialRequestLineId).filter((x): x is string => !!x));
 }
 
+export interface PoCreateInput {
+  supplierId: string; currency: string; rateToSar?: string; incoterm?: string | null; depositPercent: number; orderDate?: string | null; expectedOn?: string | null;
+  projectId?: string | null; notes?: string | null; lines: PoLineInput[];
+}
+
+/** Create a draft purchase order with its lines and totals (manual, from an MR, or from an awarded RFQ). Returns the PO id. */
+export async function createPurchaseOrder(tx: Tx, actor: RequestActor, b: PoCreateInput, materialRequestId: string | null) {
+  await loadSupplier(tx, b.supplierId);
+  if (b.projectId) {
+    if (!isUuid(b.projectId)) throw notFound('project');
+    const [prj] = await tx.select({ id: project.id }).from(project).where(eq(project.id, b.projectId));
+    if (!prj) throw notFound('project');
+  }
+  const rate = b.rateToSar ?? defaultRate(b.currency);
+  if (!rate || dec(rate).lte(0)) throw badRequest(`give the SAR rate for ${b.currency} (rateToSar)`);
+  const { number } = await nextNumber(tx, 'purchase_order');
+  const [po] = await tx.insert(purchaseOrder).values({
+    number, supplierId: b.supplierId, status: 'draft', currency: b.currency, rateToSar: rate, incoterm: b.incoterm ?? null, depositPercent: b.depositPercent, orderDate: b.orderDate ?? riyadhDate(),
+    expectedOn: b.expectedOn ?? null, projectId: b.projectId ?? null, materialRequestId, notes: b.notes ?? null, ownerId: actor.userId, createdBy: actor.userId, updatedBy: actor.userId,
+  }).returning();
+  await insertPoLines(tx, actor, po!, b.lines);
+  const t = await writePoTotals(tx, po!);
+  await audit(tx, actor, 'create', 'purchase_order', po!.id, null, { number, supplierId: b.supplierId, currency: b.currency, totalSar: halalasToFixed(t.totalSar), lines: b.lines.length });
+  await emit(tx, 'purchase_order', po!.id, 'purchase_order.created', { number });
+  return po!.id;
+}
+
 /** Undo the MR "ordered" quantities of PO lines (draft edit / cancel). */
 export async function unlinkPoLines(tx: Tx, actor: RequestActor, poId: string) {
   const lines = await tx.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.orderId, poId));
@@ -383,6 +410,8 @@ export async function postLandedCost(tx: Tx, actor: RequestActor, shipmentId: st
 export interface BillInput {
   supplierId: string; orderId: string; supplierInvoiceNo: string; billDate: string; currency: string; rateToSar?: string;
   lines: { orderLineId: string; qty: string; unitPrice: string }[]; vat: string; fileId?: string | null; acceptException?: boolean;
+  /** the supplier's ZATCA e-invoice XML (INV-66) — kept as the bill's file when no other file is given */
+  sourceXmlFileId?: string | null;
 }
 
 /** Supplier bill with the 3-way match (INV-64): billed (existing + this bill) must not exceed received. */
@@ -409,12 +438,12 @@ export async function createBill(tx: Tx, actor: RequestActor, b: BillInput) {
   const [row] = await tx.insert(supplierBill).values({
     number, supplierId: b.supplierId, orderId: po.id, supplierInvoiceNo: b.supplierInvoiceNo, billDate: b.billDate, currency: b.currency, rateToSar: b.rateToSar ?? (defaultRate(b.currency) || po.rateToSar),
     subtotal: halalasToFixed(subtotal), vat: halalasToFixed(vat), total: halalasToFixed(subtotal + vat), lines: b.lines,
-    matchStatus: match.ok ? 'matched' : 'exception', matchIssues: issues, fileId: b.fileId ?? null, status: accepted ? 'approved' : 'draft', createdBy: actor.userId, updatedBy: actor.userId,
+    matchStatus: match.ok ? 'matched' : 'exception', matchIssues: issues, fileId: b.fileId ?? b.sourceXmlFileId ?? null, status: accepted ? 'approved' : 'draft', createdBy: actor.userId, updatedBy: actor.userId,
   }).returning();
   if (accepted) {
     for (const l of billed) await tx.update(purchaseOrderLine).set({ billedQty: fq(dec(l.billedQty).plus(add.get(l.id)!)), updatedAt: new Date(), updatedBy: actor.userId }).where(eq(purchaseOrderLine.id, l.id));
   }
-  await audit(tx, actor, 'create', 'supplier_bill', row!.id, null, { number, order: po.number, matchStatus: row!.matchStatus, accepted });
+  await audit(tx, actor, 'create', 'supplier_bill', row!.id, null, { number, order: po.number, matchStatus: row!.matchStatus, accepted, ...(b.sourceXmlFileId ? { sourceXmlFileId: b.sourceXmlFileId } : {}) });
   await emit(tx, 'supplier_bill', row!.id, match.ok ? 'supplier_bill.matched' : 'supplier_bill.exception', { number, order: po.number });
   return row!;
 }

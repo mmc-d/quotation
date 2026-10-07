@@ -174,3 +174,33 @@ describe('FakeBackOffice — Phase 5', () => {
     expect((await bo.health()).detail).toMatch(/not ZATCA/);
   });
 });
+
+describe('upsertProject', () => {
+  it('ErpNext: Project keyed by mmc_core_id, named by the Core number, status mapped', async () => {
+    const { bo, posts } = erp();
+    const r = await bo.upsertProject({ coreId: 'prj-1', name: 'PRJ-0001', title: 'فيلا العليا', customerErpName: 'CUST-0001', status: 'active', expectedStart: '2026-10-01', expectedEnd: '2026-12-01' });
+    expect(r.erpName).toBe('DOC-1');
+    expect(posts()[0]!.url).toBe('https://erp.example/api/resource/Project');
+    expect(posts()[0]!.body).toEqual({
+      project_name: 'PRJ-0001', status: 'Open', is_active: 'Yes', company: 'MMC', customer: 'CUST-0001', expected_start_date: '2026-10-01', expected_end_date: '2026-12-01', notes: 'فيلا العليا', mmc_core_id: 'prj-1',
+    });
+  });
+
+  it('ErpNext: an existing Project (found by mmc_core_id) is updated, not duplicated', async () => {
+    const { bo, calls, posts } = erp({ get: (u) => (u.includes('/Project?') ? [{ name: 'PRJ-0001' }] : []) });
+    const r = await bo.upsertProject({ coreId: 'prj-1', name: 'PRJ-0001', status: 'closed' });
+    expect(r.erpName).toBe('PRJ-0001');
+    expect(posts()).toHaveLength(0);
+    const get = calls.find((c) => c.method === 'GET')!;
+    expect(get.url).toContain('/api/resource/Project?filters=[["mmc_core_id","=","prj-1"]]');
+    const put = calls.find((c) => c.method === 'PUT')!;
+    expect(put.url).toBe('https://erp.example/api/resource/Project/PRJ-0001');
+    expect(put.body).toEqual({ project_name: 'PRJ-0001', status: 'Completed', is_active: 'No', company: 'MMC' });
+  });
+
+  it('Fake: idempotent, the ERP name is the Core number', async () => {
+    const bo = new FakeBackOffice({ nextInvoiceNumber: async () => 'X', seller: async () => ({ name: 'S', vatNumber: null, vatRegistered: false }) });
+    expect(await bo.upsertProject({ coreId: 'p', name: 'PRJ-0009', status: 'active' })).toEqual({ erpName: 'PRJ-0009' });
+    expect(await bo.upsertProject({ coreId: 'p', name: 'PRJ-0009', status: 'cancelled' })).toEqual({ erpName: 'PRJ-0009' });
+  });
+});

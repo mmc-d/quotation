@@ -233,6 +233,21 @@ export interface LandedCostPayload {
   basis: string;
 }
 
+/** ERPNext Project, so stock entries / POs / receipts can carry `project` (upserted by Core id). */
+export interface ProjectPayload {
+  coreId: string;
+  /** Project name in ERPNext (Core project number, e.g. PRJ-0001) */
+  name: string;
+  /** human title (kept in the Project notes) */
+  title?: string | null;
+  /** ERPNext Customer name of the project's customer, when synced */
+  customerErpName?: string | null;
+  /** Core status: active | on_hold | closed | cancelled */
+  status: string;
+  expectedStart?: string | null;
+  expectedEnd?: string | null;
+}
+
 export interface DocResult {
   erpName: string;
   /** ERP document number (in ERPNext the name is the number) */
@@ -251,6 +266,7 @@ export interface BackOfficePort {
   // Phase 5 — procurement & stock
   upsertSupplier(s: SupplierPayload): Promise<{ erpName: string }>;
   upsertWarehouse(w: WarehousePayload): Promise<{ erpName: string }>;
+  upsertProject(p: ProjectPayload): Promise<{ erpName: string }>;
   createPurchaseOrder(p: PurchaseOrderPayload): Promise<DocResult>;
   createPurchaseReceipt(p: ReceiptPayload): Promise<DocResult>;
   createPurchaseInvoice(p: SupplierBillPayload): Promise<DocResult>;

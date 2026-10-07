@@ -84,3 +84,63 @@ export interface SupplierItem {
   id: string; supplierId: string; productId: string; vendorSku: string | null; price: string | null; currency: string; moq: string | null; leadTimeDays: number | null;
   validUntil: string | null; preferred: boolean; supplierName: string; productCode: string; productName: string;
 }
+
+// ───────────────────────── RFQ (INV-65) and supplier e-invoice (INV-66) ─────────────────────────
+
+export interface RfqLine { productId: string | null; code: string; description?: string | null; qty: string }
+
+export interface RfqRow {
+  id: string; number: string; status: string; materialRequestId: string | null; dueDate: string | null; lines: RfqLine[]; supplierIds: string[];
+  awardedQuoteId: string | null; purchaseOrderId: string | null; notes: string | null; createdAt: string;
+  lineCount: number; supplierCount: number; quoteCount: number; materialRequestNumber: string | null; purchaseOrderNumber: string | null;
+}
+
+export interface SupplierQuote {
+  id: string; rfqId: string; supplierId: string; supplierName: string; currency: string; rateToSar: string; incoterm: string | null; leadTimeDays: number | null;
+  validUntil: string | null; landedPercent: string; lines: { code: string; qty: string; unitPrice: string | null; note?: string | null; quoted: boolean }[];
+  fileId: string | null; notes: string | null; updatedAt: string;
+}
+
+export interface RfqView extends Omit<RfqRow, 'lineCount' | 'supplierCount' | 'quoteCount' | 'materialRequestNumber' | 'purchaseOrderNumber'> {
+  createdByName: string | null;
+  materialRequest: { id: string; number: string; status: string; projectId: string | null } | null;
+  purchaseOrder: { id: string; number: string; status: string } | null;
+  suppliers: { id: string; nameAr: string; nameEn: string | null; email: string | null; phone: string | null; quoteId: string | null }[];
+  quotes: SupplierQuote[];
+  canSeePrices: boolean;
+}
+
+export interface Delivery { supplierId: string; supplierName: string; channel: 'email' | 'whatsapp' | 'none'; to: string | null; status: string; messageId: string | null; attachment: 'pdf' | 'html' | null; note?: string }
+
+export interface ComparisonOffer {
+  quoteId: string; supplierId: string; quoted: boolean; unitPrice: string | null; unitSar: string | null; landedUnitSar: string | null; landedSar: string | null; leadTimeDays: number | null; best: boolean; note: string | null;
+}
+
+export interface Comparison {
+  rfqId: string; number: string; status: string; awardedQuoteId: string | null;
+  lines: { code: string; description: string | null; productId: string | null; qty: string; offers: ComparisonOffer[]; bestSupplierId: string | null }[];
+  totals: {
+    quoteId: string; supplierId: string; supplierName: string; currency: string; rateToSar: string; landedPercent: string; incoterm: string | null; leadTimeDays: number | null; validUntil: string | null; expired: boolean;
+    goodsTotal: string; totalSar: string; landedTotalSar: string; quotedLines: number; missingLines: number; bestLines: number; recommended: boolean;
+  }[];
+  recommended: { quoteId: string; supplierId: string; supplierName: string; landedTotalSar: string; leadTimeDays: number | null } | null;
+  reason: { ar: string; en: string } | null;
+}
+
+export interface XmlIssue { level: 'error' | 'warning'; code: string; ar: string; en: string }
+
+export interface XmlProposal {
+  ok: boolean;
+  fileId: string;
+  invoice: {
+    number: string; uuid: string | null; issueDate: string; typeCode: string; currency: string; vat: string; taxExclusive: string; taxInclusive: string; payable: string; hasQr: boolean;
+    supplier: { name: string | null; vatNumber: string | null }; customer: { name: string | null; vatNumber: string | null };
+  };
+  supplier: { id: string; nameAr: string; nameEn: string | null; vatNumber: string | null } | null;
+  purchaseOrders: { id: string; number: string; status: string; currency: string; subtotal: string | null; matchedLines: number; score: number }[];
+  orderId: string | null;
+  lines: { invoiceLineId: string; name: string; sellersItemId: string | null; qty: string; unitPrice: string; lineExtension: string; vatPercent: string | null; orderLineId: string | null; poLineCode: string | null; matchedBy: string | null; score: number }[];
+  totals: { taxExclusive: string; vat: string; taxInclusive: string; payable: string; currency: string };
+  bill: { supplierId: string; orderId: string; supplierInvoiceNo: string; billDate: string; currency: string; rateToSar?: string; vat: string; sourceXmlFileId: string; lines: { orderLineId: string; qty: string; unitPrice: string }[] } | null;
+  validation: XmlIssue[];
+}

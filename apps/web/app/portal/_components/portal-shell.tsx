@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Cpu, FileSignature, Home, Loader2, LogOut, ReceiptText, Wrench, FolderKanban } from 'lucide-react';
+import { Cpu, FileSignature, Home, LifeBuoy, Loader2, LogOut, ReceiptText, Wrench, FolderKanban } from 'lucide-react';
 import { clsx } from '@/components/ui';
 import { LanguageToggle, useI18n } from '@/lib/i18n';
 import { portalFetch, portalRetry, type PortalMe } from './portal-api';
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/portal/projects', ar: 'المشاريع', en: 'Projects', icon: FolderKanban },
   { href: '/portal/billing', ar: 'الفواتير والمدفوعات', en: 'Invoices & payments', short: ['الفواتير', 'Billing'], icon: ReceiptText },
   { href: '/portal/agreements', ar: 'عقود الصيانة', en: 'Agreements', short: ['العقود', 'Contracts'], icon: FileSignature },
+  { href: '/portal/help', ar: 'المساعدة', en: 'Help', icon: LifeBuoy },
 ] as const;
 
 export function usePortalMe() {
@@ -96,7 +97,7 @@ function SignedInShell({ children, pathname }: { children: ReactNode; pathname: 
 
       {/* phones: bottom tab bar */}
       <nav aria-label={bi('أقسام البوابة', 'Portal sections')} className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,.06)] backdrop-blur md:hidden">
-        <ul className="grid grid-cols-6">
+        <ul className="grid grid-cols-7">
           {NAV.map((n) => {
             const active = isActive(n.href, 'exact' in n && n.exact);
             const label = 'short' in n ? bi(n.short[0], n.short[1]) : bi(n.ar, n.en);

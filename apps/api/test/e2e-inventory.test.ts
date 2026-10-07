@@ -392,15 +392,19 @@ describe('stock count, 3-way match, ledger and cost visibility', () => {
   it('counts MAIN with one difference → accuracy < 1 and a count adjustment', async () => {
     const c = await store.post('/api/inventory/counts', { warehouseId: S.main.id });
     expect(c.number).toMatch(/^CNT-\d{4}$/);
-    const expected = Object.fromEntries(c.lines.map((l: any) => [l.code, l.expected]));
+    // other test files share this database and may leave stock in MAIN: assert on our products, and
+    // count everyone else's lines exactly as expected so only our one difference remains
+    const ours = c.lines.filter((l: any) => l.code.startsWith('INV-'));
+    const expected = Object.fromEntries(ours.map((l: any) => [l.code, l.expected]));
     expect(expected).toEqual({ 'INV-CABLE': '1', 'INV-PANEL': '2', 'INV-PSU': '13' });
+    const others = c.lines.filter((l: any) => !l.code.startsWith('INV-')).map((l: any) => ({ productId: l.productId, counted: l.expected }));
     await store.post('/api/inventory/counts', { warehouseId: S.main.id }, { expect: 409 });
-    await store.put(`/api/inventory/counts/${c.id}`, { lines: [{ productId: S.psu.id, counted: '12' }, { productId: S.cable.id, counted: '1' }] });
+    await store.put(`/api/inventory/counts/${c.id}`, { lines: [{ productId: S.psu.id, counted: '12' }, { productId: S.cable.id, counted: '1' }, ...others] });
     await store.post(`/api/inventory/counts/${c.id}/post`, {}, { expect: 400 }); // INV-PANEL not counted
     await store.put(`/api/inventory/counts/${c.id}`, { lines: [{ productId: S.panel.id, counted: '2' }] });
     const posted = await store.post(`/api/inventory/counts/${c.id}/post`);
     expect(posted.status).toBe('posted');
-    expect(Number(posted.accuracy)).toBeCloseTo(0.667, 3);
+    expect(Number(posted.accuracy)).toBeCloseTo((c.lines.length - 1) / c.lines.length, 3);
     expect(posted.moves).toHaveLength(1);
     expect(posted.moves[0]).toMatchObject({ kind: 'count', qty: '1.000', fromWarehouseId: S.main.id });
     expect((await stockOf(S.psu.id)).balances.find((b: any) => b.code === 'MAIN').qty).toBe('12.000');

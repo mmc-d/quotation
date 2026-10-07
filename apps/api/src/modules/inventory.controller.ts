@@ -22,8 +22,9 @@ import {
   postMove, quantities, reserve, syncReserved, takeReservation, userNameMap, visibleWarehouseIds,
 } from './inventory.service.js';
 import {
-  approverRank, approveBill, createBill, defaultRate, insertPoLines, landedMoves, loadPo, loadSupplier, poView, postLandedCost, purchaseOrderDoc, receiptView, receiptsOfShipment, receive, unlinkPoLines, writePoTotals,
+  approverRank, approveBill, createBill, createPurchaseOrder, defaultRate, insertPoLines, landedMoves, loadPo, loadSupplier, poView, postLandedCost, purchaseOrderDoc, receiptView, receiptsOfShipment, receive, unlinkPoLines, writePoTotals,
 } from './purchasing.service.js';
+import { deliverPurchaseOrder } from './rfq.service.js';
 
 /**
  * Inventory, procurement & imports (module 07) under /api/inventory. MMC Core keeps the stock ledger
@@ -77,7 +78,7 @@ const declarationSchema = z.object({ fasahNumber: zText(60).min(1), fasahDate: z
 const countLinesSchema = z.object({ lines: z.array(z.object({ productId: zUuid, counted: zQty0.nullable(), serials: z.array(zText(120)).max(5000).optional() })).max(5000) });
 const billSchema = z.object({
   supplierId: zUuid, orderId: zUuid, supplierInvoiceNo: zText(100).min(1), billDate: zDate, currency: z.enum(CURRENCIES).default('SAR'), rateToSar: zMoney.optional(),
-  lines: z.array(z.object({ orderLineId: zUuid, qty: zQty, unitPrice: zPrice })).min(1).max(500), vat: zPrice.default('0'), fileId: zUuid.nullish(), acceptException: z.boolean().optional(),
+  lines: z.array(z.object({ orderLineId: zUuid, qty: zQty, unitPrice: zPrice })).min(1).max(500), vat: zPrice.default('0'), fileId: zUuid.nullish(), acceptException: z.boolean().optional(), sourceXmlFileId: zUuid.nullish(),
 });
 
 type LineIn = z.infer<typeof lineIn>;
@@ -714,20 +715,7 @@ export class InventoryController {
   }
 
   private async createPo(tx: Tx, actor: RequestActor, b: Omit<PoInput, 'orderDate'> & { orderDate?: string | null }, materialRequestId: string | null) {
-    await loadSupplier(tx, b.supplierId);
-    if (b.projectId) await loadProjectRow(tx, b.projectId);
-    const rate = b.rateToSar ?? defaultRate(b.currency);
-    if (!rate || dec(rate).lte(0)) throw badRequest(`give the SAR rate for ${b.currency} (rateToSar)`);
-    const { number } = await nextNumber(tx, 'purchase_order');
-    const [po] = await tx.insert(purchaseOrder).values({
-      number, supplierId: b.supplierId, status: 'draft', currency: b.currency, rateToSar: rate, incoterm: b.incoterm ?? null, depositPercent: b.depositPercent, orderDate: b.orderDate ?? riyadhDate(),
-      expectedOn: b.expectedOn ?? null, projectId: b.projectId ?? null, materialRequestId, notes: b.notes ?? null, ownerId: actor.userId, createdBy: actor.userId, updatedBy: actor.userId,
-    }).returning();
-    await insertPoLines(tx, actor, po!, b.lines);
-    const t = await writePoTotals(tx, po!);
-    await audit(tx, actor, 'create', 'purchase_order', po!.id, null, { number, supplierId: b.supplierId, currency: b.currency, totalSar: halalasToFixed(t.totalSar), lines: b.lines.length });
-    await emit(tx, 'purchase_order', po!.id, 'purchase_order.created', { number });
-    return po!.id;
+    return createPurchaseOrder(tx, actor, b, materialRequestId);
   }
 
   @Get('purchase-orders/:id')
@@ -820,14 +808,15 @@ export class InventoryController {
 
   @Post('purchase-orders/:id/send')
   @Perm('purchase.write')
-  async poSend(@Actor() actor: RequestActor, @Param('id') id: string) {
+  async poSend(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ channel: z.enum(['auto', 'email', 'whatsapp', 'none']).optional() }).default({}))) b: { channel?: 'auto' | 'email' | 'whatsapp' | 'none' }) {
     return tenantTx(actor.tenantId, async (tx) => {
       const po = await loadPo(tx, actor, id, 'purchase.write');
       if (po.status !== 'approved') throw badRequest(`a ${po.status} purchase order cannot be sent`);
       await tx.update(purchaseOrder).set({ status: 'sent', updatedAt: new Date(), updatedBy: actor.userId, version: po.version + 1 }).where(eq(purchaseOrder.id, id));
-      await audit(tx, actor, 'send', 'purchase_order', id, { status: po.status }, { status: 'sent' });
-      await emit(tx, 'purchase_order', id, 'purchase_order.sent', { number: po.number });
-      return poView(tx, actor, id);
+      const delivery = await deliverPurchaseOrder(tx, actor, id, b.channel ?? 'auto');
+      await audit(tx, actor, 'send', 'purchase_order', id, { status: po.status }, { status: 'sent', delivery });
+      await emit(tx, 'purchase_order', id, 'purchase_order.sent', { number: po.number, channel: delivery.channel });
+      return { ...(await poView(tx, actor, id)), delivery };
     }, actor.userId);
   }
 

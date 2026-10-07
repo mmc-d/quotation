@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { halalasToFixed, toHalalas } from '@mmc/domain';
 import {
   BackOfficeError, type BackOfficePort, type CreateInvoicePayload, type CustomerPayload, type DocResult, type InvoiceResult, type ItemPayload, type LandedCostPayload, type PaymentResult,
-  type PurchaseOrderPayload, type ReceiptPayload, type RecordPaymentPayload, type StockEntryPayload, type SupplierBillPayload, type SupplierPayload, type WarehousePayload, type ZatcaStatus,
+  type ProjectPayload, type PurchaseOrderPayload, type ReceiptPayload, type RecordPaymentPayload, type StockEntryPayload, type SupplierBillPayload, type SupplierPayload, type WarehousePayload, type ZatcaStatus,
 } from './port.js';
 
 /**
@@ -389,6 +389,25 @@ export class ErpNextBackOffice implements BackOfficePort {
       warehouse_type: this.p5.warehouseTypes[w.kind],
     };
     return { erpName: await this.upsertByCoreId('Warehouse', w.coreId, doc) };
+  }
+
+  /**
+   * Project (by `mmc_core_id`): project_name = Core project number so documents can reference it;
+   * Core active/on_hold → Open, closed → Completed, cancelled → Cancelled.
+   */
+  async upsertProject(p: ProjectPayload) {
+    const status = p.status === 'closed' ? 'Completed' : p.status === 'cancelled' ? 'Cancelled' : 'Open';
+    const doc: Doc = {
+      project_name: p.name,
+      status,
+      is_active: status === 'Open' ? 'Yes' : 'No',
+      company: this.o.company,
+      customer: p.customerErpName ?? undefined,
+      expected_start_date: p.expectedStart ?? undefined,
+      expected_end_date: p.expectedEnd ?? undefined,
+      notes: p.title ?? undefined,
+    };
+    return { erpName: await this.upsertByCoreId('Project', p.coreId, doc) };
   }
 
   async createPurchaseOrder(p: PurchaseOrderPayload) {

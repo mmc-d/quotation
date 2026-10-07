@@ -33,6 +33,7 @@ export const NAV: NavGroup[] = [
       { href: '/service/agreements', label: 'عقود الصيانة', en: 'Service agreements', icon: 'ShieldCheck', perm: 'agreement.read' },
       { href: '/service/reports', label: 'تقارير الخدمة', en: 'Service reports', icon: 'Gauge', perm: 'agreement.read' },
       { href: '/iot', label: 'تنبيهات الأجهزة (IoT)', en: 'Device alerts (IoT)', icon: 'Radio', perm: 'asset.read' },
+      { href: '/kb', label: 'قاعدة المعرفة', en: 'Knowledge base', icon: 'BookOpen', perm: 'kb.read' },
       { href: '/tech', label: 'يومي (الفني)', en: 'My day (technician)', icon: 'Smartphone', perm: 'workorder.write' },
     ],
   },
@@ -40,6 +41,7 @@ export const NAV: NavGroup[] = [
     label: 'المشتريات والمخزون', en: 'Purchasing & stock', items: [
       { href: '/inventory', label: 'المخزون', en: 'Stock', icon: 'Warehouse', perm: 'inventory.read' },
       { href: '/purchasing/requests', label: 'طلبات المواد', en: 'Material requests', icon: 'ClipboardCheck', perm: 'purchase.read' },
+      { href: '/purchasing/rfqs', label: 'طلبات عروض الأسعار', en: 'RFQs', icon: 'FileQuestion', perm: 'purchase.read' },
       { href: '/purchasing/orders', label: 'أوامر الشراء', en: 'Purchase orders', icon: 'ShoppingCart', perm: 'purchase.read' },
       { href: '/purchasing/shipments', label: 'الشحنات المستوردة', en: 'Import shipments', icon: 'Ship', perm: 'purchase.read' },
       { href: '/inventory/transfers', label: 'التحويلات المخزنية', en: 'Stock transfers', icon: 'ArrowLeftRight', perm: 'inventory.write' },

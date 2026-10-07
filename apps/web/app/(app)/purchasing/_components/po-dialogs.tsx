@@ -1,7 +1,7 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileCode2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseSerialList } from '@mmc/domain';
 import { ApiError, api, qs } from '@/lib/api';
@@ -9,11 +9,11 @@ import { today } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useMe } from '@/lib/me';
 import { AttachmentPicker, type AttachmentMeta } from '@/components/attachments';
-import { Button, Checkbox, clsx, Dialog, Field, Input, Select, Table, Td, Textarea, Th } from '@/components/ui';
+import { Button, Card, Checkbox, clsx, Dialog, Field, Input, Select, Table, Td, Textarea, Th } from '@/components/ui';
 import { NumInput } from '../../quotes/_components/common';
 import { Amount, CURRENCIES, Ltr, WarningList, defaultRate, fixed, qty as fmtQty } from './common';
 import { WarehouseSelect } from './pickers';
-import type { BillRow, PoView, ReceiptView, ShipmentRow } from './types';
+import type { BillRow, PoView, ReceiptView, ShipmentRow, XmlIssue, XmlProposal } from './types';
 
 type Msg = { ar: string; en: string };
 
@@ -185,20 +185,85 @@ export function ReceiveDialog({ po, open, onClose, onDone }: { po: PoView; open:
 
 // ───────────────────────── supplier bill (3-way match) ─────────────────────────
 
-export function BillDialog({ po, open, onClose, onDone }: { po: PoView; open: boolean; onClose: () => void; onDone: (b: BillRow) => void }) {
+/**
+ * Read a supplier's ZATCA e-invoice (UBL 2.1 XML) in the browser and send its text to
+ * POST /inventory/bills/parse-xml — the API keeps the XML as a file and returns a bill proposal.
+ */
+export function useParseXml() {
+  return useMutation({
+    mutationFn: async (v: { file: File; orderId?: string; supplierId?: string }) => {
+      if (v.file.size > 2_000_000) throw new Error('XML > 2 MB');
+      const xml = await v.file.text();
+      return api.post<XmlProposal>('/inventory/bills/parse-xml', { xml, orderId: v.orderId ?? null, supplierId: v.supplierId ?? null });
+    },
+  });
+}
+
+export function XmlFileButton({ onFile, loading, label }: { onFile: (f: File) => void; loading?: boolean; label?: string }) {
+  const { bi } = useI18n();
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept=".xml,application/xml,text/xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+      <Button type="button" variant="outline" size="sm" icon={<FileCode2 className="size-4" />} loading={loading} onClick={() => ref.current?.click()}>{label ?? bi('استيراد فاتورة إلكترونية (XML)', 'Import supplier e-invoice (XML)')}</Button>
+    </>
+  );
+}
+
+/** Validation list of a parsed e-invoice: errors (red) and warnings (amber). */
+export function XmlIssues({ issues }: { issues: XmlIssue[] }) {
+  const { bi } = useI18n();
+  const errors = issues.filter((i) => i.level === 'error');
+  const warnings = issues.filter((i) => i.level === 'warning');
+  return (
+    <>
+      <WarningList tone="red" title={bi('أخطاء في الفاتورة الإلكترونية — لم تُعبّأ البيانات', 'E-invoice errors — the form was not filled')} items={errors} />
+      <WarningList title={bi('ملاحظات على الفاتورة الإلكترونية', 'E-invoice warnings')} items={warnings} />
+    </>
+  );
+}
+
+type BillVals = Record<string, { qty: string; unitPrice: string }>;
+
+export function BillDialog({ po, open, onClose, onDone, prefill }: { po: PoView; open: boolean; onClose: () => void; onDone: (b: BillRow) => void; prefill?: XmlProposal | null }) {
   const { bi } = useI18n();
   const { can } = useMe();
-  const [invoiceNo, setInvoiceNo] = useState('');
-  const [billDate, setBillDate] = useState(today());
-  const [currency, setCurrency] = useState(po.currency);
-  const [rate, setRate] = useState(po.rateToSar);
-  const [vat, setVat] = useState('0');
+  const usable = (p: XmlProposal | null | undefined) => (p && p.ok && p.bill && p.bill.orderId === po.id ? p.bill : null);
+  const pre = usable(prefill);
+  const [invoiceNo, setInvoiceNo] = useState(pre?.supplierInvoiceNo ?? '');
+  const [billDate, setBillDate] = useState(pre?.billDate ?? today());
+  const [currency, setCurrency] = useState(pre?.currency ?? po.currency);
+  const [rate, setRate] = useState(pre ? pre.rateToSar ?? (pre.currency === po.currency ? po.rateToSar : defaultRate(pre.currency)) : po.rateToSar);
+  const [vat, setVat] = useState(pre?.vat ?? '0');
   const [file, setFile] = useState<AttachmentMeta[]>([]);
   const [accept, setAccept] = useState(false);
-  const [vals, setVals] = useState<Record<string, { qty: string; unitPrice: string }>>(() => Object.fromEntries(po.lines.map((l) => {
+  const [xmlFileId, setXmlFileId] = useState<string | null>(pre?.sourceXmlFileId ?? null);
+  const [xmlIssues, setXmlIssues] = useState<XmlIssue[]>(prefill?.validation ?? []);
+  const fromBill = (b: NonNullable<XmlProposal['bill']>): BillVals => Object.fromEntries(po.lines.map((l) => {
+    const m = b.lines.find((x) => x.orderLineId === l.id);
+    return [l.id, { qty: m ? String(Number(m.qty)) : '0', unitPrice: m ? String(Number(m.unitPrice)) : l.unitPrice === null ? '' : String(Number(l.unitPrice)) }];
+  }));
+  const [vals, setVals] = useState<BillVals>(() => (pre ? fromBill(pre) : Object.fromEntries(po.lines.map((l) => {
     const left = Math.max(0, Number(l.receivedQty) - Number(l.billedQty));
     return [l.id, { qty: String(left), unitPrice: l.unitPrice === null ? '' : String(Number(l.unitPrice)) }];
-  })));
+  }))));
+  const parse = useParseXml();
+  const importXml = (f: File) => parse.mutate({ file: f, orderId: po.id, supplierId: po.supplierId }, {
+    onSuccess: (p) => {
+      setXmlIssues(p.validation);
+      const b = usable(p);
+      if (!b) {
+        if (p.ok) toast.error(bi('الفاتورة لا تخص هذا المورد أو أمر الشراء', 'The invoice is not for this supplier / purchase order'));
+        else toast.error(bi('الفاتورة الإلكترونية فيها أخطاء', 'The e-invoice has errors'));
+        return;
+      }
+      setInvoiceNo(b.supplierInvoiceNo); setBillDate(b.billDate); setCurrency(b.currency);
+      setRate(b.rateToSar ?? (b.currency === po.currency ? po.rateToSar : defaultRate(b.currency)));
+      setVat(b.vat); setVals(fromBill(b)); setXmlFileId(b.sourceXmlFileId);
+      toast.success(bi(`تمت تعبئة الفاتورة ${b.supplierInvoiceNo} من الملف`, `Filled from e-invoice ${b.supplierInvoiceNo}`));
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
   const set = (id: string, patch: Partial<{ qty: string; unitPrice: string }>) => setVals((v) => ({ ...v, [id]: { ...v[id]!, ...patch } }));
   const onCurrency = (c: string) => { setCurrency(c); setRate(c === po.currency ? po.rateToSar : defaultRate(c)); };
 
@@ -216,7 +281,7 @@ export function BillDialog({ po, open, onClose, onDone }: { po: PoView; open: bo
     mutationFn: () => api.post<BillRow>('/inventory/bills', {
       supplierId: po.supplierId, orderId: po.id, supplierInvoiceNo: invoiceNo.trim(), billDate, currency, ...(rate ? { rateToSar: rate } : {}),
       lines: chosen.map((l) => ({ orderLineId: l.id, qty: fixed(Number(vals[l.id]!.qty), 3), unitPrice: fixed(Number(vals[l.id]!.unitPrice), 4) })),
-      vat: fixed(Number(vat) || 0, 2), fileId: file[0]?.id ?? null, acceptException: issues.length > 0 && accept ? true : undefined,
+      vat: fixed(Number(vat) || 0, 2), fileId: file[0]?.id ?? null, sourceXmlFileId: xmlFileId, acceptException: issues.length > 0 && accept ? true : undefined,
     }),
     onSuccess: (b) => {
       if (b.matchStatus === 'exception' && b.status === 'draft') toast.warning(bi(`سُجّلت الفاتورة ${b.number} كمسودة باستثناء مطابقة — تحتاج اعتمادًا`, `Bill ${b.number} saved as a draft with a match exception — needs approval`));
@@ -230,6 +295,11 @@ export function BillDialog({ po, open, onClose, onDone }: { po: PoView; open: bo
     <Dialog wide open={open} onClose={onClose} title={<>{bi('فاتورة مورد', 'Supplier bill')} — <span dir="ltr" className="num">{po.number}</span></>}
       footer={<><Button variant="outline" onClick={onClose}>{bi('إلغاء', 'Cancel')}</Button><Button disabled={!valid} loading={save.isPending} onClick={() => save.mutate()}>{bi('تسجيل الفاتورة', 'Record bill')}</Button></>}>
       <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-line bg-tint/40 px-3 py-2">
+          <span className="text-xs text-muted">{xmlFileId ? bi('مرتبطة بملف الفاتورة الإلكترونية (XML) — سيُحفظ مع الفاتورة', 'Linked to the e-invoice XML — kept with the bill') : bi('فاتورة مورد سعودي؟ استورد ملف XML لتعبئة البيانات تلقائيًا', 'Saudi supplier? Import the XML e-invoice to fill the form')}</span>
+          <XmlFileButton onFile={importXml} loading={parse.isPending} />
+        </div>
+        <XmlIssues issues={xmlIssues} />
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label={bi('رقم فاتورة المورد *', 'Supplier invoice no. *')} className="sm:col-span-2"><Input dir="ltr" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} /></Field>
           <Field label={bi('تاريخ الفاتورة', 'Bill date')} className="sm:col-span-2"><Input type="date" dir="ltr" value={billDate} onChange={(e) => setBillDate(e.target.value)} /></Field>
@@ -282,6 +352,86 @@ export function BillDialog({ po, open, onClose, onDone }: { po: PoView; open: bo
               <p className="text-xs text-muted">{bi('ستُسجَّل الفاتورة كمسودة باستثناء حتى يعتمدها صاحب صلاحية الاعتماد.', 'The bill will be saved as a draft exception until someone with approval rights accepts it.')}</p>
             )}
           </div>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
+// ───────────────────────── supplier e-invoice import (from the orders list) ─────────────────────────
+
+/** Parse an e-invoice first, show what was matched, then open the matched PO's bill dialog prefilled. */
+export function EInvoiceImportDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (b: BillRow) => void }) {
+  const { bi, locale } = useI18n();
+  const parse = useParseXml();
+  const [p, setP] = useState<XmlProposal | null>(null);
+  const [orderId, setOrderId] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const po = useQuery({ queryKey: ['po', orderId], queryFn: () => api.get<PoView>(`/inventory/purchase-orders/${orderId}`), enabled: !!orderId && !!p });
+  const [billOpen, setBillOpen] = useState(false);
+  const run = (f: File, oid?: string) => {
+    setFile(f);
+    parse.mutate({ file: f, orderId: oid }, {
+      onSuccess: (r) => { setP(r); setOrderId(r.orderId ?? ''); },
+      onError: (e) => toast.error((e as Error).message),
+    });
+  };
+  const errors = p?.validation.filter((i) => i.level === 'error') ?? [];
+  if (billOpen && po.data && p) return <BillDialog po={po.data} open prefill={p} onClose={() => setBillOpen(false)} onDone={onDone} />;
+  return (
+    <Dialog wide open={open} onClose={onClose} title={bi('استيراد فاتورة مورد إلكترونية (XML)', 'Import a supplier e-invoice (XML)')}
+      footer={<>
+        <Button variant="outline" onClick={onClose}>{bi('إغلاق', 'Close')}</Button>
+        <Button disabled={!p || !p.ok || !p.supplier || !orderId || !po.data} loading={po.isFetching} onClick={() => setBillOpen(true)}>{bi('تسجيل الفاتورة على أمر الشراء', 'Record the bill on the PO')}</Button>
+      </>}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <XmlFileButton onFile={(f) => run(f)} loading={parse.isPending} label={file ? bi('اختيار ملف آخر', 'Choose another file') : undefined} />
+          {file && <span dir="ltr" className="num truncate text-xs text-muted">{file.name}</span>}
+        </div>
+        <p className="text-xs leading-relaxed text-muted">{bi('يُقرأ الملف ويُتحقق منه (الرقم الضريبي للمورد، حساب الضريبة، الإجماليات، رمز QR) دون تسجيل أي قيد. ملفات DTD/ENTITY مرفوضة.', 'The file is read and checked (supplier VAT, VAT arithmetic, totals, QR) without booking anything. DTD/ENTITY files are refused.')}</p>
+        {p && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card title={bi('الفاتورة', 'Invoice')}>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-3"><dt className="text-muted">{bi('الرقم', 'Number')}</dt><dd dir="ltr" className="num font-bold">{p.invoice.number}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">{bi('التاريخ', 'Date')}</dt><dd dir="ltr" className="num">{p.invoice.issueDate}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">{bi('المورد', 'Supplier')}</dt><dd>{p.invoice.supplier.name} <span dir="ltr" className="num text-xs text-muted">{p.invoice.supplier.vatNumber}</span></dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">{bi('قبل الضريبة', 'Excl. VAT')}</dt><dd><Amount value={p.totals.taxExclusive} currency={p.totals.currency} /></dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-muted">{bi('الضريبة', 'VAT')}</dt><dd><Amount value={p.totals.vat} currency={p.totals.currency} /></dd></div>
+                  <div className="flex justify-between gap-3 border-t border-line pt-1 font-extrabold"><dt>{bi('الإجمالي', 'Total')}</dt><dd><Amount value={p.totals.taxInclusive} currency={p.totals.currency} /></dd></div>
+                </dl>
+              </Card>
+              <Card title={bi('المطابقة', 'Matching')}>
+                <div className="space-y-2 text-sm">
+                  <div>{bi('المورد في النظام', 'Supplier on file')}: {p.supplier ? <b>{locale === 'en' ? p.supplier.nameEn || p.supplier.nameAr : p.supplier.nameAr}</b> : <span className="font-bold text-danger">{bi('غير موجود', 'Not found')}</span>}</div>
+                  <Field label={bi('أمر الشراء', 'Purchase order')}>
+                    <Select value={orderId} onChange={(e) => { setOrderId(e.target.value); if (file && e.target.value) run(file, e.target.value); }} disabled={!p.purchaseOrders.length}>
+                      <option value="">{p.purchaseOrders.length ? '—' : bi('لا توجد أوامر مفتوحة', 'No open orders')}</option>
+                      {p.purchaseOrders.map((o) => <option key={o.id} value={o.id}>{o.number} · {bi(`${o.matchedLines} بند مطابق`, `${o.matchedLines} line(s) matched`)}</option>)}
+                    </Select>
+                  </Field>
+                </div>
+              </Card>
+            </div>
+            <Table>
+              <thead><tr><Th>#</Th><Th>{bi('بند الفاتورة', 'Invoice line')}</Th><Th className="text-end">{bi('الكمية', 'Qty')}</Th><Th className="text-end">{bi('سعر الوحدة', 'Unit price')}</Th><Th>{bi('بند أمر الشراء', 'PO line')}</Th></tr></thead>
+              <tbody>
+                {p.lines.map((l) => (
+                  <tr key={l.invoiceLineId}>
+                    <Td><Ltr>{l.invoiceLineId}</Ltr></Td>
+                    <Td><div className="text-sm">{l.name}</div>{l.sellersItemId && <div dir="ltr" className="num text-xs text-muted">{l.sellersItemId}</div>}</Td>
+                    <Td className="text-end"><Ltr>{fmtQty(l.qty)}</Ltr></Td>
+                    <Td className="text-end"><Amount value={l.unitPrice} currency={p.totals.currency} /></Td>
+                    <Td>{l.poLineCode ? <Ltr className="font-bold">{l.poLineCode}</Ltr> : <span className="text-xs font-bold text-danger">{bi('غير مطابق', 'Unmatched')}</span>}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            {errors.length > 0 && <p className="text-xs font-bold text-danger">{bi('لا يمكن تسجيل فاتورة فيها أخطاء — راجع المورد.', 'An invoice with errors cannot be recorded — check with the supplier.')}</p>}
+            <XmlIssues issues={p.validation} />
+          </>
         )}
       </div>
     </Dialog>

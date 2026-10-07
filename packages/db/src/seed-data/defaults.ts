@@ -53,6 +53,18 @@ export const DEFAULT_MESSAGE_TEMPLATES = [
   // Phase 7c — IoT alarm → service ticket (also ensured at runtime by the API)
   { key: 'iot_alert', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_iot_alert', variables: ['name', 'device', 'number'],
     body: 'مرحبًا {{name}}، رصدت منظومة المراقبة لدى المدى المبارك تنبيهًا في الجهاز {{device}}. تم فتح طلب الصيانة رقم {{number}} وسيتواصل معكم فريق الدعم الفني.' },
+  // FSM-84 — staff reply on a service call (also ensured at runtime by the API)
+  { key: 'ticket_reply', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_ticket_reply', variables: ['name', 'number', 'reply', 'link'],
+    body: 'مرحبًا {{name}}، رد فريق خدمة المدى المبارك على طلبكم رقم {{number}}: {{reply}} — للمتابعة: {{link}}' },
   { key: 'quote_sent', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'number', 'link'],
     body: 'مرحبًا {{name}}،\n\nعرض السعر رقم {{number}} جاهز للاطلاع والقبول:\n{{link}}\n\nمع التحية،\nالمدى المبارك للتجارة والحلول الذكية' },
+  // Purchasing — RFQ to suppliers and the purchase order (also ensured at runtime by the API, rfq.service.ts)
+  { key: 'rfq_request', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_rfq_request', variables: ['name', 'company', 'number', 'items', 'due'],
+    body: 'مرحبًا {{name}}، تطلب {{company}} عرض سعر لطلب عروض الأسعار رقم {{number}} ({{items}} بنود) قبل {{due}}: السعر والعملة وشروط التسليم ومدة التوريد.\nDear supplier, {{company}} requests your quotation for RFQ {{number}} ({{items}} items) by {{due}}: price, currency, Incoterm and lead time.' },
+  { key: 'rfq_request', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'company', 'number', 'items', 'due', 'lines'],
+    body: 'مرحبًا {{name}}،\n\nنرجو تزويدنا بعرض سعر لطلب عروض الأسعار رقم {{number}} قبل {{due}} (المستند مرفق):\n{{lines}}\n\nيرجى ذكر سعر الوحدة والعملة وشروط التسليم (Incoterm) ومدة التوريد وصلاحية العرض.\n\nDear {{name}},\n\nPlease send your quotation for RFQ {{number}} ({{items}} items, document attached) by {{due}}, stating unit price, currency, Incoterm, lead time and validity.\n\n{{company}}' },
+  { key: 'purchase_order', channel: 'whatsapp', category: 'utility', language: 'ar', providerTemplateName: 'mmc_purchase_order', variables: ['name', 'company', 'number', 'total'],
+    body: 'مرحبًا {{name}}، أصدرت {{company}} أمر الشراء رقم {{number}} بإجمالي {{total}}. نرجو تأكيد الاستلام وموعد التوريد.\nDear supplier, {{company}} has issued purchase order {{number}} ({{total}}). Please confirm receipt and the delivery date.' },
+  { key: 'purchase_order', channel: 'email', category: 'utility', language: 'ar', providerTemplateName: null, variables: ['name', 'company', 'number', 'total'],
+    body: 'مرحبًا {{name}}،\n\nمرفق أمر الشراء رقم {{number}} بإجمالي {{total}}. نرجو تأكيد الاستلام وموعد التوريد.\n\nDear {{name}},\n\nPlease find attached purchase order {{number}} ({{total}}). Kindly confirm receipt and the delivery date.\n\n{{company}}' },
 ];

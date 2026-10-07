@@ -32,17 +32,17 @@ export const PERM_GROUP_AR: Record<string, string> = {
   admin: 'الإدارة', party: 'العملاء والموردون', product: 'المنتجات', quote: 'عروض الأسعار', contract: 'العقود',
   lead: 'العملاء المحتملون', opportunity: 'الفرص', activity: 'المهام والأنشطة', message: 'الرسائل',
   billing: 'طلبات الدفع', invoice: 'الفواتير', payment: 'المدفوعات', report: 'التقارير',
-  project: 'المشاريع', asset: 'الأجهزة المركبة', workorder: 'أوامر العمل', ticket: 'بلاغات الأعطال', agreement: 'عقود الصيانة', portal: 'بوابة العملاء',
+  project: 'المشاريع', asset: 'الأجهزة المركبة', workorder: 'أوامر العمل', ticket: 'بلاغات الأعطال', agreement: 'عقود الصيانة', portal: 'بوابة العملاء', kb: 'قاعدة المعرفة',
   inventory: 'المخزون', purchase: 'المشتريات', ai: 'الذكاء الاصطناعي',
 };
 export const PERM_GROUP_EN: Record<string, string> = {
   admin: 'Administration', party: 'Customers & suppliers', product: 'Products', quote: 'Quotations', contract: 'Contracts',
   lead: 'Leads', opportunity: 'Opportunities', activity: 'Tasks & activities', message: 'Messages',
   billing: 'Payment requests', invoice: 'Invoices', payment: 'Payments', report: 'Reports',
-  project: 'Projects', asset: 'Installed devices', workorder: 'Work orders', ticket: 'Service calls', agreement: 'Service agreements', portal: 'Customer portal',
+  project: 'Projects', asset: 'Installed devices', workorder: 'Work orders', ticket: 'Service calls', agreement: 'Service agreements', portal: 'Customer portal', kb: 'Knowledge base',
   inventory: 'Inventory', purchase: 'Purchasing', ai: 'AI',
 };
-export const PERM_GROUP_ORDER = ['admin', 'party', 'product', 'quote', 'contract', 'lead', 'opportunity', 'activity', 'message', 'billing', 'invoice', 'payment', 'report', 'project', 'asset', 'workorder', 'ticket', 'agreement', 'portal', 'inventory', 'purchase', 'ai'];
+export const PERM_GROUP_ORDER = ['admin', 'party', 'product', 'quote', 'contract', 'lead', 'opportunity', 'activity', 'message', 'billing', 'invoice', 'payment', 'report', 'project', 'asset', 'workorder', 'ticket', 'agreement', 'portal', 'kb', 'inventory', 'purchase', 'ai'];
 
 export const PERM_AR: Record<string, string> = {
   'admin.users': 'إدارة المستخدمين', 'admin.roles': 'تعديل الأدوار والصلاحيات', 'admin.settings': 'إعدادات المنشأة', 'admin.audit': 'سجل التدقيق',
@@ -64,6 +64,7 @@ export const PERM_AR: Record<string, string> = {
   'ticket.read': 'عرض البلاغات', 'ticket.write': 'تسجيل ومعالجة البلاغات',
   'agreement.read': 'عرض عقود الصيانة', 'agreement.write': 'إنشاء وإدارة عقود الصيانة',
   'portal.manage': 'إدارة حسابات بوابة العملاء',
+  'kb.read': 'عرض قاعدة المعرفة', 'kb.write': 'كتابة ونشر مقالات المعرفة والردود الجاهزة المشتركة',
   'iot.manage': 'إدارة تكامل IoT (محاكاة التنبيهات والأجهزة غير المربوطة)', 'commission.read': 'عرض العمولات والحوافز', 'commission.manage': 'إدارة خطط العمولة وصرفها',
   'ai.use': 'استخدام الذكاء الاصطناعي (اقتراحات، صياغة، ترجمة، مفاتيح MCP)', 'ai.approve': 'اعتماد مقترحات الذكاء الاصطناعي (إنشاء عرض من جدول الكميات)',
   'inventory.read': 'عرض المخزون', 'inventory.write': 'الحركات المخزنية والتحويلات', 'inventory.count': 'الجرد والتسويات',
@@ -90,6 +91,7 @@ export const PERM_EN: Record<string, string> = {
   'ticket.read': 'View service calls', 'ticket.write': 'Log & handle service calls',
   'agreement.read': 'View service agreements', 'agreement.write': 'Create & manage service agreements',
   'portal.manage': 'Manage customer portal accounts',
+  'kb.read': 'View the knowledge base', 'kb.write': 'Write & publish articles and shared canned replies',
   'iot.manage': 'Manage the IoT integration (simulate alarms, unbound devices)', 'commission.read': 'View commissions & incentives', 'commission.manage': 'Manage & pay out commission plans',
   'ai.use': 'Use AI (suggestions, drafting, translation, MCP tokens)', 'ai.approve': 'Approve AI suggestions (create a quote from a BOQ)',
   'inventory.read': 'View stock', 'inventory.write': 'Stock moves & transfers', 'inventory.count': 'Stock counts & adjustments',

@@ -23,6 +23,7 @@ const MESSAGES: [RegExp, string, string][] = [
   [/choose one of the listed accounts/i, 'اختر إحدى الجهات المعروضة.', 'Choose one of the listed accounts.'],
   [/device is on another site/i, 'الجهاز المختار في موقع آخر — غيّر الموقع أو الجهاز.', 'The selected device is on another site — change the site or the device.'],
   [/photo must be an image/i, 'كل صورة يجب ألا تتجاوز 1.5 ميجابايت.', 'Each photo must be at most 1.5 MB.'],
+  [/more than 7 days ago|request is closed/i, 'هذا الطلب مغلق — يُرجى فتح طلب جديد.', 'This request is closed — please open a new request.'],
   [/validation failed/i, 'بعض البيانات غير مكتملة أو غير صحيحة — راجع الحقول.', 'Some details are missing or invalid — please check the fields.'],
   [/already been rated/i, 'تم تقييم هذه الزيارة مسبقًا.', 'This visit has already been rated.'],
   [/score must be/i, 'اختر تقييمًا من 1 إلى 5.', 'Choose a rating from 1 to 5.'],
@@ -124,6 +125,22 @@ export interface PortalTicketDetail extends PortalTicket {
   timeline: { at: string; kind: 'opened' | 'status' | 'reply'; status?: string; note?: string; ar: string; en: string }[];
   workOrders: PortalWorkOrder[];
   photos: { id: string; filename: string; mime: string; size: number; url: string }[];
+  /** conversation (never internal notes) */
+  messages?: PortalMessage[];
+  /** false when closed, or resolved more than 7 days ago (open a new request instead) */
+  canMessage?: boolean;
+}
+
+export interface PortalMessage {
+  id: string; author: 'staff' | 'customer' | 'system' | string; authorName: string | null; body: string; createdAt: string;
+  files: { id: string; filename: string; mime: string; url: string }[];
+}
+
+export interface PortalKbSummary { id: string; slug: string; titleAr: string; titleEn: string | null; excerptAr: string; excerptEn: string | null; hasVideo: boolean; updatedAt: string }
+export interface PortalKbArticle {
+  id: string; slug: string; titleAr: string; titleEn: string | null; bodyAr: string; bodyEn: string | null; tags: string[]; videoUrl: string | null; updatedAt: string;
+  products: { id: string; code: string; nameAr: string; nameEn: string | null }[];
+  files: { id: string; filename: string; mime: string; size: number; url: string }[];
 }
 
 export type ClockLevel = 'not_started' | 'ok' | 'warn70' | 'warn90' | 'overdue' | 'stopped';

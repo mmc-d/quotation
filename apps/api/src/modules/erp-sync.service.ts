@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PgBoss } from 'pg-boss';
 import {
-  and, asc, desc, eq, erpLink, goodsReceipt, goodsReceiptLine, importShipment, inArray, isNotNull, isNull, party, product, project, purchaseOrder, purchaseOrderLine,
+  and, asc, desc, eq, erpLink, goodsReceipt, goodsReceiptLine, importShipment, inArray, isNotNull, isNull, or, party, product, project, purchaseOrder, purchaseOrderLine,
   site, sql, stockMove, supplierBill, syncReconciliationRun, tenant, warehouse, withTenant, type Tx,
 } from '@mmc/db';
 import { dec, riyadhDate } from '@mmc/domain';
@@ -14,7 +14,7 @@ import { config } from '../config.js';
  * Push Phase 5 operational records to the back office (ERPNext) through the BackOfficePort — Core
  * never keeps a general ledger (owner decision 2026-10-06). Records go in dependency order:
  *
- *   warehouses → suppliers → purchase orders (approved+) → goods receipts → supplier bills (approved)
+ *   warehouses → suppliers → projects (referenced by pending documents) → purchase orders (approved+) → goods receipts → supplier bills (approved)
  *   → stock entries (grouped stock moves) → landed cost vouchers
  *
  * Items are pushed on demand when a document references a product without `erpName`.
@@ -22,6 +22,8 @@ import { config } from '../config.js';
  * Where the result is written back:
  *  - warehouse / purchase_order / goods_receipt / supplier_bill → their `erp_name` column;
  *  - supplier → `erp_link` (party, Supplier) — `party.erp_name` is already the ERPNext *Customer*;
+ *  - project → `erp_link` (project, Project); documents carry the ERP Project name from that link
+ *    (a project not pushed yet is upserted on demand — upsert by `mmc_core_id`, so always idempotent);
  *  - stock_move is append-only for the app role (UPDATE revoked), so every pushed move gets an
  *    `erp_link` row (stock_move, Stock Entry) instead; `checksum` holds the group key, so a group
  *    that failed is retried with exactly the same moves and idempotency key;
@@ -30,7 +32,7 @@ import { config } from '../config.js';
  * each run is recorded in `sync_reconciliation_run` (entity `erp_push`).
  */
 
-export const SYNC_TYPES = ['warehouse', 'supplier', 'purchase_order', 'goods_receipt', 'supplier_bill', 'stock_entry', 'landed_cost'] as const;
+export const SYNC_TYPES = ['warehouse', 'supplier', 'project', 'purchase_order', 'goods_receipt', 'supplier_bill', 'stock_entry', 'landed_cost'] as const;
 export type SyncType = (typeof SYNC_TYPES)[number];
 
 /** Purchase orders that exist for the supplier (approved or later). */
@@ -43,6 +45,7 @@ export const STOCK_ENTRY_KINDS = ['transfer', 'issue_project', 'consume_wo', 're
 const LINK = {
   warehouse: { entityType: 'warehouse', doctype: 'Warehouse' },
   supplier: { entityType: 'party', doctype: 'Supplier' },
+  project: { entityType: 'project', doctype: 'Project' },
   purchase_order: { entityType: 'purchase_order', doctype: 'Purchase Order' },
   goods_receipt: { entityType: 'goods_receipt', doctype: 'Purchase Receipt' },
   supplier_bill: { entityType: 'supplier_bill', doctype: 'Purchase Invoice' },
@@ -77,6 +80,17 @@ function pendingMovesWhere() {
   return and(inArray(stockMove.kind, STOCK_ENTRY_KINDS), sql`${stockMove.qty} <> 0`, sql`(${stockMove.fromWarehouseId} is not null or ${stockMove.toWarehouseId} is not null)`, sql`coalesce(${stockMove.refType}, '') <> 'landed_cost'`, notSynced('stock_entry', stockMove.id));
 }
 
+/** Projects referenced by documents still waiting to be pushed (POs, PO lines, receipts, stock moves). */
+function pendingProjectsWhere(tx: Tx) {
+  const openPo = and(isNull(purchaseOrder.erpName), inArray(purchaseOrder.status, PO_SYNC_STATUSES));
+  return and(notSynced('project', project.id), or(
+    inArray(project.id, tx.select({ id: purchaseOrder.projectId }).from(purchaseOrder).where(and(openPo, isNotNull(purchaseOrder.projectId)))),
+    inArray(project.id, tx.select({ id: purchaseOrderLine.projectId }).from(purchaseOrderLine).innerJoin(purchaseOrder, eq(purchaseOrder.id, purchaseOrderLine.orderId)).where(and(openPo, isNotNull(purchaseOrderLine.projectId)))),
+    inArray(project.id, tx.select({ id: purchaseOrder.projectId }).from(goodsReceipt).innerJoin(purchaseOrder, eq(purchaseOrder.id, goodsReceipt.orderId)).where(and(isNull(goodsReceipt.erpName), isNotNull(purchaseOrder.projectId)))),
+    inArray(project.id, tx.select({ id: stockMove.projectId }).from(stockMove).where(and(pendingMovesWhere(), isNotNull(stockMove.projectId)))),
+  ));
+}
+
 /** Pending counts per type (stock_entry = stock moves waiting, not documents). */
 export async function pendingCounts(tx: Tx): Promise<Record<SyncType, number>> {
   const c = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
@@ -84,6 +98,7 @@ export async function pendingCounts(tx: Tx): Promise<Record<SyncType, number>> {
   return {
     warehouse: await c(tx.select({ n }).from(warehouse).where(isNull(warehouse.erpName))),
     supplier: await c(tx.select({ n }).from(party).where(and(eq(party.isSupplier, true), notSynced('supplier', party.id)))),
+    project: await c(tx.select({ n }).from(project).where(pendingProjectsWhere(tx))),
     purchase_order: await c(tx.select({ n }).from(purchaseOrder).where(and(isNull(purchaseOrder.erpName), inArray(purchaseOrder.status, PO_SYNC_STATUSES)))),
     goods_receipt: await c(tx.select({ n }).from(goodsReceipt).where(isNull(goodsReceipt.erpName))),
     supplier_bill: await c(tx.select({ n }).from(supplierBill).where(and(isNull(supplierBill.erpName), inArray(supplierBill.status, BILL_SYNC_STATUSES)))),
@@ -110,7 +125,7 @@ class Waiting extends Error {}
 export async function syncPending(tx: Tx, tenantId: string, opts: { limit?: number } = {}): Promise<SyncResult> {
   const limit = Math.max(1, Math.min(opts.limit ?? 50, 500));
   const bo = backOffice(tenantId);
-  const res: SyncResult = { backOffice: bo.kind, pushed: { warehouse: 0, supplier: 0, purchase_order: 0, goods_receipt: 0, supplier_bill: 0, stock_entry: 0, landed_cost: 0 }, items: 0, errors: [] };
+  const res: SyncResult = { backOffice: bo.kind, pushed: { warehouse: 0, supplier: 0, project: 0, purchase_order: 0, goods_receipt: 0, supplier_bill: 0, stock_entry: 0, landed_cost: 0 }, items: 0, errors: [] };
   // one run per tenant at a time (cron + manual button)
   const [lock] = await tx.execute<{ ok: boolean }>(sql`select pg_try_advisory_xact_lock(hashtext(${`erp-sync:${tenantId}`})) as ok`);
   if (!lock?.ok) return { ...res, skipped: 'busy' };
@@ -164,15 +179,28 @@ export async function syncPending(tx: Tx, tenantId: string, opts: { limit?: numb
     if (!l) throw new Waiting(`waiting for supplier ${partyId} to sync`);
     return l.erpName;
   };
-  const projectNumbers = new Map<string, string>();
+  const pushProject = async (sp: Tx, p: typeof project.$inferSelect) => {
+    const [cust] = p.partyId ? await sp.select({ erpName: party.erpName }).from(party).where(eq(party.id, p.partyId)) : [];
+    const r = await bo.upsertProject({ coreId: p.id, name: p.number, title: p.name, customerErpName: cust?.erpName ?? null, status: p.status, expectedStart: p.plannedStart ?? p.clockStartedOn ?? null, expectedEnd: null });
+    await writeLink(sp, 'project', p.id, r);
+    return r.erpName;
+  };
+  const projectNames = new Map<string, string>();
+  /** ERP Project name of a Core project (from erp_link; upserted on demand when not pushed yet). */
   const projectName = async (sp: Tx, id: string | null | undefined) => {
     if (!id) return null;
-    if (!projectNumbers.has(id)) {
-      const [p] = await sp.select({ number: project.number }).from(project).where(eq(project.id, id));
-      projectNumbers.set(id, p?.number ?? '');
+    if (!projectNames.has(id)) {
+      const [l] = await sp.select({ erpName: erpLink.erpName }).from(erpLink).where(and(eq(erpLink.entityType, 'project'), eq(erpLink.erpDoctype, 'Project'), eq(erpLink.entityId, id), eq(erpLink.syncStatus, 'synced')));
+      let name = l?.erpName ?? '';
+      if (!name) {
+        const [p] = await sp.select().from(project).where(eq(project.id, id));
+        if (!p) throw new Waiting(`project ${id} not found`);
+        name = await pushProject(sp, p);
+        res.pushed.project++;
+      }
+      projectNames.set(id, name);
     }
-    // ERPNext Project is assumed to be named by the Core project number (see the status notes).
-    return projectNumbers.get(id) || null;
+    return projectNames.get(id) || null;
   };
 
   // 1. warehouses
@@ -195,6 +223,13 @@ export async function syncPending(tx: Tx, tenantId: string, opts: { limit?: numb
         currency: lastPo?.currency ?? (p.vatNumber ? 'SAR' : 'USD'), paymentTermsDays: p.paymentTermsDays, email: p.email, phone: p.phone,
       });
       await writeLink(sp, 'supplier', p.id, r);
+    });
+  }
+
+  // 2b. projects referenced by pending documents (before the documents that carry them)
+  for (const p of await tx.select().from(project).where(pendingProjectsWhere(tx)).orderBy(asc(project.createdAt)).limit(limit)) {
+    await step('project', p.id, p.number, async (sp) => {
+      projectNames.set(p.id, await pushProject(sp, p));
     });
   }
 
@@ -352,7 +387,7 @@ export async function syncStatus(tx: Tx, tenantId: string) {
     lastRun: last ? { at: last.runAt, status: last.status, pushed: last.erpCount, attempted: last.coreCount, detail: last.drift } : null,
     errors,
     notes: [
-      'Stock Entry rows reference ERPNext Projects by the Core project number — create Projects in ERPNext with those names (no project push yet).',
+      'Projects referenced by purchase orders, receipts and stock entries are upserted in ERPNext (by mmc_core_id, named by the Core project number) before those documents.',
       'Supplier links are kept in erp_link (party.erp_name is the ERPNext Customer).',
     ],
   };

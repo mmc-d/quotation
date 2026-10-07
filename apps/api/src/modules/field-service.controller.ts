@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@ne
 import type { Response } from 'express';
 import { z } from 'zod';
 import {
-  agreementVisit, and, asc, contact, desc, emit, eq, file, gte, ilike, inArray, installedAsset, isNull, lt, nextNumber, notification, or, party, project, serviceAgreement, site, siteLocation, sql, ticket, timeEntry, workOrder, type Tx,
+  agreementVisit, and, asc, contact, desc, emit, eq, file, gte, ilike, inArray, installedAsset, isNull, lt, nextNumber, notification, or, party, project, serviceAgreement, site, siteLocation, sql, ticket, ticketMessage, timeEntry, workOrder, type Tx,
 } from '@mmc/db';
 import { canTransitionWorkOrder, defaultChecklist, normalizeMac, normalizePhone, riyadhDate, TICKET_STATUSES, WORK_ORDER_TYPES, type WorkOrderStatus, type WorkOrderType } from '@mmc/domain';
 import { Actor, Perm, Public, type RequestActor } from '../auth/actor.js';
@@ -14,7 +14,8 @@ import { sendTemplate } from '../common/messaging.js';
 import { ZodPipe, zDate, zPage, zQty, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import { consumeForWorkOrder } from './inventory.service.js';
-import { markFirstResponse, sendCsatRequest, slaDue, slaFilter, ticketSla } from './service.service.js';
+import { deliverTicketReply, markFirstResponse, sendCsatRequest, slaDue, slaFilter, ticketSla } from './service.service.js';
+import { staffMessages } from './kb.service.js';
 import { syncAlarmsForTicket } from './iot.service.js';
 import {
   EDITABLE, LocationResolver, bookingWarnings, checkInGeofence, OPEN_WO, Rollback, assertAssetWrite, assignedTo, canWo, closeTimeEntries, coverageFor, decorateWorkOrders, duplicateAsset, ensureServiceReportTemplate, evidenceOf,
@@ -461,7 +462,7 @@ export class FieldServiceController {
     const [t] = await tx.select().from(ticket).where(eq(ticket.id, id));
     const [d] = await this.decorateTickets(tx, [t!]);
     const wos = await tx.select().from(workOrder).where(eq(workOrder.ticketId, id)).orderBy(desc(workOrder.createdAt));
-    return { ...d!, workOrders: await decorateWorkOrders(tx, wos.filter((w) => canWo(actor, 'workorder.read', w))) };
+    return { ...d!, workOrders: await decorateWorkOrders(tx, wos.filter((w) => canWo(actor, 'workorder.read', w))), messages: await staffMessages(tx, id) };
   }
 
   /** Resolve site/location/party from the asset when only the device is known; coverage from asset + site. */
@@ -541,17 +542,40 @@ export class FieldServiceController {
     }, actor.userId);
   }
 
-  /** Staff reply to the customer (shown on the portal timeline); the first one stops the SLA response clock. */
+  /**
+   * Staff reply to the customer: stored in the ticket conversation, visible on the portal (portal tickets)
+   * and sent by WhatsApp with the `ticket_reply` utility template; the first one stops the SLA response clock.
+   * `internal: true` makes it an internal note instead (never shown to the customer, no SLA effect).
+   */
   @Post('tickets/:id/respond')
   @Perm('ticket.write')
-  async respond(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ note: zText(2000).min(1) }))) b: { note: string }) {
+  async respond(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ note: zText(4000).min(1), internal: z.boolean().optional() }))) b: { note: string; internal?: boolean }) {
+    if (b.internal) return this.addNote(actor, id, b.note);
     return tenantTx(actor.tenantId, async (tx) => {
       const t = await loadTicket(tx, actor, id, 'ticket.write');
       if (t.status === 'closed') throw badRequest('the ticket is closed');
       await markFirstResponse(tx, id);
+      const via = await deliverTicketReply(tx, actor, t, b.note);
+      await tx.insert(ticketMessage).values({ ticketId: id, author: 'staff', authorUserId: actor.userId, body: b.note, internal: false, deliveredVia: via });
       await tx.update(ticket).set({ updatedAt: new Date(), updatedBy: actor.userId, version: t.version + 1 }).where(eq(ticket.id, id));
-      await audit(tx, actor, 'respond', 'ticket', id, null, { note: b.note });
+      await audit(tx, actor, 'respond', 'ticket', id, null, { note: b.note, deliveredVia: via });
       await emit(tx, 'ticket', id, 'ticket.responded', { number: t.number });
+      return this.ticketView(tx, actor, id);
+    }, actor.userId);
+  }
+
+  /** Internal note on the ticket conversation (staff only). */
+  @Post('tickets/:id/notes')
+  @Perm('ticket.write')
+  async note(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ note: zText(4000).min(1) }))) b: { note: string }) {
+    return this.addNote(actor, id, b.note);
+  }
+
+  private addNote(actor: RequestActor, id: string, note: string) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      await loadTicket(tx, actor, id, 'ticket.write');
+      await tx.insert(ticketMessage).values({ ticketId: id, author: 'staff', authorUserId: actor.userId, body: note, internal: true, deliveredVia: 'none' });
+      await audit(tx, actor, 'note', 'ticket', id, null, { internal: true });
       return this.ticketView(tx, actor, id);
     }, actor.userId);
   }

@@ -17,12 +17,14 @@ import { CalendarController } from './modules/calendar.controller.js';
 import { ProjectsController } from './modules/projects.controller.js';
 import { FieldServiceController } from './modules/field-service.controller.js';
 import { InventoryController } from './modules/inventory.controller.js';
+import { RfqController } from './modules/rfq.controller.js';
 import { ServiceController } from './modules/service.controller.js';
 import { PortalController } from './modules/portal.controller.js';
 import { InsightsController } from './modules/insights.controller.js';
 import { ErpSyncController } from './modules/erp-sync.controller.js';
 import { IotBindingController, IotController } from './modules/iot.controller.js';
 import { CommissionsController } from './modules/commissions.controller.js';
+import { KbController } from './modules/kb.controller.js';
 import { AiController } from './ai/ai.controller.js';
 import { McpController } from './ai/mcp.js';
 
@@ -31,8 +33,8 @@ import { McpController } from './ai/mcp.js';
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
-    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, ServiceController, PortalController, InsightsController, ErpSyncController,
-    IotController, IotBindingController, CommissionsController,
+    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
+    IotController, IotBindingController, CommissionsController, KbController,
     AiController, McpController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

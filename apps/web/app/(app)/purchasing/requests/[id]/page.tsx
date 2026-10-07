@@ -2,13 +2,13 @@
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ShoppingCart, XCircle } from 'lucide-react';
+import { CheckCircle2, FileQuestion, ShoppingCart, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { date } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useMe } from '@/lib/me';
-import { Button, Card, Empty, ErrorBox, PageHeader, Spinner, Table, Td, Th } from '@/components/ui';
+import { Button, Card, Empty, ErrorBox, LinkButton, PageHeader, Spinner, Table, Td, Th } from '@/components/ui';
 import { ConfirmDialog } from '../../../quotes/_components/common';
 import { Chip, Info, Ltr, MrStatusBadge, PoStatusBadge, RESERVATION_STATUS, WarningList, qty } from '../../_components/common';
 import { PoFromRequestDialog } from '../../_components/mr-dialogs';
@@ -59,6 +59,7 @@ export default function MaterialRequestPage({ params }: { params: Promise<{ id: 
         subtitle={mr.project ? <>{bi('المشروع', 'Project')}: <Link href={`/projects/${mr.project.id}`} className="font-bold text-primary hover:underline"><span dir="ltr" className="num">{mr.project.number}</span> — {mr.project.name}</Link></> : undefined}
         actions={<>
           {mr.status === 'draft' && can('purchase.approve') && <Button variant="outline" icon={<CheckCircle2 className="size-4" />} onClick={() => setConfirm('approve')}>{bi('اعتماد', 'Approve')}</Button>}
+          {open && hasOpen && can('purchase.write') && <LinkButton href={`/purchasing/rfqs/new?materialRequestId=${mr.id}`} icon={<FileQuestion className="size-4" />}>{bi('طلب عروض أسعار', 'Request quotations')}</LinkButton>}
           {open && hasOpen && can('purchase.write') && <Button icon={<ShoppingCart className="size-4" />} onClick={() => setOrdering(true)}>{bi('إنشاء أمر شراء', 'Create purchase order')}</Button>}
           {open && (can('purchase.write') || can('inventory.write')) && <Button variant="danger" icon={<XCircle className="size-4" />} onClick={() => setConfirm('cancel')}>{bi('إلغاء الطلب', 'Cancel request')}</Button>}
         </>}

@@ -10,6 +10,7 @@ import { useMe } from '@/lib/me';
 import { dateTime } from '@/lib/format';
 import { Badge, Button, Checkbox, clsx, Dialog, Empty, ErrorBox, Field, Input, Select, Spinner, StatusBadge, Textarea } from '@/components/ui';
 import { AiAssist } from '@/components/ai-assist';
+import { CannedReplies } from '@/components/canned-replies';
 import { UserSelect } from '@/components/user-select';
 import { useI18n } from '@/lib/i18n';
 import { INTEREST_LABELS, INTEREST_LABELS_EN, INTERESTS } from './labels';
@@ -237,6 +238,7 @@ function Thread({ id, row }: { id: string; row: ConvRow | null }) {
                 className="flex-1 resize-none"
               />
               <Button loading={reply.isPending} disabled={!text.trim()} icon={<Send className="size-4 rtl:-scale-x-100" />} aria-label={bi('إرسال', 'Send')}>{bi('إرسال', 'Send')}</Button>
+              <CannedReplies scope="inbox" conversationId={c.id} text={text} onInsert={(b, replace) => setText(replace || !text.trim() ? b : `${text}\n${b}`)} />
               <AiAssist context={c.channel === 'email' ? 'email' : 'whatsapp'} thread={c.messages.filter((m) => m.body).slice(-30).map((m) => `${m.direction === 'in' ? 'Customer' : 'Us'}: ${m.body}`).join('\n')} onInsert={setText} />
             </form>
           ) : (

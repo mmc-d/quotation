@@ -14,6 +14,7 @@ import { DevicesStep } from '../_components/devices';
 import { PartsStep } from '../_components/parts';
 import { SignatureStep } from '../_components/signature';
 import { OutboxBar, OutboxProvider, isOffline, useOutbox } from '../_components/outbox';
+import { TechHowTo } from '../../kb/_components/common';
 
 /** Section id for a `missing` key from the completion stage gate. */
 function sectionOf(key: string): string {
@@ -235,6 +236,9 @@ function TechJob({ id }: { id: string }) {
           {wa ? <a href={wa} target="_blank" rel="noopener noreferrer" className={clsx(tap, tapTone.outline, 'px-2 text-sm text-emerald-700')}><MessageCircle className="size-5" />{bi('واتساب', 'WhatsApp')}</a> : <span className={clsx(tap, tapTone.outline, 'px-2 text-sm opacity-40')}><MessageCircle className="size-5" />{bi('واتساب', 'WhatsApp')}</span>}
         </div>
       </Section>
+
+      {/* how-to articles for the job's device (knowledge base, internal + public) */}
+      {(wo.assetId ?? wo.assets[0]?.id) && <TechHowTo assetId={(wo.assetId ?? wo.assets[0]?.id)!} />}
 
       {/* 2 ── status actions ── */}
       {!done && (

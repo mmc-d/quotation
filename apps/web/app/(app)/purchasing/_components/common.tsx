@@ -26,6 +26,13 @@ export const MR_STATUS: L = {
   cancelled: ['ملغى', 'Cancelled', 'bg-gray-200 text-gray-500'],
 };
 
+export const RFQ_STATUS: L = {
+  draft: ['مسودة', 'Draft', 'bg-gray-100 text-gray-700'],
+  sent: ['مُرسل للموردين', 'Sent to suppliers', 'bg-indigo-100 text-indigo-800'],
+  closed: ['تمت الترسية', 'Awarded', 'bg-emerald-100 text-emerald-800'],
+  cancelled: ['ملغى', 'Cancelled', 'bg-gray-200 text-gray-500'],
+};
+
 export const SHIP_STATUS: L = {
   ordered: ['مطلوبة', 'Ordered', 'bg-gray-100 text-gray-700'],
   shipped: ['تم الشحن', 'Shipped', 'bg-indigo-100 text-indigo-800'],

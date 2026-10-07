@@ -12,8 +12,8 @@ import { sendTemplate } from '../common/messaging.js';
 import { ZodPipe, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
 import {
-  agreements, clientIp, createTicket, decide, device, devices, invoices, logout, me, paymentRequests, PORTAL_COOKIE, portalFile, projectDetail, projects, rateLimit, requestLoginCode, SESSION_DAYS,
-  ticketDetail, tickets, verifyLoginCode, withPortal, type PortalTicketInput,
+  addTicketMessage, agreements, clientIp, createTicket, decide, device, devices, invoices, kbArticleBySlug, kbFeedback, kbList, kbSuggest, logout, me, paymentRequests, PORTAL_COOKIE, portalFile, projectDetail, projects, rateLimit,
+  requestLoginCode, SESSION_DAYS, ticketDetail, tickets, verifyLoginCode, withPortal, type PortalMessageInput, type PortalTicketInput,
 } from './portal.service.js';
 import { ensureServiceTemplates } from './service.service.js';
 import { siteHealth } from './iot.service.js';
@@ -31,6 +31,8 @@ const ticketSchema = z.object({
   siteId: zUuid.nullish(), assetId: zUuid.nullish(), subject: zText(300).min(3), description: zText(5000).nullish(),
   photos: z.array(z.object({ name: zText(120).min(1), contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/heic']), data: z.string().min(1).max(2_100_000) })).max(3).optional(),
 });
+
+const messageSchema = z.object({ body: zText(4000).min(1), photos: ticketSchema.shape.photos });
 
 function setSessionCookie(res: Response, token: string) {
   res.cookie(PORTAL_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.env === 'production', path: '/', maxAge: SESSION_DAYS * 86_400_000 });
@@ -225,6 +227,40 @@ export class PortalController {
   @Get('tickets/:id')
   async ticket(@Req() req: Request, @Param('id') id: string) {
     return withPortal(req, (tx, c) => ticketDetail(tx, c, id));
+  }
+
+  /** Customer message on a request (+ up to 3 photos); reopens a request resolved within 7 days. */
+  @Public()
+  @Post('tickets/:id/messages')
+  async ticketMessage(@Req() req: Request, @Param('id') id: string, @Body(new ZodPipe(messageSchema)) b: PortalMessageInput) {
+    return withPortal(req, (tx, c) => addTicketMessage(tx, c, id, b));
+  }
+
+  // ───────────────────────── customer: knowledge base (published + public) ─────────────────────────
+
+  @Public()
+  @Get('kb')
+  async kb(@Req() req: Request, @Query(new ZodPipe(z.object({ q: z.string().max(200).optional(), productId: zUuid.optional() }))) q: { q?: string; productId?: string }) {
+    return withPortal(req, (tx) => kbList(tx, q.q, q.productId));
+  }
+
+  @Public()
+  @Get('kb/suggest')
+  async kbSuggest(@Req() req: Request, @Query(new ZodPipe(z.object({ assetId: zUuid }))) q: { assetId: string }) {
+    return withPortal(req, (tx, c) => kbSuggest(tx, c, q.assetId));
+  }
+
+  @Public()
+  @Get('kb/:slug')
+  async kbArticle(@Req() req: Request, @Param('slug') slug: string) {
+    return withPortal(req, (tx) => kbArticleBySlug(tx, slug));
+  }
+
+  @Public()
+  @Post('kb/:slug/feedback')
+  @HttpCode(200)
+  async kbFeedback(@Req() req: Request, @Param('slug') slug: string, @Body(new ZodPipe(z.object({ helpful: z.boolean() }))) b: { helpful: boolean }) {
+    return withPortal(req, (tx) => kbFeedback(tx, slug, b.helpful));
   }
 
   @Public()

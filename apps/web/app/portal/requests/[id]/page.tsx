@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import { portalFetch, portalRetry, type PortalTicketDetail } from '../../_components/portal-api';
 import { CoverageBadge, ErrorBlock, Info, Loading, Num, PageTitle, PortalStatus, SlaChip, sectionTitle } from '../../_components/portal-ui';
 import { WorkOrderRow } from '../../_components/work-order-row';
+import { PortalConversation } from '../../_components/portal-conversation';
 
 export default function RequestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = use(params);
@@ -61,6 +62,8 @@ export default function RequestPage({ params, searchParams }: { params: Promise<
         </PublicCard>
       )}
 
+      {t.messages && <PortalConversation ticketId={t.id} messages={t.messages} canMessage={t.canMessage ?? t.status !== 'closed'} status={t.status} />}
+
       <PublicCard>
         <h2 className={sectionTitle}><Truck className="size-4" aria-hidden />{bi('زيارات الفني', 'Technician visits')}</h2>
         {t.workOrders.length === 0
@@ -71,7 +74,7 @@ export default function RequestPage({ params, searchParams }: { params: Promise<
       <PublicCard>
         <h2 className={sectionTitle}><Clock className="size-4" aria-hidden />{bi('سجل الطلب', 'Request timeline')}</h2>
         <ol className="relative space-y-4 border-s-2 border-line ps-5">
-          {t.timeline.map((e, i) => (
+          {t.timeline.filter((e) => !(t.messages && e.kind === 'reply')).map((e, i) => (
             <li key={i} className="relative">
               <span className={clsx('absolute -start-[27px] top-0.5 grid size-4 place-items-center rounded-full ring-4 ring-white', e.kind === 'reply' ? 'bg-gold' : e.kind === 'opened' ? 'bg-primary' : 'bg-primary/60')} aria-hidden />
               <div className="flex flex-wrap items-center gap-2 text-sm">
