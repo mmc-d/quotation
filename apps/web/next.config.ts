@@ -9,6 +9,8 @@ const config: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@mmc/domain'],
+  // dev server reachable from other devices on the office network (this Mac serves as the test server)
+  allowedDevOrigins: (process.env.DEV_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim()).filter(Boolean),
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API}/api/:path*` }];
   },
