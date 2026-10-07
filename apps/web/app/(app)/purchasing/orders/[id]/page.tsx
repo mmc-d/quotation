@@ -162,7 +162,7 @@ export default function PurchaseOrderPage({ params }: { params: Promise<{ id: st
                 <tbody>
                   {bills.data!.map((b) => (
                     <tr key={b.id} className="align-top">
-                      <Td><Ltr className="font-bold">{b.number}</Ltr></Td>
+                      <Td><Link href={`/purchasing/bills/${b.id}`} dir="ltr" className="num font-bold text-primary hover:underline">{b.number}</Link></Td>
                       <Td><Ltr>{b.supplierInvoiceNo}</Ltr></Td>
                       <Td><Ltr className="text-xs">{date(b.billDate)}</Ltr></Td>
                       <Td className="text-end"><Amount value={b.total} currency={b.currency} /></Td>

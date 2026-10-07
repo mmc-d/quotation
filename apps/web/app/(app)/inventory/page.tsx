@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Fragment, Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight, ChevronDown, Download, PackageMinus, PackagePlus, ShieldAlert, ShoppingCart, Warehouse as WarehouseIcon } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, Download, PackageCheck, PackageMinus, PackagePlus, ReceiptText, ShieldAlert, ShoppingCart, Warehouse as WarehouseIcon } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
@@ -82,10 +82,14 @@ function Overview() {
       <PageHeader
         title={bi('المخزون', 'Stock')}
         subtitle={stock.data ? bi(`${stock.data.total} صنف`, `${stock.data.total} items`) : undefined}
-        actions={canWrite && <>
-          <Button variant="outline" icon={<PackageMinus className="size-4" />} onClick={() => setDialog('issue')}>{bi('صرف لمشروع', 'Issue to project')}</Button>
-          <Button variant="outline" icon={<PackagePlus className="size-4" />} onClick={() => setDialog('return')}>{bi('مرتجع من مشروع', 'Return from project')}</Button>
-          <Button icon={<ArrowLeftRight className="size-4" />} onClick={() => setDialog('transfer')}>{bi('تحويل', 'Transfer')}</Button>
+        actions={<>
+          {can('inventory.count') && <LinkButton href="/inventory/opening/new" icon={<PackageCheck className="size-4" />}>{bi('رصيد افتتاحي', 'Opening stock')}</LinkButton>}
+          {can('purchase.write') && <LinkButton href="/purchasing/bills/new" icon={<ReceiptText className="size-4" />}>{bi('فاتورة مشتريات', 'Supplier bill')}</LinkButton>}
+          {canWrite && <>
+            <Button variant="outline" icon={<PackageMinus className="size-4" />} onClick={() => setDialog('issue')}>{bi('صرف لمشروع', 'Issue to project')}</Button>
+            <Button variant="outline" icon={<PackagePlus className="size-4" />} onClick={() => setDialog('return')}>{bi('مرتجع من مشروع', 'Return from project')}</Button>
+            <Button icon={<ArrowLeftRight className="size-4" />} onClick={() => setDialog('transfer')}>{bi('تحويل', 'Transfer')}</Button>
+          </>}
         </>}
       />
       <InventoryNav />

@@ -74,6 +74,7 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   stock_transfer: { pattern: 'TRF-{SEQ:5}', reset: 'never' },
   stock_count: { pattern: 'CNT-{SEQ:4}', reset: 'never' },
   supplier_bill: { pattern: 'BILL-{SEQ:5}', reset: 'never' },
+  stock_opening: { pattern: 'OPN-{SEQ:4}', reset: 'never' },
   service_agreement: { pattern: 'AMC-{SEQ:4}', reset: 'never' },
   rfq: { pattern: 'RFQ-{SEQ:4}', reset: 'never' },
 };

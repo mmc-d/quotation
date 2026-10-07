@@ -29,6 +29,9 @@ MMC Core keeps the stock ledger **until ERPNext is connected** (every move has a
 | Imports | Shipments with B/L, containers, ETA, documents checklist, FASAH declaration (duty; import VAT recoverable), charges, clearance checks, **landed-cost allocation** into average cost. |
 | Operations | Transfers via transit, issue/return to projects, technician consumption from the van when a work order is completed, stock counts with accuracy and adjustments, supplier bills with **3-way match** (exceptions accepted later by an approver). |
 | Reports | Valuation, reorder suggestions, project consumption vs BOQ, ledger, serial traceability. |
+| Opening stock | `/inventory/opening`: paste code/qty/cost from Excel or enter lines, preview (unknown codes, service items, serial counts, serials already in stock, existing balance warnings, cost source entered/average/catalogue), then post as `opening` moves that set the average cost (`stock_opening`, `OPN-nnnn`). Storekeepers post quantities without seeing or typing costs. |
+| Direct supplier bills | `/purchasing/bills/new`: local purchases without a PO — product lines received into stock at unit price × rate (VAT excluded), expense lines, serials, per-line VAT 15/0 with the printed VAT accepted within rounding, cash purchases paid at once. |
+| Payables | `/purchasing/bills`: all bills (PO + direct) with unpaid/overdue/paid/exception filters, CSV export, totals owed / overdue / due in 7 days and aging by supplier; payments to suppliers (partial, never above what is owed, void with reason — all audited) by `payment.record` or `purchase.approve`. ERP sync: direct-bill receipts and opening moves go as stock entries, the bill as a purchase invoice without a PO. |
 
 Not built: OCR/AI capture of supplier documents, supplier ZATCA XML parsing (INV-66), RFQ comparison (P1), bins/putaway and label printing (P1), vendor scorecards (P2). PO sending to the supplier only changes the status (no template yet).
 

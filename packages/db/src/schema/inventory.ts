@@ -301,6 +301,14 @@ export const stockCount = pgTable('stock_count', {
   ...audit,
 }, (t) => [uniqueIndex('stock_count_number_uq').on(t.tenantId, t.number)]);
 
+export interface SupplierBillLine {
+  orderLineId?: string; productId?: string | null; code?: string; description?: string | null;
+  qty: string; unitPrice: string; vatPercent?: string; serials?: string[];
+}
+
+/** A payment to the supplier against a bill (bank transfer, cash, cheque…). */
+export interface SupplierPayment { id: string; paidOn: string; amount: string; method: string; reference?: string | null; note?: string | null; by: string | null; at: string }
+
 /** Supplier bill (purchase invoice) for 3-way match; supplier ZATCA XML kept as a file (INV-64/66). */
 export const supplierBill = pgTable('supplier_bill', {
   id: id(),
@@ -315,13 +323,43 @@ export const supplierBill = pgTable('supplier_bill', {
   subtotal: amount('subtotal').notNull(),
   vat: amount('vat').notNull().default('0'),
   total: amount('total').notNull(),
-  lines: jsonb('lines').$type<{ orderLineId: string; qty: string; unitPrice: string }[]>().notNull().default([]),
-  /** matched | exception */
+  /**
+   * PO bills: `orderLineId` per line. Direct bills (no PO): `productId` (stock lines) or a free-text
+   * expense line (`code`/`description` only); `vatPercent` per line.
+   */
+  lines: jsonb('lines').$type<SupplierBillLine[]>().notNull().default([]),
+  /** po (3-way match against a purchase order) | direct (local purchase entered straight from the invoice) */
+  kind: text('kind').notNull().default('po'),
+  /** direct bills: where the goods were received (null = expense-only bill, nothing received) */
+  warehouseId: uuid('warehouse_id').references(() => warehouse.id),
+  projectId: uuid('project_id').references(() => project.id),
+  dueDate: date('due_date'),
+  /** SAR paid to the supplier so far (sum of `payments`) */
+  paidAmount: amount('paid_amount').notNull().default('0'),
+  payments: jsonb('payments').$type<SupplierPayment[]>().notNull().default([]),
+  notes: text('notes'),
+  /** matched | exception | direct */
   matchStatus: text('match_status').notNull().default('matched'),
   matchIssues: jsonb('match_issues').$type<{ line: number; ar: string; en: string }[]>().notNull().default([]),
   fileId: uuid('file_id').references(() => file.id),
-  /** draft | approved | paid */
+  /** draft | approved | partially_paid | paid | cancelled */
   status: text('status').notNull().default('draft'),
   erpName: text('erp_name'),
   ...audit,
-}, (t) => [uniqueIndex('supplier_bill_number_uq').on(t.tenantId, t.number), uniqueIndex('supplier_bill_ext_uq').on(t.tenantId, t.supplierId, t.supplierInvoiceNo)]);
+}, (t) => [index('supplier_bill_status_idx').on(t.tenantId, t.status, t.dueDate), uniqueIndex('supplier_bill_number_uq').on(t.tenantId, t.number), uniqueIndex('supplier_bill_ext_uq').on(t.tenantId, t.supplierId, t.supplierInvoiceNo)]);
+
+/**
+ * Opening stock (رصيد افتتاحي): the quantities and unit costs on hand when the company starts using
+ * the system. Posted once as `opening` moves; corrections go through a stock count.
+ */
+export const stockOpening = pgTable('stock_opening', {
+  id: id(),
+  tenantId: tenantId(),
+  number: text('number').notNull(),
+  warehouseId: uuid('warehouse_id').notNull().references(() => warehouse.id),
+  openedOn: date('opened_on').notNull(),
+  lines: jsonb('lines').$type<{ productId: string; code: string; qty: string; unitCostSar: string; serials?: string[] }[]>().notNull().default([]),
+  totalSar: amount('total_sar').notNull().default('0'),
+  notes: text('notes'),
+  ...audit,
+}, (t) => [uniqueIndex('stock_opening_number_uq').on(t.tenantId, t.number)]);

@@ -1326,22 +1326,6 @@ export class InventoryController {
 
   // ───────────────────────── supplier bills (INV-64) ─────────────────────────
 
-  @Get('bills')
-  @Perm('purchase.read')
-  async bills(@Actor() actor: RequestActor, @Query(new ZodPipe(zPage.extend({ orderId: zUuid.optional(), supplierId: zUuid.optional(), matchStatus: z.enum(['matched', 'exception']).optional() }))) q: { limit: number; offset: number; orderId?: string; supplierId?: string; matchStatus?: string }) {
-    return tenantTx(actor.tenantId, async (tx) => {
-      const where = whereAll([q.orderId ? eq(supplierBill.orderId, q.orderId) : undefined, q.supplierId ? eq(supplierBill.supplierId, q.supplierId) : undefined, q.matchStatus ? eq(supplierBill.matchStatus, q.matchStatus) : undefined]);
-      const [{ n }] = (await tx.select({ n: sql<number>`count(*)::int` }).from(supplierBill).where(where)) as [{ n: number }];
-      const rows = await tx.select({ b: supplierBill, supplierName: party.nameAr, orderNumber: purchaseOrder.number }).from(supplierBill).innerJoin(party, eq(party.id, supplierBill.supplierId))
-        .leftJoin(purchaseOrder, eq(purchaseOrder.id, supplierBill.orderId)).where(where).orderBy(desc(supplierBill.billDate)).limit(q.limit).offset(q.offset);
-      const cost = canCost(actor);
-      return {
-        rows: rows.map((r) => ({ ...r.b, subtotal: cost ? r.b.subtotal : null, vat: cost ? r.b.vat : null, total: cost ? r.b.total : null, lines: r.b.lines.map((l) => ({ ...l, unitPrice: cost ? l.unitPrice : null })), supplierName: r.supplierName, orderNumber: r.orderNumber })),
-        total: n,
-      };
-    }, actor.userId);
-  }
-
   @Post('bills/:id/approve')
   @Perm('purchase.approve')
   async approveBill(@Actor() actor: RequestActor, @Param('id') id: string) {

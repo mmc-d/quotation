@@ -464,6 +464,7 @@ export async function approveBill(tx: Tx, actor: RequestActor, id: string) {
   if (bill.status !== 'draft') throw badRequest(`bill ${bill.number} is ${bill.status}`);
   if (bill.createdBy === actor.userId) throw forbidden('the user who entered the bill cannot accept its exception');
   for (const l of bill.lines) {
+    if (!l.orderLineId) continue;
     const [line] = await tx.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.id, l.orderLineId));
     if (line) await tx.update(purchaseOrderLine).set({ billedQty: fq(dec(line.billedQty).plus(l.qty)), updatedAt: new Date(), updatedBy: actor.userId }).where(eq(purchaseOrderLine.id, line.id));
   }

@@ -48,10 +48,30 @@ export interface ReceiptView {
   lines: { id: string; orderLineId: string; productId: string | null; qty: string; unitCostSar: string | null; landedPerUnitSar: string | null; serials: { serial: string; macs: string[] }[]; code: string; description: string | null }[];
 }
 
+export interface BillLine { orderLineId?: string; productId?: string | null; code?: string; description?: string | null; qty: string; unitPrice: string | null; vatPercent?: string; serials?: string[] }
+export interface SupplierPayment { id: string; paidOn: string; amount: string | null; method: string; reference?: string | null; note?: string | null; by: string | null; at: string }
+
 export interface BillRow {
-  id: string; number: string; supplierId: string; orderId: string | null; supplierInvoiceNo: string; billDate: string; currency: string; rateToSar: string;
-  subtotal: string | null; vat: string | null; total: string | null; lines: { orderLineId: string; qty: string; unitPrice: string | null }[];
-  matchStatus: string; matchIssues: { line: number; ar: string; en: string }[]; fileId: string | null; status: string; supplierName: string; orderNumber: string | null;
+  id: string; number: string; kind: 'po' | 'direct'; supplierId: string; orderId: string | null; supplierInvoiceNo: string; billDate: string; dueDate: string | null; currency: string; rateToSar: string;
+  subtotal: string | null; vat: string | null; total: string | null; paidAmount: string | null; payments: SupplierPayment[]; lines: BillLine[];
+  matchStatus: string; matchIssues: { line: number; ar: string; en: string }[]; fileId: string | null; status: string; supplierName: string; supplierNameEn?: string | null; orderNumber: string | null;
+  owedSar?: string | null; overdue?: boolean; notes?: string | null; warehouseId?: string | null; projectId?: string | null; createdAt?: string;
+}
+
+export interface BillView extends Omit<BillRow, 'supplierName' | 'orderNumber'> {
+  supplier: { id: string; nameAr: string; nameEn: string | null; vatNumber: string | null; phone: string | null } | null;
+  order: { id: string; number: string } | null;
+  warehouse: { id: string; code: string; nameAr: string; nameEn: string | null } | null;
+  project: { id: string; number: string; name: string } | null;
+  owed: string | null; owedSar: string | null; overdue: boolean;
+  moves: { id: string; productId: string; code: string; qty: string; unitCostSar: string | null; serials: string[]; postedAt: string }[];
+}
+
+export interface AgingRow { current: string; '1_30': string; '31_60': string; '61_90': string; '90_plus': string; total: string; bills: number }
+export interface PayablesAging {
+  asOf: string;
+  totals: AgingRow & { overdue: string; dueThisWeek: string };
+  suppliers: (AgingRow & { supplierId: string; supplierName: string; supplierNameEn: string | null })[];
 }
 
 export interface Warehouse { id: string; code: string; nameAr: string; nameEn: string | null; kind: string; archivedAt: string | null }

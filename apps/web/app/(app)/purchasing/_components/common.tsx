@@ -52,13 +52,31 @@ export const SHIP_MODE: L = {
 export const MATCH_STATUS: L = {
   matched: ['مطابقة', 'Matched', 'bg-emerald-100 text-emerald-800'],
   exception: ['استثناء', 'Exception', 'bg-rose-100 text-rose-800'],
+  direct: ['مباشرة', 'Direct', 'bg-violet-100 text-violet-800'],
 };
 
 export const BILL_STATUS: L = {
   draft: ['مسودة', 'Draft', 'bg-gray-100 text-gray-700'],
-  approved: ['معتمدة', 'Approved', 'bg-sky-100 text-sky-800'],
+  approved: ['غير مدفوعة', 'Unpaid', 'bg-sky-100 text-sky-800'],
+  partially_paid: ['مدفوعة جزئيًا', 'Partly paid', 'bg-amber-100 text-amber-800'],
   paid: ['مدفوعة', 'Paid', 'bg-emerald-100 text-emerald-800'],
 };
+
+export const PAYMENT_METHOD: L = {
+  bank_transfer: ['تحويل بنكي', 'Bank transfer'],
+  cash: ['نقدًا', 'Cash'],
+  cheque: ['شيك', 'Cheque'],
+  card: ['بطاقة', 'Card'],
+  other: ['أخرى', 'Other'],
+};
+
+export const AGING_BUCKETS = [
+  ['current', 'لم يحن موعدها', 'Not due'],
+  ['1_30', '1–30 يومًا', '1–30 days'],
+  ['31_60', '31–60 يومًا', '31–60 days'],
+  ['61_90', '61–90 يومًا', '61–90 days'],
+  ['90_plus', 'أكثر من 90', '90+ days'],
+] as const;
 
 export const RESERVATION_STATUS: L = {
   active: ['محجوز', 'Reserved', 'bg-sky-100 text-sky-800'],

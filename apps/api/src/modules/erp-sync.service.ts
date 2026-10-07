@@ -38,9 +38,10 @@ export type SyncType = (typeof SYNC_TYPES)[number];
 /** Purchase orders that exist for the supplier (approved or later). */
 export const PO_SYNC_STATUSES = ['approved', 'sent', 'partially_received', 'received', 'closed'];
 /** Supplier bills the back office should book (approved; paid ones too if they were never pushed). */
-export const BILL_SYNC_STATUSES = ['approved', 'paid'];
+export const BILL_SYNC_STATUSES = ['approved', 'partially_paid', 'paid'];
 /** Stock-move kinds that become Stock Entries (receipts → Purchase Receipt; landed-cost rows → LCV). */
-export const STOCK_ENTRY_KINDS = ['transfer', 'issue_project', 'consume_wo', 'return', 'adjust', 'count', 'scrap'];
+/** Receipts against a PO sync as Purchase Receipts; opening stock and direct-bill receipts go as stock entries. */
+export const STOCK_ENTRY_KINDS = ['opening', 'transfer', 'issue_project', 'consume_wo', 'return', 'adjust', 'count', 'scrap'];
 
 const LINK = {
   warehouse: { entityType: 'warehouse', doctype: 'Warehouse' },
@@ -77,7 +78,7 @@ export function stockPurpose(m: { fromWarehouseId: string | null; toWarehouseId:
 }
 
 function pendingMovesWhere() {
-  return and(inArray(stockMove.kind, STOCK_ENTRY_KINDS), sql`${stockMove.qty} <> 0`, sql`(${stockMove.fromWarehouseId} is not null or ${stockMove.toWarehouseId} is not null)`, sql`coalesce(${stockMove.refType}, '') <> 'landed_cost'`, notSynced('stock_entry', stockMove.id));
+  return and(or(inArray(stockMove.kind, STOCK_ENTRY_KINDS), and(eq(stockMove.kind, 'receipt'), eq(stockMove.refType, 'supplier_bill'))), sql`${stockMove.qty} <> 0`, sql`(${stockMove.fromWarehouseId} is not null or ${stockMove.toWarehouseId} is not null)`, sql`coalesce(${stockMove.refType}, '') <> 'landed_cost'`, notSynced('stock_entry', stockMove.id));
 }
 
 /** Projects referenced by documents still waiting to be pushed (POs, PO lines, receipts, stock moves). */
@@ -282,7 +283,13 @@ export async function syncPending(tx: Tx, tenantId: string, opts: { limit?: numb
       if (pending) throw new Waiting(`waiting for goods receipt ${pending.number} to sync`);
       const poLines = po ? await sp.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.orderId, po.id)) : [];
       const lp = [];
-      for (const l of b.lines) {
+      for (const [i, l] of b.lines.entries()) {
+        if (!po) {
+          // direct bill (no PO): the goods were posted as stock entries; the invoice carries the items only
+          const code = l.code || `EXP-${b.number}-${i + 1}`;
+          lp.push({ poLineCoreId: null, itemCode: await ensureItem(sp, l.productId ?? null, { id: `${b.id}:${i}`, code, description: l.description }), qty: l.qty, rate: l.unitPrice });
+          continue;
+        }
         const pl = poLines.find((x) => x.id === l.orderLineId);
         if (!pl) throw new Waiting(`bill line ${l.orderLineId} is not on the purchase order`);
         lp.push({ poLineCoreId: pl.id, itemCode: await ensureItem(sp, pl.productId, { id: pl.id, code: pl.code, description: pl.description }), qty: l.qty, rate: l.unitPrice });

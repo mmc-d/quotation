@@ -43,9 +43,11 @@ export const NAV: NavGroup[] = [
       { href: '/purchasing/requests', label: 'طلبات المواد', en: 'Material requests', icon: 'ClipboardCheck', perm: 'purchase.read' },
       { href: '/purchasing/rfqs', label: 'طلبات عروض الأسعار', en: 'RFQs', icon: 'FileQuestion', perm: 'purchase.read' },
       { href: '/purchasing/orders', label: 'أوامر الشراء', en: 'Purchase orders', icon: 'ShoppingCart', perm: 'purchase.read' },
+      { href: '/purchasing/bills', label: 'فواتير المشتريات', en: 'Supplier bills', icon: 'ReceiptText', perm: 'purchase.read' },
       { href: '/purchasing/shipments', label: 'الشحنات المستوردة', en: 'Import shipments', icon: 'Ship', perm: 'purchase.read' },
       { href: '/inventory/transfers', label: 'التحويلات المخزنية', en: 'Stock transfers', icon: 'ArrowLeftRight', perm: 'inventory.write' },
       { href: '/inventory/counts', label: 'الجرد', en: 'Stock counts', icon: 'ListOrdered', perm: 'inventory.count' },
+      { href: '/inventory/opening', label: 'الرصيد الافتتاحي', en: 'Opening stock', icon: 'PackagePlus', perm: 'inventory.count' },
     ],
   },
   {
@@ -53,6 +55,7 @@ export const NAV: NavGroup[] = [
       { href: '/finance/requests', label: 'طلبات الدفع', en: 'Payment requests', icon: 'HandCoins', perm: 'billing.read' },
       { href: '/finance/invoices', label: 'الفواتير', en: 'Invoices', icon: 'Receipt', perm: 'invoice.read' },
       { href: '/finance/aging', label: 'أعمار الذمم', en: 'AR aging', icon: 'Hourglass', perm: 'invoice.read' },
+      { href: '/purchasing/bills?view=payables', label: 'المستحق للموردين', en: 'Payables', icon: 'Banknote', perm: 'payment.record' },
     ],
   },
   {

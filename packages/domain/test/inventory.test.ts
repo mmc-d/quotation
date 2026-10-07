@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocateLandedCost, canTransitionPo, complianceStatus, countAccuracy, importCharges, movingAverageCost, parseSerialList,
-  planMaterials, poApproverRole, projectedQty, threeWayMatch, toSar,
+  planMaterials, poApproverRole, projectedQty, threeWayMatch, toSar, directBillTotals, billPaymentStatus, payableBucket, parseOpeningSheet,
 } from '../src/index.js';
 
 describe('valuation', () => {
@@ -81,5 +81,26 @@ describe('serials & counts', () => {
   it('measures count accuracy', () => {
     expect(countAccuracy([{ expected: 5, counted: 5 }, { expected: 3, counted: 2 }])).toBe(0.5);
     expect(countAccuracy([])).toBe(1);
+  });
+});
+
+describe('direct supplier bills, payments, opening stock', () => {
+  it('totals a bill per line with per-line VAT', () => {
+    expect(directBillTotals([{ qty: '100', unitPrice: '4.5' }, { qty: '1', unitPrice: '360' }, { qty: '3', unitPrice: '0.333', vatPercent: 0 }])).toEqual({
+      lines: [{ amount: 45_000, vat: 6_750 }, { amount: 36_000, vat: 5_400 }, { amount: 100, vat: 0 }], subtotal: 81_100, vat: 12_150, total: 93_250,
+    });
+  });
+  it('derives the payment status and the payables bucket', () => {
+    expect(billPaymentStatus(1_000, 0)).toBe('approved');
+    expect(billPaymentStatus(1_000, 400)).toBe('partially_paid');
+    expect(billPaymentStatus(1_000, 1_000)).toBe('paid');
+    expect(payableBucket('2026-10-10', '2026-09-01', '2026-10-07')).toBe('current');
+    expect(payableBucket(null, '2026-09-01', '2026-10-07')).toBe('31_60');
+    expect(payableBucket('2026-06-01', '2026-05-01', '2026-10-07')).toBe('90_plus');
+  });
+  it('parses an opening sheet pasted from Excel', () => {
+    const r = parseOpeningSheet('Code\tQty\tCost\nabc-1\t10\t2.5\nCAM\t2\t300\tsn1 SN2\n\nabc-1\t1\t1\nX\t-1\t1\nY\t1\tfree');
+    expect(r.rows).toEqual([{ line: 2, code: 'ABC-1', qty: '10', unitCost: '2.5', serials: [] }, { line: 3, code: 'CAM', qty: '2', unitCost: '300', serials: ['SN1', 'SN2'] }]);
+    expect(r.errors.map((e) => e.line)).toEqual([5, 6, 7]);
   });
 });

@@ -248,7 +248,7 @@ export async function postMove(tx: Tx, actor: RequestActor | null, m: MoveInput)
     else await tx.insert(stockBalance).values({ warehouseId: from, productId: p.id, qty: fq(after) });
   }
   let unitCost = avg;
-  if (m.kind === 'receipt') {
+  if (m.kind === 'receipt' || m.kind === 'opening') {
     if (m.unitCostSar === undefined || m.unitCostSar === null) throw badRequest('a receipt needs a unit cost');
     unitCost = dec(m.unitCostSar);
     const onHand = await valuationQty(tx, p.id);

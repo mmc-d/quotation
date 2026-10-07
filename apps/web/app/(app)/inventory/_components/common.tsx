@@ -31,6 +31,7 @@ type L = Record<string, [string, string, string?]>;
 
 export const MOVE_KIND: L = {
   receipt: ['استلام', 'Receipt', 'bg-emerald-100 text-emerald-800'],
+  opening: ['رصيد افتتاحي', 'Opening stock', 'bg-lime-100 text-lime-800'],
   transfer: ['تحويل', 'Transfer', 'bg-sky-100 text-sky-800'],
   issue_project: ['صرف لمشروع', 'Issue to project', 'bg-indigo-100 text-indigo-800'],
   consume_wo: ['استهلاك أمر عمل', 'Work-order use', 'bg-violet-100 text-violet-800'],
@@ -124,6 +125,8 @@ export function refHref(refType: string | null, refId: string | null): string | 
     case 'project': return `/projects/${refId}`;
     case 'work_order': return `/field/work-orders/${refId}`;
     case 'purchase_order': return `/purchasing/orders/${refId}`;
+    case 'supplier_bill': return `/purchasing/bills/${refId}`;
+    case 'stock_opening': return `/inventory/opening/${refId}`;
     case 'goods_receipt': return null;
     case 'import_shipment': case 'landed_cost': return `/purchasing/shipments/${refId}`;
     default: return null;
@@ -140,6 +143,8 @@ export function useRefLabel() {
       case 'work_order': return bi('أمر عمل', 'Work order');
       case 'goods_receipt': return bi('سند استلام', 'Goods receipt');
       case 'purchase_order': return bi('أمر شراء', 'Purchase order');
+      case 'supplier_bill': return bi('فاتورة مشتريات', 'Supplier bill');
+      case 'stock_opening': return bi('رصيد افتتاحي', 'Opening stock');
       case 'import_shipment': case 'landed_cost': return bi('شحنة', 'Shipment');
       default: return refType ?? '—';
     }
@@ -391,6 +396,7 @@ export function InventoryNav() {
     { href: '/inventory/serials', label: bi('تتبع الأرقام التسلسلية', 'Serial lookup') },
     { href: '/inventory/transfers', label: bi('التحويلات', 'Transfers') },
     { href: '/inventory/counts', label: bi('الجرد', 'Counts') },
+    { href: '/inventory/opening', label: bi('الرصيد الافتتاحي', 'Opening stock') },
   ];
   return (
     <nav className="mb-4 flex flex-wrap gap-1.5">

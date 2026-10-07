@@ -17,6 +17,7 @@ import { CalendarController } from './modules/calendar.controller.js';
 import { ProjectsController } from './modules/projects.controller.js';
 import { FieldServiceController } from './modules/field-service.controller.js';
 import { InventoryController } from './modules/inventory.controller.js';
+import { PayablesController } from './modules/payables.controller.js';
 import { RfqController } from './modules/rfq.controller.js';
 import { ServiceController } from './modules/service.controller.js';
 import { PortalController } from './modules/portal.controller.js';
@@ -33,7 +34,7 @@ import { McpController } from './ai/mcp.js';
     HealthController, MeController, SettingsController, UsersController, AuditController, FilesController,
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
-    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
+    PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, PayablesController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
     IotController, IotBindingController, CommissionsController, KbController,
     AiController, McpController,
   ],

@@ -18,7 +18,7 @@ export const WAREHOUSE_KIND_LABELS: Record<WarehouseKind, { ar: string; en: stri
   quarantine: { ar: 'حجر / مرتجعات', en: 'Quarantine / RMA' },
 };
 
-export const STOCK_MOVE_KINDS = ['receipt', 'transfer', 'issue_project', 'consume_wo', 'return', 'adjust', 'count', 'rma_out', 'scrap'] as const;
+export const STOCK_MOVE_KINDS = ['receipt', 'opening', 'transfer', 'issue_project', 'consume_wo', 'return', 'adjust', 'count', 'rma_out', 'scrap'] as const;
 export type StockMoveKind = (typeof STOCK_MOVE_KINDS)[number];
 
 /** Moving-weighted-average cost (IFRS, no LIFO — INV-73). Returns the new unit cost (4 dp, SAR). */
@@ -240,3 +240,72 @@ export const SHIPMENT_DOCS: { key: string; ar: string; en: string }[] = [
   { key: 'delivery_order', ar: 'إذن التسليم', en: 'Delivery order' },
   { key: 'broker_invoice', ar: 'فاتورة المخلص الجمركي', en: 'Broker invoice' },
 ];
+
+// ───────────── direct supplier bills, supplier payments, opening stock ─────────────
+
+export interface DirectBillLine { qty: Decimal.Value; unitPrice: Decimal.Value; vatPercent?: Decimal.Value | null }
+
+/**
+ * Totals of a supplier bill entered straight from the invoice (no PO), in minor units of the bill
+ * currency: each line rounded once, VAT per line (15% by default, 0 for exempt/imported lines).
+ */
+export function directBillTotals(lines: DirectBillLine[], defaultVatPercent: Decimal.Value = 15): { lines: { amount: number; vat: number }[]; subtotal: number; vat: number; total: number } {
+  const out = lines.map((l) => {
+    const amount = new Decimal(l.unitPrice).times(l.qty).times(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+    const vat = new Decimal(amount).times(l.vatPercent ?? defaultVatPercent).div(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+    return { amount, vat };
+  });
+  const subtotal = out.reduce((s, l) => s + l.amount, 0);
+  const vat = out.reduce((s, l) => s + l.vat, 0);
+  return { lines: out, subtotal, vat, total: subtotal + vat };
+}
+
+/** Bill status from what has been paid (halalas): approved → partially_paid → paid. */
+export function billPaymentStatus(totalHalalas: number, paidHalalas: number): 'approved' | 'partially_paid' | 'paid' {
+  if (paidHalalas <= 0) return 'approved';
+  return paidHalalas >= totalHalalas ? 'paid' : 'partially_paid';
+}
+
+/** Payables aging: days past the due date (bills without a due date count from the bill date). */
+export function payableBucket(dueDate: string | null, billDate: string, asOf: string): 'current' | '1_30' | '31_60' | '61_90' | '90_plus' {
+  const due = dueDate ?? billDate;
+  const days = Math.floor((Date.parse(`${asOf}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / 86400000);
+  if (days <= 0) return 'current';
+  if (days <= 30) return '1_30';
+  if (days <= 60) return '31_60';
+  if (days <= 90) return '61_90';
+  return '90_plus';
+}
+
+export interface OpeningRow { line: number; code: string; qty: string; unitCost: string; serials: string[] }
+
+/**
+ * Parse an opening-stock sheet pasted from Excel: one product per line
+ * "code, qty, unit cost (SAR) [, serial1 serial2 …]" — comma, tab or semicolon separated; serials
+ * separated by spaces or "|". A header line (non-numeric quantity) is skipped. Codes are upper-cased.
+ */
+export function parseOpeningSheet(text: string): { rows: OpeningRow[]; errors: { line: number; ar: string; en: string }[] } {
+  const rows: OpeningRow[] = [];
+  const errors: { line: number; ar: string; en: string }[] = [];
+  const seen = new Set<string>();
+  const num = /^\d+(\.\d{1,4})?$/;
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) return;
+    const cells = line.split(/[\t;,]/).map((c) => c.trim());
+    const [codeRaw = '', qtyRaw = '', costRaw = '', ...rest] = cells;
+    const qtyClean = qtyRaw.replace(/[\s٬]/g, '');
+    const costClean = costRaw.replace(/[\s٬]/g, '');
+    if (idx === 0 && !num.test(qtyClean)) return; // header
+    const code = codeRaw.toUpperCase();
+    const n = idx + 1;
+    if (!code) { errors.push({ line: n, ar: 'الكود فارغ', en: 'Empty code' }); return; }
+    if (!num.test(qtyClean) || Number(qtyClean) <= 0) { errors.push({ line: n, ar: `${code}: الكمية غير صحيحة`, en: `${code}: invalid quantity` }); return; }
+    if (!num.test(costClean)) { errors.push({ line: n, ar: `${code}: التكلفة غير صحيحة`, en: `${code}: invalid unit cost` }); return; }
+    if (seen.has(code)) { errors.push({ line: n, ar: `${code}: الكود مكرر`, en: `${code}: duplicate code` }); return; }
+    seen.add(code);
+    const serials = rest.join(' ').split(/[\s|]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
+    rows.push({ line: n, code, qty: qtyClean, unitCost: costClean, serials });
+  });
+  return { rows, errors };
+}

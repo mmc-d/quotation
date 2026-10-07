@@ -141,6 +141,20 @@
       "when": 1791362612749,
       "tag": "0019_company_tech_incentive_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791368806762,
+      "tag": "0020_direct_bills_opening_stock",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791368807762,
+      "tag": "0021_direct_bills_opening_stock_rls",
+      "breakpoints": true
     }
   ]
 }
