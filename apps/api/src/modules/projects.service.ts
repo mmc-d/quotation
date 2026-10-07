@@ -1,6 +1,6 @@
 import {
   and, appUser, asc, billingMilestone, contract, desc, emit, eq, file, inArray, installedAsset, isNull, ne, nextNumber, or, party, paymentMirror, paymentRequest,
-  project, projectApproval, projectClockPause, projectStageLog, projectTask, quote, site, siteLocation, snag, sql, workOrder, type SQL, type Tx,
+  project, projectApproval, projectClockPause, projectStageLog, projectTask, quote, site, siteLocation, snag, sql, stockMove, stockReservation, workOrder, type SQL, type Tx,
 } from '@mmc/db';
 import {
   APPROVAL_KINDS, APPROVAL_LABELS, PROJECT_STAGE_LABELS, PROJECT_STAGES, REQUIRED_APPROVALS, clockStartDate, deliveryClock, formatNationalAddress, gateFor, riyadhDate, warrantyEnds,
@@ -14,6 +14,7 @@ import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { loadCalendar } from './calendar.controller.js';
 import { CO_TRIGGER, contractFinalInvoice } from './finance.service.js';
+import { contractBoq, mergeBoq } from './inventory.service.js';
 
 export type ProjectRow = typeof project.$inferSelect;
 
@@ -173,6 +174,25 @@ function groupApprovals(rows: (typeof projectApproval.$inferSelect)[]) {
   });
 }
 
+/**
+ * Materials are ready when every stock item of the contract BOQ is covered by what is reserved for the
+ * project or already delivered / consumed on it (net of returns). The manual tick still overrides.
+ */
+export async function materialsCovered(tx: Tx, p: ProjectRow): Promise<boolean> {
+  if (!p.contractId) return false;
+  const boq = mergeBoq((await contractBoq(tx, p.contractId)).lines);
+  if (!boq.size) return false;
+  const used = await tx.select({ productId: stockMove.productId, q: sql<string>`sum(case when ${stockMove.kind} = 'return' then -${stockMove.qty} else ${stockMove.qty} end)::text` })
+    .from(stockMove).where(and(eq(stockMove.projectId, p.id), inArray(stockMove.kind, ['issue_project', 'consume_wo', 'return']))).groupBy(stockMove.productId);
+  const held = await tx.select({ productId: stockReservation.productId, q: sql<string>`sum(${stockReservation.qty})::text` })
+    .from(stockReservation).where(and(eq(stockReservation.projectId, p.id), eq(stockReservation.status, 'active'))).groupBy(stockReservation.productId);
+  for (const [id, line] of boq) {
+    const have = Number(used.find((u) => u.productId === id)?.q ?? 0) + Number(held.find((h) => h.productId === id)?.q ?? 0);
+    if (have + 1e-9 < Number(line.qty)) return false;
+  }
+  return true;
+}
+
 /** The facts the stage gates are evaluated on (module 05 §2). */
 export async function loadFacts(tx: Tx, p: ProjectRow) {
   const milestones = p.contractId
@@ -197,7 +217,7 @@ export async function loadFacts(tx: Tx, p: ProjectRow) {
   const facts: ProjectFacts = {
     advancePaidOn, deliveryPaymentPaid,
     requiredApprovals: (p.requiredApprovals ?? REQUIRED_APPROVALS).filter((k): k is ApprovalKind => (APPROVAL_KINDS as readonly string[]).includes(k)),
-    approvedOn, materialsReady: p.materialsReady, assetCount: a?.n ?? 0, assetsUntested: a?.untested ?? 0, finalInvoiced, openSnags: s?.n ?? 0, acceptedOn: p.acceptedOn,
+    approvedOn, materialsReady: p.materialsReady || (await materialsCovered(tx, p)), assetCount: a?.n ?? 0, assetsUntested: a?.untested ?? 0, finalInvoiced, openSnags: s?.n ?? 0, acceptedOn: p.acceptedOn,
   };
   return { facts, milestones, approvals };
 }

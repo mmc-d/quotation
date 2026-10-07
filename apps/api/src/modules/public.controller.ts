@@ -3,7 +3,7 @@ import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req, Res 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
-  and, contact, contract, conversation, desc, eq, esignRequest, gte, inboxEvent, issuedDocument, lead, message, notification, quote, quoteAcceptance, sql, withTenant, type Tx,
+  and, appUser, contact, contract, conversation, desc, eq, esignRequest, gte, inboxEvent, issuedDocument, lead, message, notification, quote, quoteAcceptance, sql, withTenant, type Tx,
 } from '@mmc/db';
 import { INTERESTS, OTP_MAX_ATTEMPTS, OTP_TTL_MINUTES, normalizeSaudiMobile, normalizeArabic } from '@mmc/domain';
 import { htmlToPdf, renderQuoteHtml } from '@mmc/doc-templates';
@@ -105,7 +105,8 @@ export class PublicController {
     const { pdf, number } = await withTenant(getDb(), tenantId, async (tx) => {
       const { q, full, co, calc } = await publicQuote(tx, token);
       const view = { ...full, computed: { lines: calc.lines, totals: calc.totals } } as unknown as Parameters<typeof quoteDocFrom>[0];
-      const doc = quoteDocFrom(view);
+      const [owner] = q.ownerId ? await tx.select({ nameAr: appUser.nameAr }).from(appUser).where(eq(appUser.id, q.ownerId)) : [];
+      const doc = quoteDocFrom(view, owner?.nameAr);
       return { pdf: await htmlToPdf(renderQuoteHtml({ company: co, ...doc, lines: await inlineImages(tx, doc.lines) }), config.gotenbergUrl), number: q.number };
     });
     res.setHeader('Content-Type', 'application/pdf');

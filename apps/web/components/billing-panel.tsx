@@ -222,7 +222,7 @@ export function BillingPanel({ contractId }: { contractId: string }) {
                   <Td className="font-bold text-ok"><Money value={p.amount} fixed /></Td>
                   <Td>{paymentMethodLabel(p.method, locale)}</Td>
                   <Td className="num text-xs">{(p.paymentRequestId && reqNumber.get(p.paymentRequestId)) ?? '—'}</Td>
-                  <Td className="num max-w-[14rem] truncate text-xs text-muted">{p.reference ?? '—'}</Td>
+                  <Td className="num max-w-[14rem] truncate text-xs text-muted" title={p.reference ?? undefined}>{displayRef(p.reference)}</Td>
                   <Td className="num text-xs text-muted">{p.erpName}</Td>
                 </tr>
               ))}
@@ -367,3 +367,11 @@ function CreditNoteForm({ invoice, onClose, onDone }: { invoice: InvoiceRow; onC
     </form>
   );
 }
+
+/** Payment references carry an idempotency prefix ("manual:<request id>:<what the user typed>"); show the user's part. */
+function displayRef(ref: string | null | undefined): string {
+  if (!ref) return '—';
+  const m = /^manual:[0-9a-f-]{36}:?(.*)$/i.exec(ref);
+  return m ? m[1] || '—' : ref;
+}
+
