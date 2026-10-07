@@ -32,9 +32,18 @@ MMC Core keeps the stock ledger **until ERPNext is connected** (every move has a
 
 Not built: OCR/AI capture of supplier documents, supplier ZATCA XML parsing (INV-66), RFQ comparison (P1), bins/putaway and label printing (P1), vendor scorecards (P2). PO sending to the supplier only changes the status (no template yet).
 
-## Phase 7b — Service agreements & customer portal
+## Phase 7 — Service, portal, people & intelligence (Core parts)
 
-In progress at the time of writing: AMC agreements with preventive-visit work orders and payment requests per billing period, SLA targets and escalations on service calls (business-hour clock), CSAT after each visit, and the customer portal (WhatsApp-OTP sign-in; devices and warranty, service calls, invoices and payment requests, project progress and online approvals). Phase 7a (HR & payroll on Frappe HR) and 7c (IoT/ThingsBoard, AI) are not started.
+| Area | Built |
+|------|-------|
+| 7b Service agreements | AMC contracts: preventive-visit work orders, payment requests per billing period (388 on payment), renewals with uplift, coverage `amc` on calls. |
+| 7b SLA & CSAT | Response/resolution targets in business hours, at-risk/breached escalations (job every 15 min), one-tap CSAT after each visit, CSAT/SLA reports. |
+| 7b Customer portal | `/portal`: WhatsApp-code sign-in, devices & warranty, service requests with photos, project progress and online approvals, bills and pay links, agreements, site health. Customers never see costs. |
+| 7a Commissions | Plans by category on revenue or margin, earned on 388, clawed back by 381, payable as collected, payroll CSV; technician incentives. Payroll itself → Frappe HR later. |
+| 7c IoT | Signed ThingsBoard webhook → one ticket + work order per device/alarm type, heartbeats, ack/clear back to ThingsBoard. |
+| 7c AI | Gateway (Claude, PII redaction, budget, append-only log), BOQ → draft quote with human approval, reply drafting & translation, read-only MCP server with personal tokens. Sandbox until `ANTHROPIC_API_KEY` is set. |
+
+Not built: HR master data/payroll (Frappe HR), knowledge base, WhatsApp AI assistant, commission tiers/splits, AI evaluation sets.
 
 ## Phase 6 — Full accounting: ERPNext (owner decision 2026-10-06)
 
