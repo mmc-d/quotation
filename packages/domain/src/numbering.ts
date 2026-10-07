@@ -75,6 +75,7 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   stock_count: { pattern: 'CNT-{SEQ:4}', reset: 'never' },
   supplier_bill: { pattern: 'BILL-{SEQ:5}', reset: 'never' },
   service_agreement: { pattern: 'AMC-{SEQ:4}', reset: 'never' },
+  rfq: { pattern: 'RFQ-{SEQ:4}', reset: 'never' },
 };
 
 /** The bucket key a sequence counts within (e.g. the day for daily series). */

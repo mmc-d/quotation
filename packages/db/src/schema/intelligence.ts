@@ -87,6 +87,8 @@ export const commissionPlan = pgTable('commission_plan', {
   validTo: date('valid_to'),
   active: boolean('active').notNull().default(true),
   sort: integer('sort').notNull().default(0),
+  /** tiers on quota attainment (HR-53): above `fromPercent` of the monthly quota the rate is multiplied */
+  tiers: jsonb('tiers').$type<{ fromPercent: number; multiplier: number }[]>().notNull().default([]),
   ...audit,
 });
 
