@@ -101,4 +101,7 @@ To go live with what you entered while testing:
 ## Notes
 
 - Until `ERPNEXT_URL` is set, invoices come from the built-in **development back office**. They are numbered and calculated correctly, but **nothing is sent to ZATCA**.
+- With `ERPNEXT_URL` set, purchasing and stock records are also pushed to ERPNext every 15 minutes (Settings → status at `GET /api/erp-sync/status`). The implementer must create the custom fields listed in `packages/erp-connector/src/erpnext.ts` (`PHASE5_DEFAULTS`).
+- **AI** stays in a free sandbox until `ANTHROPIC_API_KEY` is set in `.env`; `AI_DAILY_USD` caps the daily spend (default 20).
+- **ThingsBoard**: set `THINGSBOARD_WEBHOOK_SECRET` (the rule chain signs each alarm with it — payload and header in `apps/api/src/modules/iot.service.ts`) and, to acknowledge/clear alarms from MMC, `THINGSBOARD_URL`, `THINGSBOARD_USERNAME`, `THINGSBOARD_PASSWORD`.
 - The API image also contains the legacy importer: `./mmc.sh import-legacy /path/to/old-json-folder [--dry-run]`.

@@ -35,6 +35,15 @@ x-api-env: &api-env
   ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET:-}
   ERPNEXT_COMPANY: ${ERPNEXT_COMPANY:-}
   ERPNEXT_WEBHOOK_SECRET: ${ERPNEXT_WEBHOOK_SECRET:-}
+  # Phase 7c — ThingsBoard alarms/heartbeats (signed webhooks) and ack/clear back
+  THINGSBOARD_WEBHOOK_SECRET: ${THINGSBOARD_WEBHOOK_SECRET:-}
+  THINGSBOARD_URL: ${THINGSBOARD_URL:-}
+  THINGSBOARD_USERNAME: ${THINGSBOARD_USERNAME:-}
+  THINGSBOARD_PASSWORD: ${THINGSBOARD_PASSWORD:-}
+  # Phase 7c — AI gateway (sandbox when the key is empty)
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+  AI_DAILY_USD: ${AI_DAILY_USD:-20}
 
 services:
   postgres:
