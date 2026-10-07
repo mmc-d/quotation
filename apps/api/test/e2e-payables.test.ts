@@ -181,3 +181,28 @@ describe('payments to suppliers and payables', () => {
     expect(rows.map((r) => r.action)).toEqual(['create', 'supplier_payment', 'supplier_payment', 'supplier_payment_void']);
   });
 });
+
+describe('product photos', () => {
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  it('uploads a photo that customers can load without a session, and removes it', async () => {
+    await owner.post(`/api/products/${S.cable.id}/image`, { name: 'x.png', contentType: 'image/jpeg', data: PNG }, { expect: 400 }); // content ≠ declared type
+    await store.post(`/api/products/${S.cable.id}/image`, { name: 'x.png', contentType: 'image/png', data: PNG }, { expect: 403 });
+    const p = await owner.post(`/api/products/${S.cable.id}/image`, { name: 'cable.png', contentType: 'image/png', data: PNG });
+    expect(p.imageUrl).toMatch(/^\/api\/public\/product-images\/[0-9a-f-]{36}$/);
+    const res = await fetch(base + p.imageUrl);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    // a staff upload that is not a product image is not public
+    const other = await owner.post('/api/files', { name: 'doc.png', contentType: 'image/png', data: PNG });
+    expect((await fetch(`${base}/api/public/product-images/${other.id}`)).status).toBe(404);
+    await owner.req('DELETE', `/api/products/${S.cable.id}/image`);
+    expect((await fetch(base + p.imageUrl)).status).toBe(404);
+  });
+
+  it('keeps exchange rates with 6 decimals editable', async () => {
+    const p = await owner.get(`/api/products/${S.cable.id}`);
+    const saved = await owner.put(`/api/products/${S.cable.id}`, { code: p.code, nameAr: p.nameAr, listPrice: '100', costPrice: '10', costCurrency: 'CNY', costRateToSar: '0.523456' });
+    expect(saved.costRateToSar).toBe('0.523456');
+  });
+});
+

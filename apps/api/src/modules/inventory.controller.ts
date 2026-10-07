@@ -1386,7 +1386,7 @@ export class InventoryController {
       const res = await tx.select({ productId: stockReservation.productId, q: sql<string>`sum(${stockReservation.qty})::text` }).from(stockReservation)
         .where(and(eq(stockReservation.projectId, prj.id), eq(stockReservation.status, 'active'))).groupBy(stockReservation.productId);
       const ids = [...new Set<string>([...boq.keys(), ...mv.map((m) => m.productId), ...res.map((r) => r.productId)])];
-      const prods = ids.length ? await tx.select({ id: product.id, code: product.code, nameAr: product.nameAr }).from(product).where(inArray(product.id, ids)) : [];
+      const prods = ids.length ? await tx.select({ id: product.id, code: product.code, nameAr: product.nameAr, serialTracked: product.serialTracked }).from(product).where(inArray(product.id, ids)) : [];
       const cost = canCost(actor);
       const rows = ids.map((id) => {
         const get = (k: string) => dec(mv.find((m) => m.productId === id && m.kind === k)?.q ?? '0');
@@ -1395,7 +1395,7 @@ export class InventoryController {
         const boqQty = boq.get(id)?.qty ?? dec(0);
         const p = prods.find((x) => x.id === id);
         return {
-          productId: id, code: p?.code ?? '', nameAr: p?.nameAr ?? '', boqQty: boqQty.toString(), issued: get('issue_project').toString(), consumed: get('consume_wo').toString(), returned: get('return').toString(),
+          productId: id, code: p?.code ?? '', nameAr: p?.nameAr ?? '', serialTracked: !!p?.serialTracked, boqQty: boqQty.toString(), issued: get('issue_project').toString(), consumed: get('consume_wo').toString(), returned: get('return').toString(),
           used: used.toString(), reserved: dec(res.find((r) => r.productId === id)?.q ?? '0').toString(), variance: used.minus(boqQty).toString(),
           costSar: cost ? halalasToFixed(toHalalas(val('issue_project').plus(val('consume_wo')).minus(val('return')))) : null,
         };

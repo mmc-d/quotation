@@ -161,7 +161,7 @@ function BillForm() {
           <Table>
             <thead><tr>
               <Th className="min-w-[16rem]">{bi('المنتج أو المصروف', 'Product or expense')}</Th>
-              <Th className="w-24">{bi('الكمية', 'Qty')}</Th><Th className="w-32">{bi('سعر الوحدة', 'Unit price')} ({currency})</Th><Th className="w-24">{bi('الضريبة', 'VAT')}</Th>
+              <Th className="w-24">{bi('الكمية', 'Qty')}</Th><Th className="w-32">{bi('سعر الوحدة', 'Unit price')} ({currency})</Th><Th className="w-28">{bi('الضريبة', 'VAT')}</Th>
               <Th className="text-end">{bi('الإجمالي', 'Line total')}</Th><Th />
             </tr></thead>
             <tbody>
@@ -180,7 +180,7 @@ function BillForm() {
                     <Td><NumInput value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} step="1" /></Td>
                     <Td><NumInput value={l.unitPrice} onChange={(v) => setLine(l.key, { unitPrice: v })} step="0.01" /></Td>
                     <Td>
-                      <Select value={l.vat} onChange={(e) => setLine(l.key, { vat: e.target.value })}>
+                      <Select className="min-w-[6rem]" value={l.vat} onChange={(e) => setLine(l.key, { vat: e.target.value })}>
                         <option value="15">15%</option><option value="0">0%</option>
                       </Select>
                     </Td>

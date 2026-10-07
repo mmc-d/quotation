@@ -6,6 +6,7 @@ import {
 import { isValidUnifiedNumber, isValidVatNumber, normalizeArabic, normalizePhone, normalizeSaudiMobile, toHalalas } from '@mmc/domain';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
+import { PRODUCT_IMAGE_PREFIX, storeFile } from '../common/files.js';
 import { audit, diff } from '../common/audit.js';
 import { badRequest, conflict, notFound } from '../common/errors.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
@@ -180,6 +181,15 @@ export class PartiesController {
   }
 }
 
+const productImageSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  data: z.string().min(1).max(4_300_000),
+});
+const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+/** Exchange rates keep up to 6 decimals in the database. */
+const zRate = z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => /^\d+(\.\d{1,6})?$/.test(v) && Number(v) > 0, 'invalid rate');
+
 const productSchema = z.object({
   code: z.string().min(1).max(64),
   nameAr: z.string().min(1),
@@ -193,7 +203,7 @@ const productSchema = z.object({
   installCost: zMoney.default('0'),
   costPrice: zMoney.nullish(),
   costCurrency: z.enum(['USD', 'SAR', 'CNY']).default('USD'),
-  costRateToSar: zMoney.default('3.75'),
+  costRateToSar: zRate.default('3.75'),
   warrantyMonths: z.number().int().nullish(),
   // inventory fields are optional so a form that doesn't send them leaves them unchanged (Phase 5)
   serialTracked: z.boolean().optional(),
@@ -293,6 +303,40 @@ export class ProductsController {
       const d = diff(before as Record<string, unknown>, values as Record<string, unknown>);
       if (d) await audit(tx, actor, 'update', 'product', id, d.before, d.after);
       return row;
+    }, actor.userId);
+  }
+
+  /** Upload the product photo (JPEG/PNG/WebP ≤ 3 MB); it becomes a public catalogue image for quotes. */
+  @Post(':id/image')
+  @Perm('product.write')
+  async uploadImage(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(productImageSchema)) b: z.infer<typeof productImageSchema>) {
+    const data = Buffer.from(b.data, 'base64');
+    if (!data.length) throw badRequest('empty file');
+    if (data.length > 3 * 1024 * 1024) throw badRequest('image larger than 3 MB');
+    const sniff = b.contentType === 'image/png' ? data.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      : b.contentType === 'image/jpeg' ? data[0] === 0xff && data[1] === 0xd8
+      : data.subarray(0, 4).toString('latin1') === 'RIFF' && data.subarray(8, 12).toString('latin1') === 'WEBP';
+    if (!sniff) throw badRequest(`the file content is not ${b.contentType}`);
+    return tenantTx(actor.tenantId, async (tx) => {
+      const [before] = isUuid(id) ? await tx.select().from(product).where(eq(product.id, id)) : [];
+      if (!before) throw notFound('product');
+      const f = await storeFile(tx, actor.tenantId, data, b.name, b.contentType, actor.userId);
+      const imageUrl = `${PRODUCT_IMAGE_PREFIX}${f.id}`;
+      const [row] = await tx.update(product).set({ imageFileId: f.id, imageUrl, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(product.id, id)).returning();
+      await audit(tx, actor, 'image', 'product', id, { imageUrl: before.imageUrl }, { imageUrl, file: f.filename, size: f.size });
+      return actor.grants['product.cost.read'] ? row : { ...row, costPrice: null };
+    }, actor.userId);
+  }
+
+  @Delete(':id/image')
+  @Perm('product.write')
+  async removeImage(@Actor() actor: RequestActor, @Param('id') id: string) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      const [before] = isUuid(id) ? await tx.select().from(product).where(eq(product.id, id)) : [];
+      if (!before) throw notFound('product');
+      const [row] = await tx.update(product).set({ imageFileId: null, imageUrl: null, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(product.id, id)).returning();
+      await audit(tx, actor, 'image_remove', 'product', id, { imageUrl: before.imageUrl }, null);
+      return actor.grants['product.cost.read'] ? row : { ...row, costPrice: null };
     }, actor.userId);
   }
 

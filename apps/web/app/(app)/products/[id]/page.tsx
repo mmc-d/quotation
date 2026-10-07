@@ -1,9 +1,9 @@
 'use client';
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Archive, ExternalLink, Package, Save } from 'lucide-react';
+import { Archive, ExternalLink, ImagePlus, Package, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
@@ -23,12 +23,34 @@ const EMPTY: Form = { code: '', nameAr: '', nameEn: '', description: '', categor
 const DEFAULT_RATE: Record<Product['costCurrency'], string> = { USD: '3.75', SAR: '1', CNY: '0.52' };
 
 const amountOk = (v: string) => /^\d+(\.\d{1,4})?$/.test(v.trim());
+const rateOk = (v: string) => /^\d+(\.\d{1,6})?$/.test(v.trim()) && Number(v) > 0;
+/** "650.0000" → "650" (the API returns fixed decimals; the form shows what people type). */
+const plain = (v: string | null | undefined) => (v === null || v === undefined || v === '' ? '' : Number.isFinite(Number(v)) ? String(Number(v)) : String(v));
+
+/** Product photo → JPEG ≤ 1000 px on white (transparent PNGs stay readable on the quote). */
+async function productPhoto(file: File): Promise<{ name: string; contentType: 'image/jpeg'; data: string }> {
+  if (!file.type.startsWith('image/')) throw new Error('unsupported');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error('decode')); i.src = url; });
+    const scale = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const d = c.toDataURL('image/jpeg', 0.85);
+    return { name: `${(file.name || 'product').replace(/\.[^.]+$/, '')}.jpg`, contentType: 'image/jpeg', data: d.slice(d.indexOf(',') + 1) };
+  } finally { URL.revokeObjectURL(url); }
+}
 
 function fromProduct(p: Product): Form {
   return {
     code: p.code, nameAr: p.nameAr, nameEn: p.nameEn ?? '', description: p.description ?? '', categoryId: p.categoryId ?? '',
-    type: p.type, uom: p.uom, listPrice: String(p.listPrice ?? '0'), installCost: String(p.installCost ?? '0'),
-    costPrice: p.costPrice ?? '', costCurrency: p.costCurrency, costRateToSar: p.costRateToSar ?? '3.75',
+    type: p.type, uom: p.uom, listPrice: plain(p.listPrice) || '0', installCost: plain(p.installCost) || '0',
+    costPrice: plain(p.costPrice), costCurrency: p.costCurrency, costRateToSar: plain(p.costRateToSar) || '3.75',
     warrantyMonths: p.warrantyMonths != null ? String(p.warrantyMonths) : '', serialTracked: p.serialTracked,
     imageUrl: p.imageUrl ?? '', datasheetUrl: p.datasheetUrl ?? '', status: p.status,
   };
@@ -51,6 +73,38 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [error, setError] = useState<unknown>(null);
   const [imgBroken, setImgBroken] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [imgBusy, setImgBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { if (pendingPreview) URL.revokeObjectURL(pendingPreview); }, [pendingPreview]);
+
+  const uploadImage = async (productId: string, file: File) => {
+    setImgBusy(true);
+    try {
+      const saved = await api.post<Product>(`/products/${productId}/image`, await productPhoto(file));
+      qc.setQueryData(['product', productId], saved);
+      qc.invalidateQueries({ queryKey: ['products'] });
+      setF((x) => ({ ...x, imageUrl: saved.imageUrl ?? '' }));
+      toast.success(bi('تم رفع صورة المنتج', 'Product photo uploaded'));
+    } catch (err) {
+      toast.error((err as Error).message === 'unsupported' || (err as Error).message === 'decode' ? bi('الملف ليس صورة مدعومة', 'Not a supported image') : (err as Error).message);
+    } finally { setImgBusy(false); }
+  };
+  const onPickImage = (file: File | undefined) => {
+    if (!file) return;
+    if (isNew) { setPendingImage(file); setPendingPreview(URL.createObjectURL(file)); return; }
+    void uploadImage(id, file);
+  };
+  const removeImage = async () => {
+    setImgBusy(true);
+    try {
+      const saved = await api.del<Product>(`/products/${id}/image`);
+      qc.setQueryData(['product', id], saved);
+      qc.invalidateQueries({ queryKey: ['products'] });
+      setF((x) => ({ ...x, imageUrl: '' }));
+    } catch (err) { toast.error((err as Error).message); } finally { setImgBusy(false); }
+  };
   useEffect(() => { if (q.data) setF(fromProduct(q.data)); }, [q.data]);
   useEffect(() => setImgBroken(false), [f.imageUrl]);
 
@@ -59,11 +113,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     listPrice: amountOk(f.listPrice) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
     installCost: amountOk(f.installCost) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
     costPrice: !f.costPrice.trim() || amountOk(f.costPrice) ? null : bi('مبلغ غير صالح', 'Invalid amount'),
-    costRateToSar: amountOk(f.costRateToSar) ? null : bi('سعر صرف غير صالح', 'Invalid exchange rate'),
+    costRateToSar: rateOk(f.costRateToSar) ? null : bi('سعر صرف غير صالح', 'Invalid exchange rate'),
     warrantyMonths: !f.warrantyMonths || /^\d+$/.test(f.warrantyMonths) ? null : bi('عدد صحيح', 'Whole number'),
   };
   const invalid = Object.values(errs).some(Boolean);
-  const costSar = f.costPrice && amountOk(f.costPrice) && amountOk(f.costRateToSar) ? Number(f.costPrice) * Number(f.costRateToSar) : null;
+  const costSar = f.costPrice && amountOk(f.costPrice) && rateOk(f.costRateToSar) ? Number(f.costPrice) * Number(f.costRateToSar) : null;
   const margin = costSar !== null && Number(f.listPrice) > 0 ? ((Number(f.listPrice) - costSar) / Number(f.listPrice)) * 100 : null;
 
   const save = async (e: React.FormEvent) => {
@@ -84,6 +138,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       toast.success(isNew ? bi('تمت إضافة المنتج', 'Product added') : bi('تم حفظ المنتج', 'Product saved'));
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.setQueryData(['product', saved.id], saved);
+      if (isNew && pendingImage) await uploadImage(saved.id, pendingImage);
       if (isNew) router.replace(`/products/${saved.id}`);
     } catch (err) { setError(err); } finally { setBusy(null); }
   };
@@ -179,12 +234,25 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         <fieldset disabled={!canWrite} className="space-y-4">
           <Card title={bi('الصورة والمرفقات', 'Image & attachments')}>
             <div className="mb-3 grid aspect-square w-full place-items-center overflow-hidden rounded-lg border border-line bg-tint/40">
-              {f.imageUrl && !imgBroken
+              {pendingPreview
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={pendingPreview} alt={f.nameAr} className="max-h-full max-w-full object-contain" />
+                : f.imageUrl && !imgBroken
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={f.imageUrl} alt={f.nameAr} className="max-h-full max-w-full object-contain" onError={() => setImgBroken(true)} />
                 : <div className="text-center text-xs text-muted"><Package className="mx-auto mb-1 size-8 text-gold" />{imgBroken ? bi('تعذّر تحميل الصورة', 'Could not load the image') : bi('لا توجد صورة', 'No image')}</div>}
             </div>
-            <Field label={bi('رابط الصورة', 'Image URL')}><Input dir="ltr" type="url" value={f.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://…" /></Field>
+            {canWrite && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { onPickImage(e.target.files?.[0]); e.target.value = ''; }} />
+                <Button type="button" variant="outline" size="sm" loading={imgBusy} icon={<ImagePlus className="size-4" />} onClick={() => fileInput.current?.click()}>
+                  {f.imageUrl || pendingImage ? bi('تغيير الصورة', 'Change photo') : bi('رفع صورة', 'Upload photo')}
+                </Button>
+                {!isNew && f.imageUrl && <Button type="button" variant="ghost" size="sm" disabled={imgBusy} icon={<Trash2 className="size-4" />} onClick={removeImage}>{bi('إزالة', 'Remove')}</Button>}
+                {isNew && pendingImage && <span className="self-center text-[11px] text-muted">{bi('تُرفع الصورة عند إضافة المنتج', 'Uploaded when the product is added')}</span>}
+              </div>
+            )}
+            <Field label={bi('أو رابط صورة', 'Or an image URL')}><Input dir="ltr" value={f.imageUrl} onChange={(e) => set("imageUrl", e.target.value)} placeholder="https://…" /></Field>
             <Field label={bi('رابط النشرة الفنية (Datasheet)', 'Datasheet URL')} className="mt-3"><Input dir="ltr" type="url" value={f.datasheetUrl} onChange={(e) => set('datasheetUrl', e.target.value)} placeholder="https://…" /></Field>
             {f.datasheetUrl && /^https?:\/\//.test(f.datasheetUrl) && (
               <a href={f.datasheetUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-gold-dark hover:underline"><ExternalLink className="size-3.5" />{bi('فتح النشرة الفنية', 'Open datasheet')}</a>

@@ -155,6 +155,13 @@
       "when": 1791368807762,
       "tag": "0021_direct_bills_opening_stock_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791368808762,
+      "tag": "0022_product_image_public",
+      "breakpoints": true
     }
   ]
 }

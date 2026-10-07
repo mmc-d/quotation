@@ -10,7 +10,7 @@ import type { RequestActor } from '../auth/actor.js';
 import { audit } from '../common/audit.js';
 import { companyBlock, loadCompany } from '../common/company.js';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
-import { storeFile } from '../common/files.js';
+import { inlineImages, storeFile } from '../common/files.js';
 import { assertCan } from '../common/scope.js';
 import { config } from '../config.js';
 import { resolvePrices } from './pricelists.controller.js';
@@ -409,7 +409,8 @@ export function quoteDocFrom(q: Awaited<ReturnType<typeof getQuoteView>>, ownerN
 
 export async function renderQuotePdf(tx: Tx, actor: RequestActor, id: string) {
   const q = await getQuoteView(tx, actor, id);
-  const html = renderQuoteHtml({ company: await companyBlock(tx), ...quoteDocFrom(q, q.owner?.nameAr) });
+  const doc = quoteDocFrom(q, q.owner?.nameAr);
+  const html = renderQuoteHtml({ company: await companyBlock(tx), ...doc, lines: await inlineImages(tx, doc.lines) });
   return { quote: q, pdf: await htmlToPdf(html, config.gotenbergUrl) };
 }
 

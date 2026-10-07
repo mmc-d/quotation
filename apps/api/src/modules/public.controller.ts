@@ -11,6 +11,7 @@ import { Public } from '../auth/actor.js';
 import { getDb } from '../common/db.js';
 import { audit } from '../common/audit.js';
 import { companyBlock } from '../common/company.js';
+import { inlineImages, readStoredFile } from '../common/files.js';
 import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { sendTemplate, verifyMetaSignature } from '../common/messaging.js';
 import { ZodPipe } from '../common/zod.js';
@@ -57,6 +58,21 @@ const leadHits = new Map<string, number[]>();
 @Controller('public')
 @Public()
 export class PublicController {
+  /** Product photos (catalogue images on quotes): only files that are some product's image are served. */
+  @Get('product-images/:fileId')
+  async productImage(@Param('fileId') fileId: string, @Res() res: Response) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fileId)) throw notFound('image');
+    const rows = await getDb().execute<{ t: string | null }>(sql`select tenant_for_product_image(${fileId}::uuid) as t`);
+    const tenantId = rows[0]?.t;
+    if (!tenantId) throw notFound('image');
+    const f = await withTenant(getDb(), tenantId, (tx) => readStoredFile(tx, fileId));
+    if (!f || !f.mime.startsWith('image/')) throw notFound('image');
+    res.setHeader('Content-Type', f.mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(f.data);
+  }
+
   @Get('quotes/:token')
   async viewQuote(@Param('token') token: string) {
     const tenantId = await tenantForToken('quote', token);
@@ -89,7 +105,8 @@ export class PublicController {
     const { pdf, number } = await withTenant(getDb(), tenantId, async (tx) => {
       const { q, full, co, calc } = await publicQuote(tx, token);
       const view = { ...full, computed: { lines: calc.lines, totals: calc.totals } } as unknown as Parameters<typeof quoteDocFrom>[0];
-      return { pdf: await htmlToPdf(renderQuoteHtml({ company: co, ...quoteDocFrom(view) }), config.gotenbergUrl), number: q.number };
+      const doc = quoteDocFrom(view);
+      return { pdf: await htmlToPdf(renderQuoteHtml({ company: co, ...doc, lines: await inlineImages(tx, doc.lines) }), config.gotenbergUrl), number: q.number };
     });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${number}.pdf"`);

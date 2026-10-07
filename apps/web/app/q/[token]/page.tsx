@@ -66,6 +66,10 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
           <ul className="divide-y divide-line">
             {d.lines.map((l, i) => (
               <li key={i} className={clsx('flex gap-3 px-4 py-3 sm:px-6', l.isOptional && 'bg-tint/30')}>
+                {/^(https?:\/\/|\/api\/public\/)/.test(l.imageUrl ?? '') && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.imageUrl!} alt="" loading="lazy" className="size-16 shrink-0 rounded-lg border border-line bg-white object-contain" />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="num rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-muted">{l.code}</span>
