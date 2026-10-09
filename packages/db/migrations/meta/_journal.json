@@ -169,6 +169,20 @@
       "when": 1791382338507,
       "tag": "0023_company_bank_account",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791382530564,
+      "tag": "0024_cash_vouchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791382541693,
+      "tag": "0025_cash_vouchers_rls",
+      "breakpoints": true
     }
   ]
 }

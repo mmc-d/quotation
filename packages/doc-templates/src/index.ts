@@ -7,3 +7,4 @@ export * from './handover.js';
 export * from './service-report.js';
 export * from './purchase-order.js';
 export * from './rfq.js';
+export * from './voucher.js';

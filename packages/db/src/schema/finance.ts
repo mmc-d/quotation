@@ -105,3 +105,48 @@ export const syncReconciliationRun = pgTable('sync_reconciliation_run', {
   status: text('status').notNull(),
   drift: jsonb('drift'),
 });
+
+/**
+ * Cash vouchers — سند صرف (payment) / سند قبض (receipt), entered by finance staff. A voucher is a
+ * draft until a second person with voucher.approve stamps it (the stamp is the approval); approved
+ * vouchers are read-only and can only be cancelled with a reason. These are office documents, not
+ * ledger postings — the ledger stays behind the back-office port.
+ */
+export const cashVoucher = pgTable('cash_voucher', {
+  id: id(),
+  tenantId: tenantId(),
+  /** payment (صرف) | receipt (قبض) */
+  kind: text('kind').notNull(),
+  number: text('number').notNull(),
+  voucherDate: date('voucher_date').notNull(),
+  partyId: uuid('party_id').references(() => party.id),
+  /** paid to / received from — free text so walk-in payees work without a party record */
+  counterpartyName: text('counterparty_name').notNull(),
+  counterpartyIdNumber: text('counterparty_id_number'),
+  counterpartyMobile: text('counterparty_mobile'),
+  amount: amount('amount').notNull(),
+  purpose: text('purpose').notNull(),
+  /** cash | cheque | transfer | card | other */
+  method: text('method').notNull().default('cash'),
+  /** cheque or transfer number */
+  methodRef: text('method_ref'),
+  bankName: text('bank_name'),
+  methodDate: date('method_date'),
+  projectId: uuid('project_id'),
+  costCenter: text('cost_center'),
+  /** PO / invoice / bill number this voucher settles */
+  docRef: text('doc_ref'),
+  notes: text('notes'),
+  /** draft | approved | cancelled */
+  status: text('status').notNull().default('draft'),
+  approvedBy: uuid('approved_by'),
+  approvedByName: text('approved_by_name'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  cancelledBy: uuid('cancelled_by'),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  cancelReason: text('cancel_reason'),
+  ...audit,
+}, (t) => [
+  uniqueIndex('cash_voucher_number_uq').on(t.tenantId, t.number),
+  index('cash_voucher_kind_date_idx').on(t.tenantId, t.kind, t.voucherDate),
+]);

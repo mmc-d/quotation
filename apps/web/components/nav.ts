@@ -54,6 +54,7 @@ export const NAV: NavGroup[] = [
     label: 'المالية', en: 'Finance', items: [
       { href: '/finance/requests', label: 'طلبات الدفع', en: 'Payment requests', icon: 'HandCoins', perm: 'billing.read' },
       { href: '/finance/invoices', label: 'الفواتير', en: 'Invoices', icon: 'Receipt', perm: 'invoice.read' },
+      { href: '/finance/vouchers', label: 'سندات القبض والصرف', en: 'Receipt & payment vouchers', icon: 'FileStack', perm: 'voucher.read' },
       { href: '/finance/aging', label: 'أعمار الذمم', en: 'AR aging', icon: 'Hourglass', perm: 'invoice.read' },
       { href: '/purchasing/bills?view=payables', label: 'المستحق للموردين', en: 'Payables', icon: 'Banknote', perm: 'payment.record' },
     ],
