@@ -87,7 +87,7 @@ export function Shell({ children }: { children: ReactNode }) {
   );
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
-      <aside className={clsx('fixed inset-y-0 start-0 z-40 w-[250px] overflow-y-auto bg-primary transition-transform lg:static lg:translate-x-0', mobileOpen ? 'translate-x-0' : dir === 'rtl' ? 'translate-x-full' : '-translate-x-full')}>
+      <aside className={clsx('fixed inset-y-0 start-0 z-40 w-[250px] overflow-y-auto overscroll-contain bg-primary transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0', mobileOpen ? 'translate-x-0' : dir === 'rtl' ? 'translate-x-full' : '-translate-x-full')}>
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
           <Link href="/" className="leading-tight">
             <div className="text-lg font-extrabold text-white">{t('shell.brand')}</div>
