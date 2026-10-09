@@ -9,6 +9,7 @@ export { schema };
 export * from './schema/index.js';
 export type { SQL } from 'drizzle-orm';
 export type { AnyPgColumn } from 'drizzle-orm/pg-core';
+export { alias } from 'drizzle-orm/pg-core';
 export { and, asc, desc, eq, gt, gte, ilike, inArray, isNull, isNotNull, lt, lte, ne, or, sql, count, sum } from 'drizzle-orm';
 
 export type Db = PostgresJsDatabase<typeof schema>;

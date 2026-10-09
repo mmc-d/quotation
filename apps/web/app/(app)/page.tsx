@@ -1,103 +1,63 @@
 'use client';
-import Link from 'next/link';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { FilePlus2, UserPlus } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { useMe } from '@/lib/me';
-import { h, money } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { Card, ErrorBox, Field, Input, LinkButton, Money, PageHeader, Spinner, Stat, Table, Td, Th } from '@/components/ui';
+import { ErrorBox, LinkButton, PageHeader, Spinner, clsx } from '@/components/ui';
+import { PeriodPicker, initialPeriod, type PeriodState } from './_dashboard/period';
+import { ActionInbox, CashStrip, FunnelCard, ProjectsCard, SalesStrip, TeamTable } from './_dashboard/sections';
+import { TrendCard } from './_dashboard/trend-chart';
+import type { Home } from './_dashboard/types';
 
-interface Cockpit {
-  range: { from: string; to: string };
-  quotes: { count: number; value: string; sent: number; accepted: number; acceptedValue: string; lost: number; pendingApproval: number; winRate: number | null; avgDiscountPercent: number; marginPercent: number | null };
-  byDay: { day: string; count: number; value: string }[];
-  byRep: { id: string; name: string; quotes: number; won: number; won_value: string; value: string }[];
-  pipeline: { key: string; name_ar: string; kind: string; count: number; amount: string; weighted: string }[];
-  leads: { total: number; fresh: number; converted: number } | null;
-  tasks: { open: number; overdue: number };
-  ar: { outstanding: string; overdue: string } | null;
-  requested: { open: string } | null;
-}
-
-function Bars({ data }: { data: { day: string; value: string }[] }) {
-  const { t } = useI18n();
-  const max = Math.max(1, ...data.map((d) => h(d.value)));
-  if (!data.length) return <p className="py-8 text-center text-sm text-muted">{t('cockpit.noQuotes')}</p>;
-  return (
-    <div className="flex h-40 items-end gap-1" role="img" aria-label={t('cockpit.dailyValue')}>
-      {data.map((d) => (
-        <div key={d.day} className="group relative flex-1">
-          <div className="rounded-t bg-gold/80 transition group-hover:bg-primary" style={{ height: `${Math.max(4, (h(d.value) / max) * 150)}px` }} />
-          <div className="pointer-events-none absolute bottom-full start-1/2 z-10 mb-1 hidden whitespace-nowrap rounded bg-ink px-2 py-1 text-[11px] text-white group-hover:block">{d.day.slice(5)} · {money(d.value)}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function CockpitPage() {
+/**
+ * Home control room: what needs action now, where the cash is, how this period's quotes convert,
+ * which projects are at risk, the trend and the sales team. Every section comes from
+ * GET /dashboard/home and is present only when the viewer may read it (cost/margin need
+ * quote.cost.read); empty sections collapse instead of showing rows of zeros.
+ */
+export default function HomePage() {
   const { me, can } = useMe();
-  const { t } = useI18n();
-  const [range, setRange] = useState<{ from?: string; to?: string }>({});
-  const q = useQuery({ queryKey: ['cockpit', range], queryFn: () => api.get<Cockpit>(`/dashboard/cockpit${qs(range)}`) });
+  const { t, bi } = useI18n();
+  const [period, setPeriod] = useState<PeriodState>(initialPeriod);
+  const q = useQuery({
+    queryKey: ['dashboard-home', period.from, period.to],
+    queryFn: () => api.get<Home>(`/dashboard/home${qs({ from: period.from, to: period.to })}`),
+    placeholderData: keepPreviousData, // refetch keeps the frame (dimmed) instead of flashing a spinner
+  });
   const d = q.data;
-  const pipeMax = Math.max(1, ...(d?.pipeline ?? []).filter((p) => p.kind === 'open').map((p) => h(p.amount)));
+  const showSales = !!d?.sales && (d.sales.count > 0 || d.sales.prev.count > 0);
+  const showTeam = !!d?.team && d.team.length > 0;
   return (
     <>
       <PageHeader
         title={t('cockpit.hello', { name: me?.user.name ?? '' })}
-        subtitle={d ? t('cockpit.period', { from: d.range.from, to: d.range.to }) : t('cockpit.title')}
+        subtitle={d ? bi(`الفترة ${d.period.from} ← ${d.period.to} · مقارنة بـ ${d.previous.from} ← ${d.previous.to}`, `Period ${d.period.from} → ${d.period.to} · compared with ${d.previous.from} → ${d.previous.to}`) : bi('لوحة التحكم', 'Control room')}
         actions={<>
-          <Field label={t('common.from')} className="w-36"><Input type="date" value={range.from ?? d?.range.from ?? ''} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></Field>
-          <Field label={t('common.to')} className="w-36"><Input type="date" value={range.to ?? d?.range.to ?? ''} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></Field>
           {can('quote.write') && <LinkButton href="/quotes/new" variant="primary" icon={<FilePlus2 className="size-4" />}>{t('cockpit.newQuote')}</LinkButton>}
           {can('lead.write') && <LinkButton href="/crm/leads?new=1" icon={<UserPlus className="size-4" />}>{t('cockpit.newLead')}</LinkButton>}
         </>}
       />
+      <div className="mb-5"><PeriodPicker value={period} onChange={setPeriod} /></div>
       <ErrorBox error={q.error} />
-      {!d ? <Spinner /> : (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-            <Stat label={t('cockpit.quotes')} value={d.quotes.count} hint={<Money value={d.quotes.value} />} />
-            <Stat label={t('cockpit.accepted')} value={d.quotes.accepted} hint={<Money value={d.quotes.acceptedValue} />} tone="green" />
-            <Stat label={t('cockpit.winRate')} value={d.quotes.winRate === null ? '—' : `${d.quotes.winRate}%`} hint={t('cockpit.lostN', { n: d.quotes.lost })} tone="gold" />
-            <Stat label={t('cockpit.pendingApproval')} value={d.quotes.pendingApproval} hint={<Link href="/quotes?status=pending_approval" className="text-gold-dark hover:underline">{t('common.view')}</Link>} />
-            <Stat label={t('cockpit.avgDiscount')} value={`${d.quotes.avgDiscountPercent}%`} />
-            {d.quotes.marginPercent !== null ? <Stat label={t('cockpit.margin')} value={`${d.quotes.marginPercent}%`} tone={d.quotes.marginPercent < 20 ? 'red' : 'green'} /> : <Stat label={t('cockpit.overdueTasks')} value={d.tasks.overdue} hint={t('cockpit.openN', { n: d.tasks.open })} tone={d.tasks.overdue ? 'red' : undefined} />}
-          </div>
-          {(d.ar || d.leads) && (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {d.ar && <Stat label={t('cockpit.arOutstanding')} value={<Money value={d.ar.outstanding} />} hint={<>{t('cockpit.overdue')} <Money value={d.ar.overdue} /></>} tone={h(d.ar.overdue) > 0 ? 'red' : undefined} />}
-              {d.requested && <Stat label={t('cockpit.openRequests')} value={<Money value={d.requested.open} />} />}
-              {d.leads && <Stat label={t('cockpit.leads')} value={d.leads.total} hint={t('cockpit.leadsHint', { fresh: d.leads.fresh, converted: d.leads.converted })} />}
-              <Stat label={t('cockpit.myTasks')} value={d.tasks.open} hint={d.tasks.overdue ? t('cockpit.overdueN', { n: d.tasks.overdue }) : t('cockpit.noOverdue')} tone={d.tasks.overdue ? 'red' : undefined} />
+      {!d ? (q.isLoading && <Spinner />) : (
+        <div className={clsx('space-y-5 transition-opacity', q.isPlaceholderData && 'opacity-60')} aria-busy={q.isFetching}>
+          <ActionInbox items={d.actions} />
+          <CashStrip cash={d.cash} />
+          {(d.trend.series.length > 0 || d.funnel) && (
+            <div className="grid gap-5 xl:grid-cols-3">
+              {d.trend.series.length > 0 && <div className={d.funnel ? 'xl:col-span-2' : 'xl:col-span-3'}><TrendCard trend={d.trend} /></div>}
+              {d.funnel && <FunnelCard funnel={d.funnel} />}
             </div>
           )}
-          <div className="grid gap-5 xl:grid-cols-2">
-            <Card title={t('cockpit.dailyValue')}><Bars data={d.byDay} /></Card>
-            {d.pipeline.length > 0 && (
-              <Card title={t('cockpit.pipeline')} actions={<Link href="/crm/pipeline" className="text-xs font-bold text-gold-dark hover:underline">{t('common.open')}</Link>}>
-                <div className="space-y-2">
-                  {d.pipeline.filter((p) => p.kind === 'open').map((p) => (
-                    <div key={p.key}>
-                      <div className="mb-0.5 flex justify-between text-xs"><b>{p.name_ar} <span className="font-normal text-muted">({p.count})</span></b><span className="text-muted">{t('cockpit.weighted')} <Money value={p.weighted} /></span></div>
-                      <div className="h-2.5 rounded-full bg-tint"><div className="h-2.5 rounded-full bg-primary" style={{ width: `${(h(p.amount) / pipeMax) * 100}%` }} /></div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-          </div>
-          {d.byRep.length > 0 && (
-            <Card title={t('cockpit.team')} padded={false}>
-              <Table>
-                <thead><tr><Th>{t('cockpit.rep')}</Th><Th className="text-center">{t('cockpit.repQuotes')}</Th><Th className="text-center">{t('cockpit.repWon')}</Th><Th>{t('cockpit.quotesValue')}</Th><Th>{t('cockpit.wonValue')}</Th></tr></thead>
-                <tbody>{d.byRep.map((r) => <tr key={r.id}><Td className="font-bold">{r.name}</Td><Td className="text-center num">{r.quotes}</Td><Td className="text-center num">{r.won}</Td><Td><Money value={r.value} /></Td><Td><Money value={r.won_value} /></Td></tr>)}</tbody>
-              </Table>
-            </Card>
-          )}
+          {showSales && <SalesStrip sales={d.sales!} />}
+          {(d.projects?.total || showTeam) ? (
+            <div className={clsx('grid gap-5', d.projects?.total && showTeam && 'xl:grid-cols-3')}>
+              {!!d.projects?.total && <ProjectsCard projects={d.projects} />}
+              {showTeam && <div className={d.projects?.total ? 'min-w-0 xl:col-span-2' : 'min-w-0'}><TeamTable team={d.team!} margin={d.visibility.margin} /></div>}
+            </div>
+          ) : null}
         </div>
       )}
     </>
