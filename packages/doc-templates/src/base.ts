@@ -31,6 +31,10 @@ export interface CompanyBlock {
   website?: string | null;
   bankName?: string | null;
   iban?: string | null;
+  bankAccountName?: string | null;
+  bankAccountNumber?: string | null;
+  /** uploaded bank QR image (data URL), loaded only for payment documents */
+  bankQrDataUrl?: string | null;
   representativeName?: string | null;
   representativeMobile?: string | null;
   stampDataUrl?: string | null;
@@ -81,11 +85,12 @@ img.sar{height:.85em;width:auto;vertical-align:middle;margin-inline-start:.15em;
 .sig{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:22px;page-break-inside:avoid}
 .sig .col{text-align:center}
 .sig .line{border-bottom:1px solid var(--ink);height:48px;margin:6px 20px}
-.stamp{width:150px;height:150px;object-fit:contain;opacity:.92;transform:rotate(-7deg)}
+.stamp{width:188px;height:188px;object-fit:contain;opacity:.92;transform:rotate(-7deg)}
 .foot{margin-top:14px;padding-top:6px;border-top:2px solid var(--primary);display:flex;justify-content:space-between;color:var(--muted);font-size:9.5px}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;background:var(--tint);color:var(--gold-dk);font-weight:700;font-size:10px}
 .ltr{direction:ltr;unicode-bidi:embed}
 .qr{width:120px;height:120px}
+table.bank{border-collapse:collapse;font-size:11px}table.bank td{padding:1.5px 0}table.bank .bk{color:var(--muted);padding-inline-end:12px;white-space:nowrap}table.bank .bv{font-weight:700}
 `;
 
 export function header(c: CompanyBlock): string {

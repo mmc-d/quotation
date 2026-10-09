@@ -15,15 +15,15 @@ interface Branch { id: string; code: string; nameAr: string; nameEn: string | nu
 interface Company {
   legalNameAr: string; legalNameEn: string | null; tradeNameAr: string | null; unifiedNumber: string | null; crNumber: string | null;
   vatRegistered: boolean; vatEffectiveFrom: string | null; vatNumber: string | null; address: Address;
-  phone: string | null; email: string | null; website: string | null; bankName: string | null; iban: string | null;
+  phone: string | null; email: string | null; website: string | null; bankName: string | null; iban: string | null; bankAccountName: string | null; bankAccountNumber: string | null;
   representativeName: string | null; representativeTitle: string | null; representativeMobile: string | null;
-  logoFileId: string | null; stampFileId: string | null;
+  logoFileId: string | null; stampFileId: string | null; bankQrFileId: string | null;
   quoteDefaults: { validityDays?: number; notesAr?: string; termsAr?: string; termsEn?: string; warrantyText?: string };
   approvalPolicy: { maxDiscountPercent: number; minMarginPercent: number };
   branches: Branch[];
 }
 
-type Form = Omit<Company, 'branches' | 'logoFileId' | 'stampFileId'>;
+type Form = Omit<Company, 'branches' | 'logoFileId' | 'stampFileId' | 'bankQrFileId'>;
 
 const s = (v: string | null | undefined) => v ?? '';
 const nn = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
@@ -43,7 +43,7 @@ function CompanySettings() {
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
     if (q.data && !f) {
-      const { branches: _b, logoFileId: _l, stampFileId: _s, ...rest } = q.data;
+      const { branches: _b, logoFileId: _l, stampFileId: _s, bankQrFileId: _q, ...rest } = q.data;
       setF({ ...rest, address: rest.address ?? {}, quoteDefaults: rest.quoteDefaults ?? {}, approvalPolicy: rest.approvalPolicy ?? { maxDiscountPercent: 10, minMarginPercent: 20 } });
     }
   }, [q.data, f]);
@@ -82,7 +82,7 @@ function CompanySettings() {
       legalNameAr: f.legalNameAr.trim(), legalNameEn: nn(f.legalNameEn), tradeNameAr: nn(f.tradeNameAr),
       unifiedNumber: nn(f.unifiedNumber), crNumber: nn(f.crNumber),
       vatRegistered: f.vatRegistered, vatNumber: nn(f.vatNumber), vatEffectiveFrom: nn(f.vatEffectiveFrom),
-      address, phone: nn(f.phone), email: nn(f.email) ?? '', website: nn(f.website), bankName: nn(f.bankName), iban: ibanClean || null,
+      address, phone: nn(f.phone), email: nn(f.email) ?? '', website: nn(f.website), bankName: nn(f.bankName), iban: ibanClean || null, bankAccountName: nn(f.bankAccountName), bankAccountNumber: nn(f.bankAccountNumber)?.replace(/\s+/g, '') ?? null,
       representativeName: nn(f.representativeName), representativeTitle: nn(f.representativeTitle), representativeMobile: nn(f.representativeMobile),
       quoteDefaults, approvalPolicy: f.approvalPolicy,
     };
@@ -150,6 +150,8 @@ function CompanySettings() {
           <Card title={bi('الحساب البنكي', 'Bank account')}>
             <div className="grid gap-3">
               <Field label={bi('اسم البنك', 'Bank name')}><Input value={s(f.bankName)} onChange={(e) => set('bankName', e.target.value)} /></Field>
+              <Field label={bi('اسم صاحب الحساب (المستفيد)', 'Account holder (beneficiary)')} hint={bi('اتركه فارغًا لاستخدام اسم المنشأة', 'Leave empty to use the company name')}><Input value={s(f.bankAccountName)} onChange={(e) => set('bankAccountName', e.target.value)} /></Field>
+              <Field label={bi('رقم الحساب', 'Account number')}><Input dir="ltr" inputMode="numeric" value={s(f.bankAccountNumber)} onChange={(e) => set('bankAccountNumber', e.target.value)} /></Field>
               <Field label={bi('رقم الآيبان (IBAN)', 'IBAN')} error={errs.iban} hint={bi('SA + 22 رقمًا', 'SA + 22 digits')}><Input dir="ltr" value={s(f.iban)} onChange={(e) => set('iban', e.target.value.toUpperCase())} placeholder="SA00 0000 0000 0000 0000 0000" /></Field>
             </div>
           </Card>
@@ -192,6 +194,7 @@ function CompanySettings() {
 
       <div className="mt-2 grid gap-4 lg:grid-cols-2">
         <ImageUpload kind="logo" title={bi('الشعار', 'Logo')} fileId={q.data.logoFileId} note={bi('يظهر في رأس عروض الأسعار والعقود والفواتير.', 'Shown in the header of quotes, contracts and invoices.')} />
+        <ImageUpload kind="bank_qr" title={bi('رمز QR للحساب البنكي', 'Bank account QR')} fileId={q.data.bankQrFileId} note={bi('صورة رمز QR من تطبيق البنك، تُطبع مع بيانات الحساب في طلبات الدفع. إن لم تُرفع يُطبع رمز QR يحتوي رقم الآيبان.', 'The QR image from your bank app, printed with the account details on payment requests. Without it, a QR containing the IBAN is printed.')} />
         <ImageUpload kind="stamp" title={bi('الختم', 'Stamp')} fileId={q.data.stampFileId} note={bi('لا يُطبع الختم تلقائيًا أبدًا: يُضاف فقط عندما يطبع مستخدم مخوَّل (صلاحية «طباعة العقد بالختم») نسخة مختومة من العقد صراحةً، ويُسجَّل ذلك في سجل التدقيق.', 'The stamp is never printed automatically: it is added only when an authorized user (the “print contract with stamp” permission) explicitly prints a stamped copy of the contract, and this is recorded in the audit log.')} />
       </div>
 
@@ -200,7 +203,7 @@ function CompanySettings() {
   );
 }
 
-function ImageUpload({ kind, title, fileId, note }: { kind: 'logo' | 'stamp'; title: string; fileId: string | null; note: string }) {
+function ImageUpload({ kind, title, fileId, note }: { kind: 'logo' | 'stamp' | 'bank_qr'; title: string; fileId: string | null; note: string }) {
   const { bi } = useI18n();
   const ref = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
@@ -215,7 +218,7 @@ function ImageUpload({ kind, title, fileId, note }: { kind: 'logo' | 'stamp'; ti
     try {
       const dataBase64 = await readFileBase64(file);
       await api.post(`/settings/company/${kind}`, { filename: file.name, mime: file.type, dataBase64 });
-      toast.success(kind === 'logo' ? bi('تم رفع الشعار', 'Logo uploaded') : bi('تم رفع الختم', 'Stamp uploaded'));
+      toast.success(kind === 'logo' ? bi('تم رفع الشعار', 'Logo uploaded') : kind === 'stamp' ? bi('تم رفع الختم', 'Stamp uploaded') : bi('تم رفع رمز QR', 'QR uploaded'));
       qc.invalidateQueries({ queryKey: ['settings-company'] });
     } catch (e) { setError(e); } finally { setBusy(false); if (ref.current) ref.current.value = ''; }
   };

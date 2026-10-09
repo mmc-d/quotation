@@ -17,9 +17,23 @@ export interface PaymentRequestDoc {
   payUrl?: string | null;
 }
 
+const formatIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
+
+/** Bank-transfer details with the bank's QR (uploaded image, else a QR of the IBAN). */
+function bankBox(co: CompanyBlock, number: string, qr: string | null): string {
+  if (!co.bankName && !co.iban && !co.bankAccountNumber) return '';
+  const row = (k: string, v: string | null | undefined, ltr = false) => (v ? `<tr><td class="bk">${k}</td><td class="bv${ltr ? ' ltr' : ''}">${esc(v)}</td></tr>` : '');
+  return `<div class="box" style="display:flex;gap:14px;align-items:center">
+${qr ? `<div style="text-align:center"><img class="qr" src="${qr}" alt=""><div style="font-size:8.5px;color:var(--muted)">${co.bankQrDataUrl ? 'امسح للتحويل' : 'امسح لنسخ الآيبان'}</div></div>` : ''}
+<div style="flex:1"><h3>التحويل البنكي</h3>
+<table class="bank">${row('اسم المستفيد', co.bankAccountName || co.legalNameAr)}${row('البنك', co.bankName)}${row('رقم الحساب', co.bankAccountNumber, true)}${row('الآيبان IBAN', co.iban ? formatIban(co.iban) : null, true)}</table>
+<div style="margin-top:4px">يرجى ذكر رقم الطلب <b class="ltr">${esc(number)}</b> في وصف التحويل.</div></div></div>`;
+}
+
 /** Payment request — NOT a tax invoice (the tax invoice is issued by the back office on receipt). */
 export async function renderPaymentRequestHtml(d: PaymentRequestDoc): Promise<string> {
   const qr = d.payUrl ? await QRCode.toDataURL(d.payUrl, { margin: 1, width: 240 }) : null;
+  const bankQr = d.company.bankQrDataUrl ?? (d.company.iban ? await QRCode.toDataURL(d.company.iban.replace(/\s+/g, ''), { margin: 1, width: 240 }) : null);
   const due = d.amount - d.paidAmount;
   const body = `${header(d.company)}
 <h1 class="doc">طلب دفع</h1><div class="doc-en">Payment request — this is not a tax invoice</div>
@@ -36,7 +50,7 @@ export async function renderPaymentRequestHtml(d: PaymentRequestDoc): Promise<st
 ${d.paidAmount > 0 ? `<tr><td>المدفوع</td><td class="money"><span class="ltr">- ${m2(d.paidAmount)}</span></td></tr>` : ''}</tbody></table>
 <div class="totals"><div class="row grand"><span>المبلغ المستحق</span><span>${m2(due)}</span></div></div>
 <div class="words">${esc(tafqitHalalas(due))} فقط لا غير</div>
-${d.company.bankName || d.company.iban ? `<div class="box"><h3>التحويل البنكي</h3>${esc(d.company.bankName ?? '')}${d.company.iban ? `<br><span class="ltr">IBAN: ${esc(d.company.iban)}</span>` : ''}<br>يرجى ذكر رقم الطلب <b class="ltr">${esc(d.number)}</b> في وصف التحويل.</div>` : ''}
+${bankBox(d.company, d.number, bankQr)}
 ${qr ? `<div class="box" style="display:flex;gap:12px;align-items:center"><img class="qr" src="${qr}" alt=""><div><h3>الدفع الإلكتروني</h3>مدى · Apple Pay · بطاقات ائتمانية<br><span class="ltr" style="font-size:9px">${esc(d.payUrl)}</span></div></div>` : ''}
 ${footer(d.company, `<span class="ltr">${esc(d.number)}</span>`)}`;
   return page(`طلب دفع ${d.number}`, body);

@@ -27,6 +27,10 @@ export const company = pgTable('company', {
   website: text('website'),
   bankName: text('bank_name'),
   iban: text('iban'),
+  bankAccountName: text('bank_account_name'),
+  bankAccountNumber: text('bank_account_number'),
+  /** optional QR image from the bank's app; without it documents print a QR of the IBAN */
+  bankQrFileId: uuid('bank_qr_file_id'),
   representativeName: text('representative_name'),
   representativeTitle: text('representative_title'),
   representativeMobile: text('representative_mobile'),

@@ -273,7 +273,7 @@ async function renderRequestPdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0
   const [p] = pr.partyId ? await tx.select().from(party).where(eq(party.id, pr.partyId)) : [];
   const [c] = pr.contractId ? await tx.select().from(contract).where(eq(contract.id, pr.contractId)) : [];
   const [m] = pr.milestoneId ? await tx.select().from(billingMilestone).where(eq(billingMilestone.id, pr.milestoneId)) : [];
-  const html = await renderPaymentRequestHtml({ company: await companyBlock(tx), number: pr.number, date: pr.createdAt.toISOString().slice(0, 10), dueDate: pr.dueDate, clientName: p?.nameAr ?? '', contractNumber: c?.number, milestoneName: m?.nameAr ?? '', amount: toHalalas(pr.amount), paidAmount: toHalalas(pr.paidAmount), payUrl: `${config.publicBaseUrl}/p/${pr.publicToken}` });
+  const html = await renderPaymentRequestHtml({ company: await companyBlock(tx, false, true), number: pr.number, date: pr.createdAt.toISOString().slice(0, 10), dueDate: pr.dueDate, clientName: p?.nameAr ?? '', contractNumber: c?.number, milestoneName: m?.nameAr ?? '', amount: toHalalas(pr.amount), paidAmount: toHalalas(pr.paidAmount), payUrl: `${config.publicBaseUrl}/p/${pr.publicToken}` });
   return htmlToPdf(html, config.gotenbergUrl);
 }
 
@@ -328,7 +328,7 @@ export class FinancePublicController {
       const co = await companyBlock(tx);
       const invoices = pr.status === 'paid' || pr.status === 'partially_paid' ? await tx.select({ id: invoiceMirror.id, number: invoiceMirror.number, typeCode: invoiceMirror.typeCode, total: invoiceMirror.total }).from(invoiceMirror).where(eq(invoiceMirror.paymentRequestId, pr.id)) : [];
       return {
-        company: { legalNameAr: co.legalNameAr, bankName: co.bankName, iban: co.iban, vatRegistered: co.vatRegistered },
+        company: { legalNameAr: co.legalNameAr, bankName: co.bankName, iban: co.iban, bankAccountName: co.bankAccountName, bankAccountNumber: co.bankAccountNumber, vatRegistered: co.vatRegistered },
         number: pr.number, status: pr.status, amount: pr.amount, paidAmount: pr.paidAmount, due: halalasToFixed(toHalalas(pr.amount) - toHalalas(pr.paidAmount)), dueDate: pr.dueDate,
         clientName: p?.nameAr ?? '', contractNumber: c?.number ?? ag?.number ?? null,
         milestone: m?.nameAr ?? (ag ? `عقد صيانة ${ag.number} — من ${pr.periodFrom ?? ''} إلى ${pr.periodTo ?? ''}` : ''), canPayOnline: ['draft', 'sent', 'partially_paid'].includes(pr.status), sandbox: config.payments.provider === 'sandbox' && config.allowSandbox, invoices,

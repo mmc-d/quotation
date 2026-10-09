@@ -57,7 +57,7 @@ importers:
         specifier: ^5.1.0
         version: 5.2.1
       fast-xml-parser:
-        specifier: ^5
+        specifier: ^5.11.2
         version: 5.11.2
       helmet:
         specifier: ^8.3.0
@@ -74,6 +74,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@22.20.5)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -3572,8 +3575,7 @@ snapshots:
     dependencies:
       hono: 4.13.13
 
-  '@img/colour@1.1.0':
-    optional: true
+  '@img/colour@1.1.0': {}
 
   '@img/sharp-darwin-arm64@0.35.5':
     optionalDependencies:
@@ -5396,8 +5398,7 @@ snapshots:
 
   scheduler@0.28.0: {}
 
-  semver@7.8.5:
-    optional: true
+  semver@7.8.5: {}
 
   send@1.2.1:
     dependencies:
@@ -5469,7 +5470,6 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.5
       '@img/sharp-win32-x64': 0.35.5
       '@types/node': 22.20.5
-    optional: true
 
   shebang-command@2.0.0:
     dependencies:

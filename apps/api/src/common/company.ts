@@ -9,14 +9,16 @@ export async function loadCompany(tx: Tx) {
   return co;
 }
 
-/** Company block for documents; the stamp image is loaded only when it will be applied. */
-export async function companyBlock(tx: Tx, withStamp = false): Promise<CompanyBlock> {
+const dataUrl = async (tx: Tx, fileId: string) => {
+  const f = await readStoredFile(tx, fileId);
+  return f ? `data:${f.mime};base64,${f.data.toString('base64')}` : null;
+};
+
+/** Company block for documents; the stamp image is loaded only when it will be applied, the bank QR only for payment documents. */
+export async function companyBlock(tx: Tx, withStamp = false, withBankQr = false): Promise<CompanyBlock> {
   const co = await loadCompany(tx);
-  let stampDataUrl: string | null = null;
-  if (withStamp && co.stampFileId) {
-    const f = await readStoredFile(tx, co.stampFileId);
-    if (f) stampDataUrl = `data:${f.mime};base64,${f.data.toString('base64')}`;
-  }
+  const stampDataUrl = withStamp && co.stampFileId ? await dataUrl(tx, co.stampFileId) : null;
+  const bankQrDataUrl = withBankQr && co.bankQrFileId ? await dataUrl(tx, co.bankQrFileId) : null;
   return {
     legalNameAr: co.legalNameAr,
     legalNameEn: co.legalNameEn,
@@ -30,6 +32,9 @@ export async function companyBlock(tx: Tx, withStamp = false): Promise<CompanyBl
     website: co.website,
     bankName: co.bankName,
     iban: co.iban,
+    bankAccountName: co.bankAccountName,
+    bankAccountNumber: co.bankAccountNumber,
+    bankQrDataUrl,
     representativeName: co.representativeName,
     representativeMobile: co.representativeMobile,
     stampDataUrl,

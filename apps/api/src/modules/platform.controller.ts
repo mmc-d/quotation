@@ -11,6 +11,7 @@ import { audit, diff } from '../common/audit.js';
 import { badRequest, conflict, notFound } from '../common/errors.js';
 import { readStoredFile, storeFile } from '../common/files.js';
 import { ZodPipe, zPage } from '../common/zod.js';
+import { cleanStampImage } from '../common/stamp.js';
 
 const addressSchema = z.object({ buildingNumber: z.string().optional(), street: z.string().optional(), district: z.string().optional(), city: z.string().optional(), postalCode: z.string().optional(), additionalNumber: z.string().optional(), country: z.string().optional() }).partial();
 
@@ -28,6 +29,8 @@ const companySchema = z.object({
   email: z.string().email().nullish().or(z.literal('')),
   website: z.string().nullish(),
   bankName: z.string().nullish(),
+  bankAccountName: z.string().max(200).nullish(),
+  bankAccountNumber: z.string().max(40).nullish(),
   iban: z.string().nullish().refine((v) => !v || /^SA\d{22}$/.test(v.replace(/\s+/g, '')), 'IBAN: SA + 22 digits'),
   representativeName: z.string().nullish(),
   representativeTitle: z.string().nullish(),
@@ -102,17 +105,24 @@ export class SettingsController {
     }, actor.userId);
   }
 
-  /** Logo/stamp upload (base64 JSON body, PNG/JPEG ≤ 2 MB). The stamp is only ever applied explicitly. */
+  /** Logo/stamp/bank-QR upload (base64 JSON body, PNG/JPEG ≤ 2 MB). The stamp is only ever applied explicitly. */
   @Post('company/:kind')
   @Perm('admin.settings')
-  async uploadImage(@Actor() actor: RequestActor, @Param('kind') kind: 'logo' | 'stamp', @Body(new ZodPipe(z.object({ filename: z.string(), mime: z.enum(['image/png', 'image/jpeg']), dataBase64: z.string().max(3_000_000) }))) body: { filename: string; mime: string; dataBase64: string }) {
-    if (kind !== 'logo' && kind !== 'stamp') throw notFound('upload target');
+  async uploadImage(@Actor() actor: RequestActor, @Param('kind') kind: 'logo' | 'stamp' | 'bank_qr', @Body(new ZodPipe(z.object({ filename: z.string(), mime: z.enum(['image/png', 'image/jpeg']), dataBase64: z.string().max(3_000_000) }))) body: { filename: string; mime: string; dataBase64: string }) {
+    if (kind !== 'logo' && kind !== 'stamp' && kind !== 'bank_qr') throw notFound('upload target');
     return tenantTx(actor.tenantId, async (tx) => {
-      const data = Buffer.from(body.dataBase64, 'base64');
+      let data: Buffer = Buffer.from(body.dataBase64, 'base64');
       if (data.length > 2_000_000) throw badRequest('image larger than 2 MB');
-      const f = await storeFile(tx, actor.tenantId, data, body.filename, body.mime, actor.userId);
+      let { filename, mime } = body;
+      if (kind === 'stamp') {
+        // paper background → transparent, empty margin trimmed (see cleanStampImage)
+        data = await cleanStampImage(data).catch(() => { throw badRequest('the stamp image could not be read'); });
+        filename = `${filename.replace(/\.[^.]+$/, '')}.png`;
+        mime = 'image/png';
+      }
+      const f = await storeFile(tx, actor.tenantId, data, filename, mime, actor.userId);
       const [co] = await tx.select().from(company).limit(1);
-      await tx.update(company).set(kind === 'logo' ? { logoFileId: f.id } : { stampFileId: f.id }).where(eq(company.id, co!.id));
+      await tx.update(company).set(kind === 'logo' ? { logoFileId: f.id } : kind === 'stamp' ? { stampFileId: f.id } : { bankQrFileId: f.id }).where(eq(company.id, co!.id));
       await audit(tx, actor, `upload_${kind}`, 'company', co!.id, null, { fileId: f.id, sha256: f.sha256 });
       return { fileId: f.id };
     });

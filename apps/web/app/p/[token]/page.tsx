@@ -10,7 +10,7 @@ import { InlineError, PublicCard, PublicLoading, PublicShell, PublicState, publi
 import { bi as biNow, useI18n } from '@/lib/i18n';
 
 interface PayView {
-  company: { legalNameAr: string; bankName: string | null; iban: string | null; vatRegistered: boolean };
+  company: { legalNameAr: string; bankName: string | null; iban: string | null; bankAccountName?: string | null; bankAccountNumber?: string | null; vatRegistered: boolean };
   number: string; status: string; amount: string; paidAmount: string; due: string; dueDate: string;
   clientName: string; contractNumber: string | null; milestone: string;
   canPayOnline: boolean; sandbox: boolean;
@@ -128,8 +128,9 @@ export default function PaymentPage({ params }: { params: Promise<{ token: strin
               <h2 className="mb-3 flex items-center gap-1.5 text-base font-extrabold text-primary"><Landmark className="size-5" />{bi('التحويل البنكي', 'Bank transfer')}</h2>
               {d.company.iban ? (
                 <div className="space-y-3 text-sm">
-                  <BankRow label={bi('اسم المستفيد', 'Beneficiary name')} value={d.company.legalNameAr} icon={<Building2 className="size-4" />} />
+                  <BankRow label={bi('اسم المستفيد', 'Beneficiary name')} value={d.company.bankAccountName || d.company.legalNameAr} icon={<Building2 className="size-4" />} />
                   {d.company.bankName && <BankRow label={bi('البنك', 'Bank')} value={d.company.bankName} icon={<Landmark className="size-4" />} />}
+                  {d.company.bankAccountNumber && <BankRow label={bi('رقم الحساب', 'Account number')} value={d.company.bankAccountNumber} icon={<Landmark className="size-4" />} />}
                   <div className="rounded-xl border border-line bg-tint/40 p-3">
                     <div className="text-[11px] font-bold text-muted">{bi('رقم الآيبان (IBAN)', 'IBAN')}</div>
                     <div className="mt-1 flex items-center justify-between gap-2">
