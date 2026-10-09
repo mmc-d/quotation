@@ -183,6 +183,41 @@
       "when": 1791382541693,
       "tag": "0025_cash_vouchers_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791449738594,
+      "tag": "0026_hr_offers_employees",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791449742364,
+      "tag": "0027_hr_offers_employees_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791454651210,
+      "tag": "0028_hr_leave_payroll",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791454662649,
+      "tag": "0029_hr_leave_payroll_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791455656926,
+      "tag": "0030_hr_bonus_voucher",
+      "breakpoints": true
     }
   ]
 }

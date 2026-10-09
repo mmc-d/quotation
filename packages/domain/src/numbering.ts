@@ -79,6 +79,9 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   rfq: { pattern: 'RFQ-{SEQ:4}', reset: 'never' },
   payment_voucher: { pattern: 'PV-{SEQ:5}', reset: 'never' },
   receipt_voucher: { pattern: 'RV-{SEQ:5}', reset: 'never' },
+  employee: { pattern: 'EMP-{SEQ:4}', reset: 'never' },
+  job_offer: { pattern: 'OFR-{SEQ:4}', reset: 'never' },
+  leave_request: { pattern: 'LV-{SEQ:5}', reset: 'never' },
 };
 
 /** The bucket key a sequence counts within (e.g. the day for daily series). */

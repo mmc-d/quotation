@@ -46,7 +46,11 @@ Not built: OCR/AI capture of supplier documents, supplier ZATCA XML parsing (INV
 | 7c IoT | Signed ThingsBoard webhook → one ticket + work order per device/alarm type, heartbeats, ack/clear back to ThingsBoard. |
 | 7c AI | Gateway (Claude, PII redaction, budget, append-only log), BOQ → draft quote with human approval, reply drafting & translation, read-only MCP server with personal tokens. Sandbox until `ANTHROPIC_API_KEY` is set. |
 
-Not built: HR master data/payroll (Frappe HR), knowledge base, WhatsApp AI assistant, commission tiers/splits, AI evaluation sets.
+HR (2026-10-08): job offers with Labor Law checks, a stamped Arabic offer letter, and the employee register (ID/contract/probation alerts) — see `/hr/offers`, `/hr/employees`.
+
+HR pay (2026-10-08): leave requests and approvals (annual, emergency, sick per Art. 117, unpaid) with accrued balances, bonuses/deductions (bonus by payment voucher), monthly payroll with GOSI employee share, approval lock, bank CSV — `/hr/leaves`, `/hr/payroll`, `/hr/me`. Payslip PDF, WPS bank formats, attendance and end-of-service calculation are not built yet.
+
+Not built: attendance (Frappe HR), knowledge base, WhatsApp AI assistant, commission tiers/splits, AI evaluation sets.
 
 ## Phase 6 — Full accounting: ERPNext (owner decision 2026-10-06)
 

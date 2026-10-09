@@ -27,6 +27,8 @@ import { IotBindingController, IotController } from './modules/iot.controller.js
 import { CommissionsController } from './modules/commissions.controller.js';
 import { KbController } from './modules/kb.controller.js';
 import { VouchersController } from './modules/vouchers.controller.js';
+import { EmployeesController, JobOffersController } from './modules/hr.controller.js';
+import { EmployeePayController, LeavesController, MyHrController, PayrollController } from './modules/hr-pay.controller.js';
 import { AiController } from './ai/ai.controller.js';
 import { McpController } from './ai/mcp.js';
 
@@ -36,7 +38,7 @@ import { McpController } from './ai/mcp.js';
     PartiesController, ProductsController, QuotesController, ContractsController, DashboardController,
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
     PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, PayablesController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
-    IotController, IotBindingController, CommissionsController, KbController, VouchersController,
+    IotController, IotBindingController, CommissionsController, KbController, VouchersController, JobOffersController, EmployeesController, EmployeePayController, LeavesController, MyHrController, PayrollController,
     AiController, McpController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

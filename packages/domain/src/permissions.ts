@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'agreement.read', 'agreement.write', 'portal.manage',
   'iot.manage', 'ai.use', 'ai.approve', 'commission.read', 'commission.manage',
   'kb.read', 'kb.write',
+  'hr.read', 'hr.write', 'hr.approve',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -113,6 +114,10 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
   technician: {
     name_ar: 'فني', name_en: 'Technician', maxDiscountPercent: 0,
     grants: { 'party.read': 'company', 'product.read': 'all', 'project.read': 'own', 'asset.read': 'company', 'asset.write': 'own', 'workorder.read': 'own', 'workorder.write': 'own', 'ticket.read': 'own', 'inventory.read': 'own', 'kb.read': 'company' },
+  },
+  hr_officer: {
+    name_ar: 'مسؤول الموارد البشرية', name_en: 'HR Officer', maxDiscountPercent: 0,
+    grants: { 'hr.read': 'company', 'hr.write': 'company', 'party.read': 'company', 'project.read': 'company' },
   },
   auditor: {
     name_ar: 'مدقق', name_en: 'Auditor', maxDiscountPercent: 0,

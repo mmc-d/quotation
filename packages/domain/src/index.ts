@@ -14,3 +14,5 @@ export * from './scheduling.js';
 export * from './inventory.js';
 export * from './service.js';
 export * from './intelligence.js';
+export * from './hr.js';
+export * from './payroll.js';

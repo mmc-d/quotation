@@ -68,6 +68,15 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'الموارد البشرية', en: 'HR', items: [
+      { href: '/hr/employees', label: 'الموظفون', en: 'Employees', icon: 'IdCard', perm: 'hr.read' },
+      { href: '/hr/offers', label: 'العروض الوظيفية', en: 'Job offers', icon: 'FileUser', perm: 'hr.read' },
+      { href: '/hr/leaves', label: 'الإجازات', en: 'Leave', icon: 'CalendarCheck', perm: 'hr.read' },
+      { href: '/hr/payroll', label: 'مسير الرواتب', en: 'Payroll', icon: 'Wallet', perm: 'hr.read' },
+      { href: '/hr/me', label: 'إجازاتي وطلباتي', en: 'My leave', icon: 'CalendarHeart' },
+    ],
+  },
+  {
     label: 'الإعدادات', en: 'Settings', items: [
       { href: '/settings/company', label: 'بيانات المنشأة', en: 'Company', icon: 'Landmark', perm: 'admin.settings' },
       { href: '/settings/users', label: 'المستخدمون والصلاحيات', en: 'Users & roles', icon: 'Users', perm: 'admin.users' },
