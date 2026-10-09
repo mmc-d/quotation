@@ -13,6 +13,7 @@ import { useI18n } from '@/lib/i18n';
 import { date, dateTime } from '@/lib/format';
 import { BillingPanel } from '@/components/billing-panel';
 import { CommissionSplitCard } from '@/components/commission-split-card';
+import { PartyPicker } from '@/components/party-picker';
 import { Badge, Button, Card, clsx, Field, Input, Money, PageHeader, Select, StatusBadge, Table, Td, Textarea, Th } from '@/components/ui';
 import { ConfirmDialog, errMsg, isConflict, NumInput, ReasonDialog } from '../../quotes/_components/common';
 import { Menu } from '../../quotes/_components/menu';
@@ -110,6 +111,21 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
   const applyView = (c: ContractView) => {
     qc.setQueryData(['contract', c.id], c);
     qc.invalidateQueries({ queryKey: ['contracts'] });
+  };
+
+  const [relinking, setRelinking] = useState(false);
+  const linkParty = async (partyId: string) => {
+    if (dirty) { toast.error(bi('احفظ تعديلات العقد أولًا', 'Save the contract changes first')); return; }
+    setBusy('party');
+    try {
+      applyView(await api.post<ContractView>(`/contracts/${contract.id}/party`, { partyId }));
+      setRelinking(false);
+      toast.success(bi('رُبط العقد بالعميل', 'Contract linked to the customer'));
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const save = async (): Promise<ContractView | null> => {
@@ -245,6 +261,21 @@ export function ContractEditor({ contract }: { contract: ContractView }) {
           </Card>
 
           <Card title={bi('الطرف الأول (العميل)', 'First party (customer)')}>
+            <div className="mb-4 rounded-lg border border-line p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-gold-dark">{bi('العميل المرتبط', 'Linked customer')}</span>
+                {contract.party && canWrite && !relinking && <Button size="sm" variant="ghost" onClick={() => setRelinking(true)}>{bi('تغيير', 'Change')}</Button>}
+              </div>
+              {contract.party && !relinking
+                ? <Link href={`/customers/${contract.party.id}`} className="text-sm font-bold text-primary hover:underline">{locale === 'en' ? contract.party.nameEn || contract.party.nameAr : contract.party.nameAr}</Link>
+                : canWrite
+                  ? <>
+                    {!contract.party && <p className="mb-2 flex items-center gap-1.5 text-xs text-danger"><AlertTriangle className="size-3.5" />{bi('العقد غير مرتبط بعميل — اربطه لتتمكن من إصدار طلبات الدفع والفواتير.', 'The contract has no linked customer — link one to issue payment requests and invoices.')}</p>}
+                    <div className={clsx(busy === 'party' && 'pointer-events-none opacity-60')}><PartyPicker value={null} onChange={(pt) => pt && void linkParty(pt.id)} /></div>
+                    {relinking && <Button size="sm" variant="ghost" className="mt-2" onClick={() => setRelinking(false)}>{bi('إلغاء', 'Cancel')}</Button>}
+                  </>
+                  : <p className="text-sm text-muted">—</p>}
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               {clientField('name', bi('اسم العميل / المنشأة', 'Customer / company name'))}
               {clientField('representative', bi('ممثل العميل', 'Customer representative'))}

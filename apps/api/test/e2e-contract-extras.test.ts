@@ -131,6 +131,30 @@ describe('Contract template sets', () => {
   });
 });
 
+describe('Linking a contract to a customer', () => {
+  it('links a contract made from a quote without a customer, updates its project, and fixes the customer once billed', async () => {
+    const q = await owner.post('/api/quotes', { clientName: 'عميل بلا ربط', clientPhone: '0551234567', discountType: 'amount', discountValue: '0', vatOn: true, lines: [{ code: 'IP-IN7', description: 'شاشة داخلية', unitPrice: '850', qty: '1' }] });
+    myQuotes.push(q.id);
+    expect((await owner.post(`/api/quotes/${q.id}/submit`)).status).toBe('approved');
+    const c = await owner.post(`/api/contracts/from-quote/${q.id}`, {});
+    expect(c).toMatchObject({ partyId: null, party: null });
+    await owner.post(`/api/contracts/${c.id}/status`, { status: 'signed' });
+    await owner.post(`/api/finance/milestones/${c.milestones[0].id}/request`, {}, { expect: 400 }); // no customer yet
+
+    await rep.post(`/api/contracts/${c.id}/party`, { partyId: S.party.id }, { expect: 403 });
+    await owner.post(`/api/contracts/${c.id}/party`, { partyId: '00000000-0000-4000-8000-000000000000' }, { expect: 404 });
+    const linked = await owner.post(`/api/contracts/${c.id}/party`, { partyId: S.party.id });
+    expect(linked).toMatchObject({ partyId: S.party.id, party: { id: S.party.id, nameAr: S.party.nameAr } });
+    expect(linked.clientBlock.name).toBe('عميل بلا ربط'); // a signed contract's text stays as signed
+    const prj = (await owner.get(`/api/projects?q=${encodeURIComponent(c.number)}`)).rows[0];
+    expect((await owner.get(`/api/projects/${prj.id}`)).customer).toMatchObject({ id: S.party.id });
+
+    await owner.post(`/api/finance/milestones/${c.milestones[0].id}/request`, {});
+    const other = await owner.post('/api/parties', { nameAr: 'عميل آخر للربط' });
+    await owner.post(`/api/contracts/${c.id}/party`, { partyId: other.id }, { expect: 409 });
+  });
+});
+
 describe('Company calendar', () => {
   it('returns working days and seeded fixed holidays; admins manage holidays', async () => {
     const cal = await rep.get('/api/calendar');

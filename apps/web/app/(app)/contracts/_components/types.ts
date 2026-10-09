@@ -13,6 +13,7 @@ export interface ContractView {
   number: string;
   quoteId: string | null;
   partyId: string | null;
+  party: { id: string; nameAr: string; nameEn: string | null } | null;
   ownerId: string | null;
   title: string;
   subtitle: string | null;

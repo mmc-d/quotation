@@ -3,7 +3,7 @@ import { Body, Controller, Get, Param, Post, Put, Query, Res } from '@nestjs/com
 import type { Response } from 'express';
 import { z } from 'zod';
 import {
-  and, appUser, asc, billingMilestone, clauseTemplate, contact, contract, contractClause, desc, emit, eq, esignRequest, ilike, inArray, issuedDocument, ne, nextNumber, or, party, quote, quoteLine, site, sql, invoiceMirror, paymentRequest, type Tx,
+  and, appUser, asc, billingMilestone, clauseTemplate, contact, contract, contractClause, desc, emit, eq, esignRequest, ilike, inArray, issuedDocument, ne, nextNumber, or, party, project, quote, quoteLine, site, sql, invoiceMirror, paymentRequest, type Tx,
 } from '@mmc/db';
 import {
   buildSchedule, calculateQuote, canTransitionContract, DEFAULT_SCHEDULE, dec, formatNationalAddress, halalasToFixed, riyadhDate, toHalalas, type ContractStatus, type MilestoneSpec, type MilestoneTrigger,
@@ -98,7 +98,8 @@ async function contractView(tx: Tx, actor: RequestActor, id: string) {
   const esigns = await tx.select().from(esignRequest).where(eq(esignRequest.contractId, id)).orderBy(desc(esignRequest.createdAt));
   const invoices = actor.grants['invoice.read'] ? await tx.select().from(invoiceMirror).where(eq(invoiceMirror.contractId, id)).orderBy(asc(invoiceMirror.issueDate)) : [];
   const requests = actor.grants['billing.read'] ? await tx.select().from(paymentRequest).where(eq(paymentRequest.contractId, id)).orderBy(asc(paymentRequest.createdAt)) : [];
-  return { ...c, quote: q ?? null, documents, esignRequests: esigns, invoices, paymentRequests: requests };
+  const [pt] = c.partyId ? await tx.select({ id: party.id, nameAr: party.nameAr, nameEn: party.nameEn }).from(party).where(eq(party.id, c.partyId)) : [];
+  return { ...c, party: pt ?? null, quote: q ?? null, documents, esignRequests: esigns, invoices, paymentRequests: requests };
 }
 
 async function writeMilestones(tx: Tx, contractId: string, schedule: ReturnType<typeof buildSchedule>, dueDates: (string | null | undefined)[] = []) {
@@ -199,6 +200,38 @@ export class ContractsController {
       }
       await writeMilestones(tx, id, computed.schedule, b.milestones.map((m) => m.dueDate));
       if (before.total !== computed.totals.total) await audit(tx, actor, 'update', 'contract', id, { total: before.total }, { total: computed.totals.total });
+      return contractView(tx, actor, id);
+    }, actor.userId);
+  }
+
+  /**
+   * Link the contract (and its project) to a customer — contracts made from a quote without a linked
+   * customer can't be billed otherwise. Once anything was billed the customer is fixed. A draft's empty
+   * client fields are filled from the customer; a signed contract's text is left as signed.
+   */
+  @Post(':id/party')
+  @Perm('contract.write')
+  async linkParty(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ partyId: z.string().uuid() }))) b: { partyId: string }) {
+    return tenantTx(actor.tenantId, async (tx) => {
+      const c = await loadContract(tx, id);
+      assertCan(actor, 'contract.write', { ownerId: c.ownerId, teamId: c.teamId, branchId: c.branchId });
+      if (c.partyId === b.partyId) return contractView(tx, actor, id);
+      const [p] = await tx.select().from(party).where(eq(party.id, b.partyId));
+      if (!p) throw notFound('customer');
+      if (c.partyId) {
+        const [billed] = await tx.select({ id: paymentRequest.id }).from(paymentRequest).where(eq(paymentRequest.contractId, id)).limit(1);
+        const [invoiced] = billed ? [billed] : await tx.select({ id: invoiceMirror.id }).from(invoiceMirror).where(eq(invoiceMirror.contractId, id)).limit(1);
+        if (invoiced) throw conflict('the contract was already billed — its customer can no longer be changed');
+      }
+      const patch: Partial<typeof contract.$inferInsert> = { partyId: p.id, updatedAt: new Date(), updatedBy: actor.userId, version: c.version + 1 };
+      if (c.status === 'draft') {
+        const cb = (c.clientBlock ?? {}) as Record<string, string | undefined>;
+        const fill = (k: string, v: string | null | undefined) => (cb[k]?.trim() ? cb[k] : v ?? cb[k] ?? '');
+        patch.clientBlock = { ...cb, name: fill('name', p.nameAr), crNumber: fill('crNumber', p.unifiedNumber ?? p.crNumber), vatNumber: fill('vatNumber', p.vatNumber), mobile: fill('mobile', p.phone) } as typeof c.clientBlock;
+      }
+      await tx.update(contract).set(patch).where(eq(contract.id, id));
+      await tx.update(project).set({ partyId: p.id, updatedAt: new Date() }).where(eq(project.contractId, id));
+      await audit(tx, actor, 'link_party', 'contract', id, { partyId: c.partyId }, { partyId: p.id });
       return contractView(tx, actor, id);
     }, actor.userId);
   }
