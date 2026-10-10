@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import AlphabeticalSequencer from './test/sequencer.js';
 
 // E2E_DB lets parallel runs use separate databases.
 const DB = process.env.E2E_DB ?? 'mmc_e2e';
@@ -8,7 +9,7 @@ export default defineConfig({
     testTimeout: 60000,
     hookTimeout: 120000,
     fileParallelism: false,
-    sequence: { concurrent: false },
+    sequence: { concurrent: false, sequencer: AlphabeticalSequencer },
     env: {
       NODE_ENV: 'test',
       DATABASE_URL: `postgres://mmc_app:mmc_app_dev_only@localhost:5433/${DB}`,
