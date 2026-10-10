@@ -42,6 +42,7 @@ export default function VoucherPage({ params }: { params: Promise<{ id: string }
     [bi('الجوال', 'Mobile'), v.counterpartyMobile && <span className="num" dir="ltr">{v.counterpartyMobile}</span>],
     [bi('وذلك مقابل', 'Being for'), <span className="whitespace-pre-line">{v.purpose}</span>],
     [bi('الطريقة', 'Method'), <>{method ? (locale === 'en' ? method.en : method.ar) : v.method}{v.methodRef && <span className="num ms-2" dir="ltr">#{v.methodRef}</span>}{v.bankName && <span className="ms-2">{v.bankName}</span>}{v.methodDate && <span className="num ms-2 text-xs text-muted">{date(v.methodDate)}</span>}</>],
+    [bi('الحساب المقابل', 'Counter account'), v.account && <span><span className="num" dir="ltr">{v.account.code}</span> — {v.account.nameAr}</span>],
     [bi('المشروع', 'Project'), v.project && <span><span className="num" dir="ltr">{v.project.number}</span> — {v.project.name}</span>],
     [bi('مركز التكلفة', 'Cost center'), v.costCenter],
     [bi('المرجع', 'Reference'), v.docRef && <span className="num" dir="ltr">{v.docRef}</span>],

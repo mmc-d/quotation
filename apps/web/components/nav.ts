@@ -62,6 +62,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'الحسابات', en: 'Accounting', items: [
       { href: '/accounting', label: 'لوحة الحسابات', en: 'Accounting home', icon: 'Calculator', perm: 'ledger.read' },
+      { href: '/accounting/exceptions', label: 'بانتظار التوجيه المحاسبي', en: 'Awaiting classification', icon: 'AlertTriangle', perm: 'ledger.read' },
       { href: '/accounting/journal', label: 'قيود اليومية', en: 'Journal entries', icon: 'BookText', perm: 'ledger.read' },
       { href: '/accounting/accounts', label: 'دليل الحسابات', en: 'Chart of accounts', icon: 'ListTree', perm: 'ledger.read' },
       { href: '/accounting/reports', label: 'التقارير المالية', en: 'Financial reports', icon: 'Scale', perm: 'ledger.read' },

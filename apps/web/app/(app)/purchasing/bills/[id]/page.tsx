@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { use, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, CheckCircle2, Undo2 } from 'lucide-react';
+import { Banknote, Ban, CheckCircle2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { date, dateTime, today } from '@/lib/format';
@@ -23,6 +23,7 @@ export default function BillPage({ params }: { params: Promise<{ id: string }> }
   const q = useQuery({ queryKey: ['bill', id], queryFn: () => api.get<BillView>(`/inventory/bills/${id}`) });
   const [paying, setPaying] = useState(false);
   const [voiding, setVoiding] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const canPay = can('payment.record') || can('purchase.approve');
 
   const done = (b: BillView, msg: string) => {
@@ -52,6 +53,7 @@ export default function BillPage({ params }: { params: Promise<{ id: string }> }
         actions={<>
           {b.status === 'draft' && can('purchase.approve') && <Button variant="outline" icon={<CheckCircle2 className="size-4" />} loading={approve.isPending} onClick={() => approve.mutate()}>{bi('قبول الاستثناء', 'Accept exception')}</Button>}
           {open && canPay && <Button icon={<Banknote className="size-4" />} onClick={() => setPaying(true)}>{bi('تسجيل دفعة للمورد', 'Record a payment')}</Button>}
+          {['draft', 'approved'].includes(b.status) && can('purchase.approve') && <Button variant="outline" icon={<Ban className="size-4" />} onClick={() => setCancelling(true)}>{bi('إلغاء الفاتورة', 'Cancel bill')}</Button>}
         </>}
       />
       <div className="space-y-4">
@@ -143,6 +145,7 @@ export default function BillPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {paying && <PaymentDialog bill={b} onClose={() => setPaying(false)} onDone={(nb) => { setPaying(false); done(nb, bi('تم تسجيل الدفعة', 'Payment recorded')); }} />}
+      {cancelling && <CancelBillDialog billId={b.id} onClose={() => setCancelling(false)} onDone={(nb) => { setCancelling(false); done(nb, bi('أُلغيت الفاتورة وعُكس قيدها', 'Bill cancelled and its entry reversed')); }} />}
       {voiding && <VoidDialog billId={b.id} paymentId={voiding} onClose={() => setVoiding(null)} onDone={(nb) => { setVoiding(null); done(nb, bi('أُلغيت الدفعة', 'Payment voided')); }} />}
     </>
   );
@@ -192,6 +195,23 @@ function VoidDialog({ billId, paymentId, onClose, onDone }: { billId: string; pa
     <Dialog open onClose={onClose} title={bi('إلغاء دفعة', 'Void a payment')}
       footer={<><Button variant="outline" onClick={onClose}>{bi('رجوع', 'Back')}</Button><Button variant="danger" loading={m.isPending} disabled={!reason.trim()} onClick={() => m.mutate()}>{bi('إلغاء الدفعة', 'Void payment')}</Button></>}>
       <p className="mb-3 text-sm text-muted">{bi('تُحذف الدفعة من الفاتورة ويبقى أثرها في سجل التدقيق.', 'The payment is removed from the bill; the audit log keeps a record.')}</p>
+      <Field label={bi('السبب *', 'Reason *')}><Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+    </Dialog>
+  );
+}
+
+function CancelBillDialog({ billId, onClose, onDone }: { billId: string; onClose: () => void; onDone: (b: BillView) => void }) {
+  const { bi } = useI18n();
+  const [reason, setReason] = useState('');
+  const m = useMutation({
+    mutationFn: () => api.post<BillView>(`/inventory/bills/${billId}/cancel`, { reason: reason.trim() }),
+    onSuccess: onDone,
+    onError: (e) => toast.error((e as Error).message),
+  });
+  return (
+    <Dialog open onClose={onClose} title={bi('إلغاء فاتورة المورد', 'Cancel the supplier bill')}
+      footer={<><Button variant="outline" onClick={onClose}>{bi('رجوع', 'Back')}</Button><Button variant="danger" loading={m.isPending} disabled={!reason.trim()} onClick={() => m.mutate()}>{bi('إلغاء الفاتورة', 'Cancel bill')}</Button></>}>
+      <p className="mb-3 text-sm text-muted">{bi('للفواتير غير المدفوعة فقط. يُعكس قيدها المحاسبي ويعود ما فُوتر على أمر الشراء. الفاتورة التي استلمت بضاعة في المخزون لا تُلغى من هنا.', 'Unpaid bills only. Its ledger entry is reversed and the billed quantities go back to the order. A bill that received goods into stock cannot be cancelled here.')}</p>
       <Field label={bi('السبب *', 'Reason *')}><Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
     </Dialog>
   );

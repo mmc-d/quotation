@@ -16,7 +16,7 @@ interface Dash {
   balances: Record<'cash' | 'bank' | 'ar' | 'ap' | 'inventory' | 'vatInput' | 'vatOutput', Bal | null>;
   profit: { month: string; year: string; monthRevenue: string; yearRevenue: string }; draftEntries: number;
   recent: { id: string; number: string; date: string; memo: string | null; kind: string; total: string; status: string }[];
-  checks: { key: string; ok: boolean; labelAr: string }[];
+  checks: { key: string; ok: boolean; labelAr: string; diff?: string }[]; exceptions: number; autoPosting: boolean;
 }
 
 export default function AccountingHome() {
@@ -49,6 +49,7 @@ function Home() {
         <Stat label={bi('صافي ربح الشهر', 'This month’s net profit')} value={<Money value={d.profit.month} fixed />} tone={profitTone(d.profit.month)} hint={`${bi('الإيرادات', 'Revenue')} ${Number(d.profit.monthRevenue).toLocaleString('en-US')}`} />
         <Stat label={bi('صافي ربح السنة المالية', 'Fiscal-year net profit')} value={<Money value={d.profit.year} fixed />} tone={profitTone(d.profit.year)} hint={`${bi('الإيرادات', 'Revenue')} ${Number(d.profit.yearRevenue).toLocaleString('en-US')}`} />
         <Stat label={bi('المخزون', 'Inventory')} value={d.balances.inventory ? <Money value={d.balances.inventory.balance} fixed /> : '—'} />
+        <Stat label={bi('بانتظار التوجيه المحاسبي', 'Awaiting classification')} value={d.exceptions} tone={d.exceptions ? 'red' : undefined} hint={<Link href="/accounting/exceptions" className="font-bold text-gold-dark hover:underline">{d.autoPosting ? bi('فتح الشاشة', 'Open') : bi('الترحيل التلقائي متوقف', 'Auto-posting is off')}</Link>} />
         <Stat label={bi('قيود بانتظار الترحيل', 'Drafts to post')} value={d.draftEntries} tone={d.draftEntries ? 'gold' : undefined} hint={d.draftEntries ? <Link href="/accounting/journal?status=draft" className="font-bold text-gold-dark hover:underline">{bi('عرضها', 'Show them')}</Link> : undefined} />
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">

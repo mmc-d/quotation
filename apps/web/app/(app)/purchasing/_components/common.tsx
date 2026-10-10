@@ -60,6 +60,7 @@ export const BILL_STATUS: L = {
   approved: ['غير مدفوعة', 'Unpaid', 'bg-sky-100 text-sky-800'],
   partially_paid: ['مدفوعة جزئيًا', 'Partly paid', 'bg-amber-100 text-amber-800'],
   paid: ['مدفوعة', 'Paid', 'bg-emerald-100 text-emerald-800'],
+  cancelled: ['ملغاة', 'Cancelled', 'bg-rose-100 text-rose-800'],
 };
 
 export const PAYMENT_METHOD: L = {

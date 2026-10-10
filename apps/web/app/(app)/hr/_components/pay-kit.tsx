@@ -162,14 +162,14 @@ const thisMonth = () => today().slice(0, 7);
 /** Bonus / deduction for a payroll month, or a bonus paid now by payment voucher. */
 export function AdjustmentDialog({ open, onClose, onSaved, employeeId, canVoucher }: { open: boolean; onClose: () => void; onSaved: (a: Adjustment) => void; employeeId: string; canVoucher: boolean }) {
   const { bi } = useI18n();
-  const [d, setD] = useState({ kind: 'bonus' as 'bonus' | 'deduction', month: thisMonth(), amount: '', reason: '', payBy: 'payroll' as 'payroll' | 'voucher', method: 'transfer' });
+  const [d, setD] = useState({ kind: 'bonus' as 'bonus' | 'deduction', month: thisMonth(), amount: '', reason: '', payBy: 'payroll' as 'payroll' | 'voucher', method: 'transfer', category: 'other' as 'advance' | 'penalty' | 'other' });
   const [busy, setBusy] = useState(false);
   const voucher = d.kind === 'bonus' && d.payBy === 'voucher';
   const problem = !/^\d+(\.\d{1,2})?$/.test(d.amount.trim()) || Number(d.amount) <= 0 ? bi('أدخل المبلغ', 'Enter the amount') : !d.reason.trim() ? bi('أدخل السبب', 'Enter the reason') : null;
   const save = async () => {
     setBusy(true);
     try {
-      const a = await api.post<Adjustment>(`/hr/employees/${employeeId}/adjustments`, { kind: d.kind, month: d.month, amount: d.amount.trim(), reason: d.reason.trim(), payBy: voucher ? 'voucher' : 'payroll', method: d.method });
+      const a = await api.post<Adjustment>(`/hr/employees/${employeeId}/adjustments`, { kind: d.kind, month: d.month, amount: d.amount.trim(), reason: d.reason.trim(), payBy: voucher ? 'voucher' : 'payroll', method: d.method, ...(d.kind === 'deduction' ? { category: d.category } : {}) });
       toast.success(a.voucherNumber ? bi(`أُنشئ سند الصرف ${a.voucherNumber} — بانتظار الاعتماد في المالية`, `Payment voucher ${a.voucherNumber} created — awaiting approval in Finance`) : d.kind === 'bonus' ? bi('أُضيفت المكافأة', 'Bonus added') : bi('أُضيف الخصم', 'Deduction added'));
       onSaved(a);
       setD((x) => ({ ...x, amount: '', reason: '' }));
@@ -208,6 +208,15 @@ export function AdjustmentDialog({ open, onClose, onSaved, employeeId, canVouche
           )}
           <Field label={bi('المبلغ (ر.س)', 'Amount (SAR)')}><NumInput value={d.amount} onChange={(v) => setD((x) => ({ ...x, amount: v }))} min={0} step="0.01" ariaLabel={bi('المبلغ', 'Amount')} /></Field>
         </div>
+        {d.kind === 'deduction' && (
+          <Field label={bi('نوع الخصم (للقيد المحاسبي)', 'Deduction type (for the ledger)')}>
+            <Select value={d.category} onChange={(e) => setD((x) => ({ ...x, category: e.target.value as 'advance' | 'penalty' | 'other' }))}>
+              <option value="advance">{bi('سلفة (تُسترد من الموظف)', 'Advance (recovered from the employee)')}</option>
+              <option value="penalty">{bi('جزاء / مخالفة', 'Penalty')}</option>
+              <option value="other">{bi('أخرى', 'Other')}</option>
+            </Select>
+          </Field>
+        )}
         <Field label={bi('السبب', 'Reason')}><Input value={d.reason} onChange={(e) => setD((x) => ({ ...x, reason: e.target.value }))} placeholder={d.kind === 'bonus' ? bi('مثال: تحقيق المستهدف', 'e.g. target achieved') : bi('مثال: سلفة، غياب، تلفيات', 'e.g. advance, absence, damage')} /></Field>
         <p className="text-xs text-muted">
           {voucher

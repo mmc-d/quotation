@@ -5,19 +5,22 @@ import { tafqitHalalas, toHalalas } from '@mmc/domain';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { today } from '@/lib/format';
+import { useMe } from '@/lib/me';
 import { PartyPicker, type PickedParty } from '@/components/party-picker';
 import { Button, Card, Field, Input, Select, Textarea } from '@/components/ui';
 import { errMsg, NumInput } from '../../../quotes/_components/common';
 import { ProjectPicker, type PickedProject } from '../../../purchasing/_components/pickers';
+import { AccountPicker } from '../../../accounting/_components/ledger-kit';
 
 export type VoucherKind = 'payment' | 'receipt';
 export interface Voucher {
   id: string; kind: VoucherKind; number: string; voucherDate: string; partyId: string | null; counterpartyName: string;
   counterpartyIdNumber: string | null; counterpartyMobile: string | null; amount: string; purpose: string; method: string;
-  methodRef: string | null; bankName: string | null; methodDate: string | null; projectId: string | null; costCenter: string | null;
+  methodRef: string | null; bankName: string | null; methodDate: string | null; projectId: string | null; costCenter: string | null; accountId: string | null;
   docRef: string | null; notes: string | null; status: 'draft' | 'approved' | 'cancelled'; approvedBy: string | null; approvedByName: string | null;
   approvedAt: string | null; cancelReason: string | null; cancelledAt: string | null; createdBy: string | null; createdByName: string | null; version: number;
   party: { id: string; nameAr: string } | null; project: { id: string; number: string; name: string } | null;
+  account: { id: string; code: string; nameAr: string } | null;
 }
 
 export const KIND_LABEL: Record<VoucherKind, [string, string]> = { payment: ['سند صرف', 'Payment voucher'], receipt: ['سند قبض', 'Receipt voucher'] };
@@ -32,7 +35,7 @@ export const METHODS: { value: string; ar: string; en: string }[] = [
 interface Draft {
   voucherDate: string; party: PickedParty | null; counterpartyName: string; counterpartyIdNumber: string; counterpartyMobile: string;
   amount: string; purpose: string; method: string; methodRef: string; bankName: string; methodDate: string;
-  project: PickedProject | null; costCenter: string; docRef: string; notes: string;
+  project: PickedProject | null; costCenter: string; accountId: string; docRef: string; notes: string;
 }
 
 const fromVoucher = (v: Voucher | null): Draft => ({
@@ -40,12 +43,13 @@ const fromVoucher = (v: Voucher | null): Draft => ({
   counterpartyName: v?.counterpartyName ?? '', counterpartyIdNumber: v?.counterpartyIdNumber ?? '', counterpartyMobile: v?.counterpartyMobile ?? '',
   amount: v ? String(Number(v.amount)) : '', purpose: v?.purpose ?? '', method: v?.method ?? 'cash', methodRef: v?.methodRef ?? '', bankName: v?.bankName ?? '',
   methodDate: v?.methodDate ?? '', project: v?.project ? { id: v.project.id, number: v.project.number, name: v.project.name } : null,
-  costCenter: v?.costCenter ?? '', docRef: v?.docRef ?? '', notes: v?.notes ?? '',
+  costCenter: v?.costCenter ?? '', accountId: v?.accountId ?? '', docRef: v?.docRef ?? '', notes: v?.notes ?? '',
 });
 
 /** Create / edit form for a draft voucher. */
 export function VoucherForm({ kind, voucher, onSaved, onCancel }: { kind: VoucherKind; voucher: Voucher | null; onSaved: (v: Voucher) => void; onCancel?: () => void }) {
   const { bi, locale } = useI18n();
+  const { can } = useMe();
   const [d, setD] = useState<Draft>(() => fromVoucher(voucher));
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
@@ -64,7 +68,7 @@ export function VoucherForm({ kind, voucher, onSaved, onCancel }: { kind: Vouche
       kind, voucherDate: d.voucherDate, partyId: d.party?.id ?? null, counterpartyName: d.counterpartyName.trim(), counterpartyIdNumber: d.counterpartyIdNumber.trim() || null,
       counterpartyMobile: d.counterpartyMobile.trim() || null, amount: d.amount.trim(), purpose: d.purpose.trim(), method: d.method,
       methodRef: nonCash ? d.methodRef.trim() || null : null, bankName: nonCash ? d.bankName.trim() || null : null, methodDate: nonCash && d.methodDate ? d.methodDate : null,
-      projectId: d.project?.id ?? null, costCenter: d.costCenter.trim() || null, docRef: d.docRef.trim() || null, notes: d.notes.trim() || null,
+      projectId: d.project?.id ?? null, costCenter: d.costCenter.trim() || null, accountId: d.accountId || null, docRef: d.docRef.trim() || null, notes: d.notes.trim() || null,
     };
     try {
       const v = voucher ? await api.put<Voucher>(`/vouchers/${voucher.id}`, { ...body, version: voucher.version }) : await api.post<Voucher>('/vouchers', body);
@@ -112,6 +116,11 @@ export function VoucherForm({ kind, voucher, onSaved, onCancel }: { kind: Vouche
         <div className="grid gap-3 md:grid-cols-3">
           <Field label={bi('المشروع', 'Project')}><ProjectPicker value={d.project} onChange={(p) => set({ project: p })} /></Field>
           <Field label={bi('مركز التكلفة', 'Cost center')}><Input value={d.costCenter} onChange={(e) => set({ costCenter: e.target.value })} placeholder={bi('مثال: مصاريف إدارية', 'e.g. admin expenses')} /></Field>
+          {can('ledger.read') && (
+            <Field label={bi('الحساب المقابل (للقيد المحاسبي)', 'Counter account (for the ledger)')} hint={bi('اتركه فارغًا ليُحدَّد تلقائيًا من العميل/المورد، وإلا يذهب إلى «حساب التسوية» بانتظار التوجيه', 'Leave empty to use the customer/supplier; otherwise it goes to the suspense account')} className="md:col-span-3">
+              <AccountPicker value={d.accountId} onChange={(id) => set({ accountId: id })} />
+            </Field>
+          )}
           <Field label={bi('المرجع (أمر شراء / فاتورة)', 'Reference (PO / invoice)')}><Input dir="ltr" value={d.docRef} onChange={(e) => set({ docRef: e.target.value })} /></Field>
           <Field label={bi('ملاحظات', 'Notes')} className="md:col-span-3"><Textarea rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
         </div>
