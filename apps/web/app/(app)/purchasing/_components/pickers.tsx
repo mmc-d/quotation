@@ -12,7 +12,7 @@ export interface PickedProduct { id: string; code: string; nameAr: string; nameE
 export interface PickedProject { id: string; number: string; name: string; customerName?: string | null; contractId?: string | null }
 
 /** Generic search-as-you-type picker with a dropdown (closes on outside click). */
-function SearchPicker<T extends { id: string }>({ value, onChange, placeholder, queryKey, fetcher, render, chip, icon, disabled }: {
+export function SearchPicker<T extends { id: string }>({ value, onChange, placeholder, queryKey, fetcher, render, chip, icon, disabled }: {
   value: T | null; onChange: (v: T | null) => void; placeholder: string; queryKey: string; fetcher: (q: string) => Promise<T[]>;
   render: (v: T) => ReactNode; chip: (v: T) => ReactNode; icon: ReactNode; disabled?: boolean;
 }) {

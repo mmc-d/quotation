@@ -60,6 +60,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: 'الحسابات', en: 'Accounting', items: [
+      { href: '/accounting', label: 'لوحة الحسابات', en: 'Accounting home', icon: 'Calculator', perm: 'ledger.read' },
+      { href: '/accounting/journal', label: 'قيود اليومية', en: 'Journal entries', icon: 'BookText', perm: 'ledger.read' },
+      { href: '/accounting/accounts', label: 'دليل الحسابات', en: 'Chart of accounts', icon: 'ListTree', perm: 'ledger.read' },
+      { href: '/accounting/reports', label: 'التقارير المالية', en: 'Financial reports', icon: 'Scale', perm: 'ledger.read' },
+      { href: '/accounting/opening', label: 'الأرصدة الافتتاحية', en: 'Opening balances', icon: 'BookMarked', perm: 'ledger.close' },
+      { href: '/accounting/settings', label: 'إعدادات الحسابات', en: 'Ledger settings', icon: 'Settings2', perm: 'ledger.read' },
+    ],
+  },
+  {
     label: 'التقارير', en: 'Reports', items: [
       { href: '/reports', label: 'تقارير المبيعات', en: 'Sales reports', icon: 'BarChart3', perm: 'report.sales' },
       { href: '/reports/finance', label: 'التقارير المالية', en: 'Finance dashboard', icon: 'Wallet', perm: 'report.finance' },
