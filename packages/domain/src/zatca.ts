@@ -1,7 +1,8 @@
 /**
  * ZATCA Phase-1 QR (TLV, tags 1–5) — port of the legacy zatcaTlvBase64/invoiceQrBase64, which were
  * themselves verified against ZATCA SDK 3.4.6: BER long-form lengths, timestamp without `Z`.
- * Phase-2 (tags 6–9, signing, clearance) is done by the ERPNext KSA compliance app, never here.
+ * Phase-2 (tags 6–9, signing, clearance) lives in `@mmc/zatca` (Node only — it needs crypto and an XML
+ * canonicaliser), or in the ERPNext KSA compliance app when that back office is configured.
  */
 export function zatcaTlv(fields: [number, string][]): Uint8Array {
   const enc = new TextEncoder();
