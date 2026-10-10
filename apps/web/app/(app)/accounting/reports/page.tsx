@@ -11,8 +11,9 @@ import { Badge, Button, Card, Checkbox, Empty, ErrorBox, Field, Input, PageHeade
 import { RequirePerm } from '../../settings/_components/common';
 import { AccountPicker, AnyPartyPicker, Amt, accountName, useAccounts, type PickedAnyParty } from '../_components/ledger-kit';
 
-type Tab = 'trial' | 'ledger' | 'journal' | 'income' | 'balance';
-const PATH: Record<Tab, string> = { trial: 'trial-balance', ledger: 'ledger', journal: 'journal', income: 'income-statement', balance: 'balance-sheet' };
+type Tab = 'trial' | 'ledger' | 'journal' | 'income' | 'balance' | 'cash' | 'equity' | 'aging' | 'zakat';
+const PATH: Record<Tab, string> = { trial: 'trial-balance', ledger: 'ledger', journal: 'journal', income: 'income-statement', balance: 'balance-sheet', cash: 'cash-flow', equity: 'equity-changes', aging: 'aging', zakat: 'zakat' };
+const AS_OF: Tab[] = ['balance', 'aging', 'zakat'];
 
 export default function ReportsPage() {
   const { bi } = useI18n();
@@ -33,9 +34,12 @@ function Reports() {
   const [by, setBy] = useState('none');
   const [level, setLevel] = useState('');
   const [withZero, setWithZero] = useState(false);
+  const [side, setSide] = useState<'ar' | 'ap'>('ar');
+  const [rate, setRate] = useState<'gregorian' | 'hijri'>('gregorian');
+  const [adjustments, setAdjustments] = useState('0');
   const fromEff = from || settings.data?.fiscalYear.start || '';
 
-  const params: Record<string, unknown> = tab === 'balance' ? { asOf }
+  const params: Record<string, unknown> = tab === 'aging' ? { asOf, side } : tab === 'zakat' ? { asOf, rate, adjustments } : tab === 'balance' ? { asOf }
     : { from: fromEff || undefined, to,
       ...(tab === 'ledger' ? { account, party: party?.id } : {}), ...(tab === 'trial' ? { level: level || undefined, withZero: withZero || undefined } : {}), ...(tab === 'income' ? { by } : {}) };
   const ready = settings.isSuccess && (tab !== 'ledger' || !!account);
@@ -56,10 +60,14 @@ function Reports() {
         { value: 'journal', label: bi('دفتر اليومية', 'Journal book') },
         { value: 'income', label: bi('قائمة الدخل', 'Income statement') },
         { value: 'balance', label: bi('المركز المالي', 'Balance sheet') },
+        { value: 'cash', label: bi('التدفقات النقدية', 'Cash flow') },
+        { value: 'equity', label: bi('حقوق الملكية', 'Equity changes') },
+        { value: 'aging', label: bi('أعمار الذمم', 'Aging') },
+        { value: 'zakat', label: bi('الوعاء الزكوي', 'Zakat base') },
       ]} />
       <Card className="mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          {tab === 'balance' ? (
+          {AS_OF.includes(tab) ? (
             <Field label={bi('كما في تاريخ', 'As of')}><Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-auto" /></Field>
           ) : <>
             <Field label={bi('من', 'From')}><Input type="date" value={fromEff} onChange={(e) => setFrom(e.target.value)} className="w-auto" /></Field>
@@ -73,6 +81,11 @@ function Reports() {
             <Field label={bi('المستوى', 'Level')}><Select value={level} onChange={(e) => setLevel(e.target.value)}><option value="">{bi('كل المستويات', 'All levels')}</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></Select></Field>
             <Checkbox label={bi('إظهار الحسابات الصفرية', 'Show zero accounts')} checked={withZero} onChange={setWithZero} />
           </>}
+          {tab === 'aging' && <Field label={bi('النوع', 'Side')}><Select value={side} onChange={(e) => setSide(e.target.value as 'ar' | 'ap')}><option value="ar">{bi('العملاء (مدينون)', 'Receivables')}</option><option value="ap">{bi('الموردون (دائنون)', 'Payables')}</option></Select></Field>}
+          {tab === 'zakat' && <>
+            <Field label={bi('نسبة الزكاة', 'Rate')}><Select value={rate} onChange={(e) => setRate(e.target.value as 'gregorian' | 'hijri')}><option value="gregorian">{bi('سنة ميلادية 2.5775٪', 'Gregorian year 2.5775%')}</option><option value="hijri">{bi('سنة هجرية 2.5٪', 'Hijri year 2.5%')}</option></Select></Field>
+            <Field label={bi('تسويات الربح للزكاة (±)', 'Profit adjustments (±)')}><Input value={adjustments} onChange={(e) => setAdjustments(e.target.value)} dir="ltr" className="w-32" inputMode="decimal" /></Field>
+          </>}
           {tab === 'income' && <Field label={bi('عرض الأعمدة حسب', 'Columns by')}><Select value={by} onChange={(e) => setBy(e.target.value)}><option value="none">{bi('الإجمالي', 'Total only')}</option><option value="month">{bi('الشهر', 'Month')}</option><option value="project">{bi('المشروع', 'Project')}</option><option value="department">{bi('القسم / مركز التكلفة', 'Department')}</option></Select></Field>}
         </div>
       </Card>
@@ -83,6 +96,10 @@ function Reports() {
           : tab === 'ledger' ? <LedgerView d={rep.data} />
           : tab === 'journal' ? <JournalBook d={rep.data} />
           : tab === 'income' ? <Income d={rep.data} onAccount={(id) => open('ledger', id)} />
+          : tab === 'cash' ? <CashFlow d={rep.data} />
+          : tab === 'equity' ? <EquityView d={rep.data} />
+          : tab === 'aging' ? <AgingView d={rep.data} />
+          : tab === 'zakat' ? <ZakatView d={rep.data} />
           : <Balance d={rep.data} onAccount={(id) => open('ledger', id)} />
         )}
     </>
@@ -259,5 +276,101 @@ function Balance({ d, onAccount }: { d: any; onAccount: (id: string) => void }) 
       </div>
       <Badge tone="gray">{bi('السنة المالية', 'Fiscal year')} {d.fiscalYear.label} · {date(d.fiscalYear.start)} → {date(d.fiscalYear.end)}</Badge>
     </div>
+  );
+}
+
+function CashFlow({ d }: { d: any }) {
+  const { bi } = useI18n();
+  const Block = ({ title, rows, total, totalLabel, head }: { title: string; rows: { code: string; nameAr: string; amount: string }[]; total: string; totalLabel: string; head?: React.ReactNode }) => (
+    <>
+      <tr className="bg-tint/60"><Td colSpan={2} className="font-extrabold text-gold-dark">{title}</Td></tr>
+      {head}
+      {rows.map((r) => <tr key={r.code} className="hover:bg-tint/50"><Td className="ps-6 text-sm"><span className="num text-xs text-gold-dark" dir="ltr">{r.code}</span> {r.nameAr}</Td><Td className="text-end"><Amt v={r.amount} /></Td></tr>)}
+      <tr className="font-extrabold"><Td>{totalLabel}</Td><Td className="text-end"><Amt v={total} strong /></Td></tr>
+    </>
+  );
+  return (
+    <Card padded={false}>
+      {!d.tiesToLedger && <div className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-danger">{bi('تنبيه: الفرق عن حركة النقد', 'Warning: difference to the change in cash')} {d.difference}</div>}
+      <Table>
+        <thead><tr><Th>{bi('البند', 'Item')}</Th><Th className="text-end">{bi('المبلغ (ر.س)', 'Amount (SAR)')}</Th></tr></thead>
+        <tbody>
+          <Block title={bi('الأنشطة التشغيلية', 'Operating activities')} total={d.operating.total} totalLabel={bi('صافي النقد من الأنشطة التشغيلية', 'Net cash from operating activities')}
+            rows={[...d.operating.adjustments, ...d.operating.workingCapital]}
+            head={<tr><Td className="ps-3 font-bold">{bi('صافي ربح (خسارة) الفترة', 'Net profit (loss)')}</Td><Td className="text-end"><Amt v={d.operating.profit} strong /></Td></tr>} />
+          <Block title={bi('الأنشطة الاستثمارية', 'Investing activities')} rows={d.investing.rows} total={d.investing.total} totalLabel={bi('صافي النقد من الأنشطة الاستثمارية', 'Net cash from investing activities')} />
+          <Block title={bi('الأنشطة التمويلية', 'Financing activities')} rows={d.financing.rows} total={d.financing.total} totalLabel={bi('صافي النقد من الأنشطة التمويلية', 'Net cash from financing activities')} />
+          <tr className="bg-tint/60 font-extrabold"><Td>{bi('صافي التغير في النقد وما يعادله', 'Net change in cash')}</Td><Td className="text-end"><Amt v={d.netChange} strong /></Td></tr>
+          <tr><Td>{bi('النقد وما يعادله في بداية الفترة', 'Cash at the start')}</Td><Td className="text-end"><Amt v={d.openingCash} /></Td></tr>
+          <tr className="bg-primary text-white"><Td className="font-extrabold">{bi('النقد وما يعادله في نهاية الفترة', 'Cash at the end')}</Td><Td className="text-end"><Amt v={d.closingCash} strong className="text-white" /></Td></tr>
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+
+function EquityView({ d }: { d: any }) {
+  const { bi } = useI18n();
+  return (
+    <Card padded={false}>
+      <Table>
+        <thead><tr><Th>{bi('البند', 'Item')}</Th>{d.columns.map((c: any) => <Th key={c.key} className="text-end">{c.nameAr}</Th>)}<Th className="text-end">{bi('الإجمالي', 'Total')}</Th></tr></thead>
+        <tbody>
+          {d.rows.map((r: any) => (
+            <tr key={r.key} className={r.key === 'closing' ? 'bg-primary text-white' : r.key === 'opening' ? 'bg-tint/50 font-bold' : ''}>
+              <Td className={r.key === 'closing' ? 'font-extrabold' : ''}>{r.ar}</Td>
+              {d.columns.map((c: any) => <Td key={c.key} className="text-end"><Amt v={r.values[c.key]} className={r.key === 'closing' ? 'text-white' : ''} /></Td>)}
+              <Td className="text-end"><Amt v={r.total} strong className={r.key === 'closing' ? 'text-white' : ''} /></Td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+
+function AgingView({ d }: { d: any }) {
+  const { bi } = useI18n();
+  if (!d.items.length) return <Card><Empty title={bi('لا توجد أرصدة مفتوحة', 'No open balances')} /></Card>;
+  return (
+    <Card padded={false}>
+      <Table>
+        <thead><tr><Th>{d.side === 'ar' ? bi('العميل', 'Customer') : bi('المورد', 'Supplier')}</Th>{d.buckets.map((b: any) => <Th key={b.key} className="text-end">{b.label} {bi('يوم', 'days')}</Th>)}<Th className="text-end">{bi('دفعات غير مخصصة', 'Unapplied')}</Th><Th className="text-end">{bi('الإجمالي', 'Total')}</Th></tr></thead>
+        <tbody>
+          {d.items.map((r: any) => (
+            <tr key={r.partyId ?? 'none'} className="hover:bg-tint/50"><Td className="font-bold">{r.name}</Td>{r.buckets.map((v: string, i: number) => <Td key={i} className="text-end"><Amt v={v} /></Td>)}<Td className="text-end"><Amt v={r.unapplied} /></Td><Td className="text-end"><Amt v={r.total} strong /></Td></tr>
+          ))}
+          <tr className="bg-primary text-white"><Td className="font-extrabold">{bi('الإجمالي', 'Total')}</Td>{d.totals.buckets.map((v: string, i: number) => <Td key={i} className="text-end"><Amt v={v} strong className="text-white" /></Td>)}<Td className="text-end"><Amt v={d.totals.unapplied} strong className="text-white" /></Td><Td className="text-end"><Amt v={d.totals.total} strong className="text-white" /></Td></tr>
+        </tbody>
+      </Table>
+      <p className="px-4 py-2 text-xs text-muted">{bi('الأعمار حسب تاريخ المستند، وتُسدَّد الأقدم أولًا من حركة الدفتر؛ تطابق رصيد الحساب في الدفتر.', 'Aged by document date, settlements applied oldest first from the ledger; the total ties to the account balance.')}</p>
+    </Card>
+  );
+}
+
+function ZakatView({ d }: { d: any }) {
+  const { bi } = useI18n();
+  const Group = ({ title, rows, total }: { title: string; rows: { label: string; amount: string }[]; total: string }) => (
+    <>
+      <tr className="bg-tint/60"><Td colSpan={2} className="font-extrabold text-gold-dark">{title}</Td></tr>
+      {rows.map((r) => <tr key={r.label}><Td className="ps-6">{r.label}</Td><Td className="text-end"><Amt v={r.amount} /></Td></tr>)}
+      <tr className="font-extrabold"><Td>{bi('الإجمالي', 'Subtotal')}</Td><Td className="text-end"><Amt v={total} strong /></Td></tr>
+    </>
+  );
+  return (
+    <Card padded={false} title={`${bi('السنة المالية', 'Fiscal year')} ${d.fiscalYear.label}`}>
+      <Table>
+        <thead><tr><Th>{bi('البند', 'Item')}</Th><Th className="text-end">{bi('المبلغ (ر.س)', 'Amount (SAR)')}</Th></tr></thead>
+        <tbody>
+          <Group title={bi('الإضافات', 'Additions')} rows={d.additions} total={d.totalAdditions} />
+          <Group title={bi('الحسميات', 'Deductions')} rows={d.deductions} total={d.totalDeductions} />
+          <tr className="bg-tint/60 font-extrabold"><Td>{bi('الوعاء الزكوي', 'Zakat base')}</Td><Td className="text-end"><Amt v={d.base} strong /></Td></tr>
+          <tr><Td>{bi('صافي الربح المعدّل', 'Adjusted net profit')}</Td><Td className="text-end"><Amt v={d.adjustedProfit} /></Td></tr>
+          <tr><Td>{bi('الوعاء الخاضع (الأكبر منهما)', 'Chargeable (the greater)')}</Td><Td className="text-end"><Amt v={d.chargeable} strong /></Td></tr>
+          <tr className="bg-primary text-white"><Td className="font-extrabold">{bi('الزكاة المقدّرة', 'Estimated Zakat')} ({(d.rate * 100).toFixed(4).replace(/0+$/, '')}٪)</Td><Td className="text-end"><Amt v={d.zakat} strong className="text-white" /></Td></tr>
+        </tbody>
+      </Table>
+      <p className="px-4 py-2 text-xs text-muted">{d.note}</p>
+    </Card>
   );
 }

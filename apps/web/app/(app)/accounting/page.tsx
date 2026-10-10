@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, BookOpen, CheckCircle2, ListTree, Plus, Scale } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle2, ListTree, Plus, Scale, Percent, Landmark, Package, CalendarCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useMe } from '@/lib/me';
 import { useI18n } from '@/lib/i18n';
@@ -78,6 +78,10 @@ function Home() {
               <Link href="/accounting/reports" className="flex items-center gap-2 font-bold text-primary hover:underline"><Scale className="size-4" />{bi('ميزان المراجعة والقوائم المالية', 'Trial balance & statements')}</Link>
               <Link href="/accounting/accounts" className="flex items-center gap-2 font-bold text-primary hover:underline"><ListTree className="size-4" />{bi('دليل الحسابات', 'Chart of accounts')}</Link>
               <Link href="/accounting/journal" className="flex items-center gap-2 font-bold text-primary hover:underline"><BookOpen className="size-4" />{bi('قيود اليومية', 'Journal entries')}</Link>
+              <Link href="/accounting/vat" className="flex items-center gap-2 font-bold text-primary hover:underline"><Percent className="size-4" />{bi('ضريبة القيمة المضافة', 'VAT return')}</Link>
+              <Link href="/accounting/bank" className="flex items-center gap-2 font-bold text-primary hover:underline"><Landmark className="size-4" />{bi('التسوية البنكية', 'Bank reconciliation')}</Link>
+              <Link href="/accounting/assets" className="flex items-center gap-2 font-bold text-primary hover:underline"><Package className="size-4" />{bi('الأصول الثابتة والمخصصات', 'Fixed assets & accruals')}</Link>
+              <Link href="/accounting/closing" className="flex items-center gap-2 font-bold text-primary hover:underline"><CalendarCheck className="size-4" />{bi('الإقفال وحزمة المراجع', 'Closing & auditor pack')}</Link>
             </div>
           </Card>
         </div>
