@@ -14,7 +14,6 @@ export interface PaymentRequestDoc {
   milestoneName: string;
   amount: Halalas;
   paidAmount: Halalas;
-  payUrl?: string | null;
 }
 
 const formatIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
@@ -30,9 +29,8 @@ ${qr ? `<div style="text-align:center"><img class="qr" src="${qr}" alt=""><div s
 <div style="margin-top:4px">يرجى ذكر رقم الطلب <b class="ltr">${esc(number)}</b> في وصف التحويل.</div></div></div>`;
 }
 
-/** Payment request — NOT a tax invoice (the tax invoice is issued by the back office on receipt). */
+/** Payment request — NOT a tax invoice (the tax invoice is issued by the back office on receipt). Bank transfer only; no online-payment link. */
 export async function renderPaymentRequestHtml(d: PaymentRequestDoc): Promise<string> {
-  const qr = d.payUrl ? await QRCode.toDataURL(d.payUrl, { margin: 1, width: 240 }) : null;
   const bankQr = d.company.bankQrDataUrl ?? (d.company.iban ? await QRCode.toDataURL(d.company.iban.replace(/\s+/g, ''), { margin: 1, width: 240 }) : null);
   const due = d.amount - d.paidAmount;
   const body = `${header(d.company)}
@@ -51,7 +49,6 @@ ${d.paidAmount > 0 ? `<tr><td>المدفوع</td><td class="money"><span class="
 <div class="totals"><div class="row grand"><span>المبلغ المستحق</span><span>${m2(due)}</span></div></div>
 <div class="words">${esc(tafqitHalalas(due))} فقط لا غير</div>
 ${bankBox(d.company, d.number, bankQr)}
-${qr ? `<div class="box" style="display:flex;gap:12px;align-items:center"><img class="qr" src="${qr}" alt=""><div><h3>الدفع الإلكتروني</h3>مدى · Apple Pay · بطاقات ائتمانية<br><span class="ltr" style="font-size:9px">${esc(d.payUrl)}</span></div></div>` : ''}
 ${footer(d.company, `<span class="ltr">${esc(d.number)}</span>`)}`;
   return page(`طلب دفع ${d.number}`, body);
 }

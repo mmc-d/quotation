@@ -279,7 +279,7 @@ async function renderRequestPdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0
   const [p] = pr.partyId ? await tx.select().from(party).where(eq(party.id, pr.partyId)) : [];
   const [c] = pr.contractId ? await tx.select().from(contract).where(eq(contract.id, pr.contractId)) : [];
   const [m] = pr.milestoneId ? await tx.select().from(billingMilestone).where(eq(billingMilestone.id, pr.milestoneId)) : [];
-  const html = await renderPaymentRequestHtml({ company: await companyBlock(tx, false, true), number: pr.number, date: pr.createdAt.toISOString().slice(0, 10), dueDate: pr.dueDate, clientName: p?.nameAr ?? '', contractNumber: c?.number, milestoneName: m?.nameAr ?? '', amount: toHalalas(pr.amount), paidAmount: toHalalas(pr.paidAmount), payUrl: `${config.publicBaseUrl}/p/${pr.publicToken}` });
+  const html = await renderPaymentRequestHtml({ company: await companyBlock(tx, false, true), number: pr.number, date: pr.createdAt.toISOString().slice(0, 10), dueDate: pr.dueDate, clientName: p?.nameAr ?? '', contractNumber: c?.number, milestoneName: m?.nameAr ?? '', amount: toHalalas(pr.amount), paidAmount: toHalalas(pr.paidAmount) });
   return htmlToPdf(html, config.gotenbergUrl);
 }
 
