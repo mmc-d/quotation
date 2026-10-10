@@ -1,6 +1,6 @@
 /**
  * Phase 7a/7c rules that live in MMC Core: IoT alarm handling (module 12 §2) and sales commissions /
- * technician incentives (module 09 §3.4). Payroll itself runs in Frappe HR; the ledger in ERPNext.
+ * technician incentives (module 09 §3.4). Payroll runs in Core (`payroll.ts`); the general ledger is in Core too (`ledger.ts`, `gl-posting.ts`) — an external HR/ERP system is optional.
  */
 import { Decimal } from 'decimal.js';
 

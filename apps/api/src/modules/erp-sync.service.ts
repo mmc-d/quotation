@@ -11,8 +11,9 @@ import { getDb } from '../common/db.js';
 import { config } from '../config.js';
 
 /**
- * Push Phase 5 operational records to the back office (ERPNext) through the BackOfficePort — Core
- * never keeps a general ledger (owner decision 2026-10-06). Records go in dependency order:
+ * Push Phase 5 operational records to an external back office (ERPNext) through the BackOfficePort.
+ * Optional since Phase 6: Core keeps its own general ledger (owner decision 2026-10-08, see
+ * `gl-posting.service.ts`) and nothing there depends on this sync. Records go in dependency order:
  *
  *   warehouses → suppliers → projects (referenced by pending documents) → purchase orders (approved+) → goods receipts → supplier bills (approved)
  *   → stock entries (grouped stock moves) → landed cost vouchers

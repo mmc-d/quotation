@@ -1,6 +1,6 @@
 # Phase 6 — General Ledger in MMC Core: implementation spec (handoff)
 
-> **Status:** approved plan, **not started** (2026-10-08). Owner-facing Arabic version: `docs/erp-plan/phase-6-accounting-plan-ar.md` (same content, less technical).
+> **Status:** **built — 6A, 6B, 6C, 6D and 6E done (2026-10-10).** Approved 2026-10-08. What each phase delivered is in `phase-4-7-status.md` (Phase 6 section); the owner steps for e-invoicing are in `phase-6d-einvoicing-owner-steps.md`; the test cases are the «الحسابات» sheet of `docs/testing/MMC-test-cases-ar.xlsx`. The spec below is kept as the design record. Owner-facing Arabic version: `docs/erp-plan/phase-6-accounting-plan-ar.md` (same content, less technical).
 > **Audience:** a Claude Code session (or developer) implementing it. Everything needed to start is here; read §0 first.
 
 ---
@@ -9,7 +9,7 @@
 
 ```
 Implement Phase 6 (general ledger) in MMC Core following docs/erp-plan/phase-6-accounting-implementation.md.
-Read CLAUDE.md and that spec fully first. Work phase by phase (6A → 6B → 6C → 6D); start with 6A only.
+Read CLAUDE.md and that spec fully first. Work phase by phase (6A → 6B → 6C → 6D → 6E); start with 6A only.
 Before coding, check `git status` — other work may be uncommitted in shared files (permissions.ts,
 numbering.ts, nav.ts, app.module.ts, migrations journal); make surgical edits only and number new
 migrations after the latest one in packages/db/migrations/meta/_journal.json.
