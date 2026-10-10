@@ -121,3 +121,20 @@ export const journalLine = pgTable('journal_line', {
   index('journal_line_project_idx').on(t.tenantId, t.projectId),
   check('journal_line_one_side', sql`${t.debit} >= 0 AND ${t.credit} >= 0 AND (${t.debit} = 0 OR ${t.credit} = 0) AND (${t.debit} + ${t.credit}) > 0`),
 ]);
+
+/**
+ * Auto-posting bookkeeping per source record (spec §5): a hash of the amounts that were posted
+ * (so a later in-place change is flagged instead of silently re-posted), supplier-payment ids
+ * already posted, and the last error. Idempotency itself comes from journal_entry_source_uq.
+ */
+export const glSourceState = pgTable('gl_source_state', {
+  id: id(),
+  tenantId: tenantId(),
+  sourceType: text('source_type').notNull(),
+  sourceId: uuid('source_id').notNull(),
+  postedHash: text('posted_hash'),
+  postedPaymentIds: jsonb('posted_payment_ids').$type<string[]>().notNull().default([]),
+  lastPostedAt: timestamp('last_posted_at', { withTimezone: true }),
+  error: text('error'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('gl_source_state_uq').on(t.tenantId, t.sourceType, t.sourceId)]);

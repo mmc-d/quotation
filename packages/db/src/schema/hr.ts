@@ -170,6 +170,8 @@ export const payAdjustment = pgTable('pay_adjustment', {
   /** payroll (added to / taken from the month's salary) | voucher (a bonus paid at once by a payment voucher, left out of payroll) */
   payMethod: text('pay_method').notNull().default('payroll'),
   voucherId: uuid('voucher_id'),
+  /** deductions only — where the ledger credits it: advance (سلفة, employee advances) | penalty | other (both other income) */
+  category: text('category').notNull().default('other'),
   ...audit,
 }, (t) => [index('pay_adjustment_employee_month_idx').on(t.tenantId, t.employeeId, t.month)]);
 

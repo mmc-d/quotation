@@ -134,6 +134,8 @@ export const cashVoucher = pgTable('cash_voucher', {
   methodDate: date('method_date'),
   projectId: uuid('project_id'),
   costCenter: text('cost_center'),
+  /** the counter account finance chose («الحساب المقابل») — what auto-posting debits/credits against the cash side */
+  accountId: uuid('account_id'),
   /** PO / invoice / bill number this voucher settles */
   docRef: text('doc_ref'),
   notes: text('notes'),

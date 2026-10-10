@@ -266,6 +266,11 @@ export const importShipment = pgTable('import_shipment', {
   /** landed-cost allocation once posted */
   landedBasis: text('landed_basis'),
   landedPostedAt: timestamp('landed_posted_at', { withTimezone: true }),
+  /** how the allocated duty + charges split when posted: onto stock still on hand vs cost of sales (the ledger reads these) */
+  landedCapitalisedSar: amount('landed_capitalised_sar'),
+  landedExpensedSar: amount('landed_expensed_sar'),
+  /** the broker / customs party that is owed the duty, charges and import VAT (credit side in the ledger) */
+  customsPayablePartyId: uuid('customs_payable_party_id').references(() => party.id),
   notes: text('notes'),
   ...audit,
 }, (t) => [uniqueIndex('import_shipment_number_uq').on(t.tenantId, t.number), index('import_shipment_status_idx').on(t.tenantId, t.status)]);
