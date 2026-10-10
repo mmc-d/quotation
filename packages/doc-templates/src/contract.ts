@@ -1,5 +1,5 @@
 import { formatSar2, tafqitHalalas, type Halalas } from '@mmc/domain';
-import { esc, escLines, footer, header, page, riyal, type CompanyBlock } from './base.js';
+import { esc, escLines, header, page, pageFooterCss, riyal, type CompanyBlock } from './base.js';
 
 export interface ContractDoc {
   company: CompanyBlock;
@@ -15,6 +15,17 @@ export interface ContractDoc {
   /** stamp only on approved contracts, applied explicitly by an authorised user */
   applyStamp: boolean;
 }
+
+/** A contract flows continuously across pages: clauses (even the one holding the price table) may split, but a title never strands at a page bottom and table rows stay whole. */
+const CONTRACT_CSS = `
+.section{break-inside:auto;page-break-inside:auto}
+.section .t{break-after:avoid;page-break-after:avoid}
+.section .b{orphans:2;widows:2}
+table.items{break-inside:auto}
+table.items thead{display:table-header-group}
+table.items tr{break-inside:avoid;page-break-inside:avoid}
+.sig{break-inside:avoid}
+`;
 
 const m2 = (h: Halalas) => `${formatSar2(h)} ${riyal}`;
 
@@ -61,6 +72,7 @@ ${afterPayments.map((x) => clause(x.titleAr, escLines(x.bodyAr))).join('')}
   <div class="col"><b style="color:var(--gold-dk)">الطرف الثاني / Second Party</b><div>${esc(co.legalNameAr)}</div><div style="color:var(--muted)">${esc(co.representativeName ?? '')}</div>
     ${c.applyStamp && co.stampDataUrl ? `<img class="stamp" src="${esc(co.stampDataUrl)}" alt="">` : '<div class="line"></div>'}<small>التوقيع والختم / Signature &amp; Stamp</small></div>
 </div>
-${footer(co, `<span class="ltr">${esc(c.number)}</span>`)}`;
-  return page(`عقد ${c.number}`, body);
+`;
+  const footerStart = [co.legalNameAr, co.phone, co.email].filter(Boolean).join(' · ');
+  return page(`عقد ${c.number}`, body, CONTRACT_CSS + pageFooterCss(footerStart, c.number));
 }

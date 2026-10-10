@@ -105,6 +105,24 @@ export function footer(c: CompanyBlock, extra = ''): string {
   return `<div class="foot"><span>${esc(c.legalNameAr)}${c.phone ? ` · <span class="ltr">${esc(c.phone)}</span>` : ''}${c.email ? ` · <span class="ltr">${esc(c.email)}</span>` : ''}</span><span>${extra}</span></div>`;
 }
 
-export function page(title: string, body: string): string {
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${BASE_CSS}</style></head><body>${body}</body></html>`;
+/** A value as a CSS string literal (for `content:`); `<` is escaped so it can never close the <style> element. */
+export function cssStr(v: unknown): string {
+  return `"${String(v ?? '').replace(/[\\"]/g, '\\$&').replace(/</g, '\\3c ').replace(/[\r\n]+/g, ' ')}"`;
+}
+
+/**
+ * A running footer in the bottom margin of every printed page: `start` on the reading-start side (right in RTL),
+ * `end` on the other, and "page/pages" centred. Needs a Chromium with page margin boxes (Gotenberg 8 ships one).
+ * Use it instead of the in-flow `footer()` so the footer sits at the bottom of every page, not after the last block.
+ */
+export function pageFooterCss(start: string, end: string): string {
+  const box = 'border-top:2px solid var(--primary);padding-top:2mm;vertical-align:top;font-family:Tajawal,Noto Sans Arabic,DejaVu Sans,sans-serif;font-size:9.5px;color:var(--muted)';
+  return `@page{margin:12mm 11mm 18mm;
+@bottom-right{content:${cssStr(start)};width:56%;text-align:right;${box}}
+@bottom-center{content:counter(page) "/" counter(pages);width:14%;text-align:center;direction:ltr;font-weight:700;${box}}
+@bottom-left{content:${cssStr(end)};width:30%;text-align:left;direction:ltr;${box}}}`;
+}
+
+export function page(title: string, body: string, extraCss = ''): string {
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${BASE_CSS}${extraCss}</style></head><body>${body}</body></html>`;
 }
