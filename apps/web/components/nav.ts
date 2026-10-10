@@ -69,6 +69,7 @@ export const NAV: NavGroup[] = [
       { href: '/accounting/vat', label: 'ضريبة القيمة المضافة', en: 'VAT return', icon: 'Percent', perm: 'ledger.read' },
       { href: '/accounting/bank', label: 'التسوية البنكية', en: 'Bank reconciliation', icon: 'Landmark', perm: 'ledger.read' },
       { href: '/accounting/assets', label: 'الأصول الثابتة والمخصصات', en: 'Fixed assets & accruals', icon: 'Package', perm: 'ledger.read' },
+      { href: '/accounting/einvoice', label: 'الفوترة الإلكترونية (ZATCA)', en: 'E-invoicing (ZATCA)', icon: 'FileCode2', perm: 'ledger.read' },
       { href: '/accounting/closing', label: 'الإقفال وحزمة المراجع', en: 'Closing & auditor pack', icon: 'CalendarCheck', perm: 'ledger.read' },
       { href: '/accounting/opening', label: 'الأرصدة الافتتاحية', en: 'Opening balances', icon: 'BookMarked', perm: 'ledger.close' },
       { href: '/accounting/settings', label: 'إعدادات الحسابات', en: 'Ledger settings', icon: 'Settings2', perm: 'ledger.read' },
