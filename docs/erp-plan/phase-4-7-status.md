@@ -1,7 +1,7 @@
 # Phases 4, 5 and 7b — build status (as of 2026-10-06, branch `mmc-core`)
 
 Built and tested locally in MMC Core. As with Phases 1–3, production use waits on hosting and on the
-external accounts listed at the end. Phase 6 (full accounting) is **not** built in Core — see the last section.
+external accounts listed at the end. Phase 6 (general ledger in Core) is in progress: 6A is built — see the Phase 6 section.
 
 ## Phase 4 — Projects & field operations
 
@@ -52,7 +52,11 @@ HR pay (2026-10-08): leave requests and approvals (annual, emergency, sick per A
 
 Not built: attendance (Frappe HR), knowledge base, WhatsApp AI assistant, commission tiers/splits, AI evaluation sets.
 
-## Phase 6 — Full accounting: ERPNext (owner decision 2026-10-06)
+## Phase 6 — Full accounting
+
+**Update 2026-10-08:** the owner moved the general ledger **into MMC Core** (spec `phase-6-accounting-implementation.md`, owner version `phase-6-accounting-plan-ar.md`). Status: **6A built (2026-10-10)** — chart of accounts (Saudi starter chart, Excel import/export), manual journal (draft → second person posts → reverse), opening balances, period lock, ledger settings, trial balance / account statement / journal book / income statement / balance sheet with Excel + PDF export, DB-level immutability of posted entries, 22 e2e cases + 21 domain tests. **Not built:** 6B auto-posting from documents, 6C VAT return / closing / bank reconciliation / fixed assets / EOSB, 6D ZATCA Phase 2. The section below is the superseded 2026-10-06 decision, kept for history.
+
+### Superseded: ERPNext (owner decision 2026-10-06)
 
 The owner kept the plan: the ledger, bank reconciliation, expenses, fixed assets, VAT return and period
 close will run in **ERPNext + the KSA compliance app**, installed later with an implementer and the
