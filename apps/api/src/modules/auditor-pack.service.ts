@@ -18,7 +18,7 @@ import { returnView } from './vat.service.js';
 /**
  * The yearly "auditor pack" (Phase 6C, spec §1): every statement and supporting schedule for one
  * fiscal year as Excel files (+ PDF for the main statements), the audit trail as CSV and a SHA-256
- * manifest, in one zip. E-invoice XML is added when Phase 2 (6D) exists.
+ * manifest, in one zip — plus the e-invoice register and XML documents (Phase 6D) when there are any.
  */
 
 const N = (x: string | number | null | undefined) => H(x);
@@ -60,6 +60,9 @@ export async function buildAuditorPack(actor: RequestActor, startParam: string |
     const invoices = await tx.execute<{ number: string; type_code: string; issue_date: string; party: string | null; taxable: string; vat_amount: string; total: string; balance_due: string; status: string; zatca_status: string }>(sql`
       select i.number, i.type_code, i.issue_date::text, pa.name_ar as party, i.taxable::text, i.vat_amount::text, i.total::text, i.balance_due::text, i.status, i.zatca_status
       from invoice_mirror i left join party pa on pa.id = i.party_id where i.issue_date >= ${p.from} and i.issue_date <= ${p.to} order by i.issue_date, i.number`);
+    const einvoices = await tx.execute<{ number: string; type_code: string; subtype: string; icv: number; issue_date: string; status: string; uuid: string; invoice_hash: string; submitted_at: string | null; xml: string; cleared_xml: string | null }>(sql`
+      select number, type_code, subtype, icv, issue_date::text, status, uuid, invoice_hash, submitted_at::text, xml, cleared_xml
+      from einvoice_document where superseded_at is null and issue_date >= ${p.from} and issue_date <= ${p.to} order by icv`);
     const bills = await tx.execute<{ number: string; supplier_invoice_no: string; bill_date: string; supplier: string | null; currency: string; subtotal: string; vat: string; total: string; paid_amount: string; status: string }>(sql`
       select b.number, b.supplier_invoice_no, b.bill_date::text, pa.name_ar as supplier, b.currency, b.subtotal::text, b.vat::text, b.total::text, b.paid_amount::text, b.status
       from supplier_bill b left join party pa on pa.id = b.supplier_id where b.bill_date >= ${p.from} and b.bill_date <= ${p.to} order by b.bill_date, b.number`);
@@ -70,7 +73,7 @@ export async function buildAuditorPack(actor: RequestActor, startParam: string |
       select id, at::text, actor_id::text, action, entity_type, entity_id, reason, hash from audit_log
       where entity_type in ('journal_entry', 'account', 'ledger_settings', 'vat_return', 'fiscal_year', 'fixed_asset', 'bank_statement', 'cash_voucher', 'invoice')
         and at >= ${p.from}::date and at < (${p.to}::date + 1) order by id limit 50000`);
-    return { p, fy, co, tb, is, bs, cf, eq, ar, ap, journal, assets, returnViews, eosb, z, checks, stmts, invoices, bills, payroll, trail };
+    return { p, fy, co, tb, is, bs, cf, eq, ar, ap, journal, assets, returnViews, eosb, z, checks, stmts, invoices, einvoices, bills, payroll, trail };
   });
 
   const { p } = data;
@@ -145,12 +148,23 @@ export async function buildAuditorPack(actor: RequestActor, startParam: string |
     zip.file(name, b);
     manifest.push({ file: name, bytes: b.length, sha256: createHash('sha256').update(b).digest('hex') });
   };
+  if (data.einvoices.length) {
+    tables.push({
+      file: '19-einvoice-register',
+      table: listTable('سجل الفوترة الإلكترونية (المرحلة الثانية)', 'E-invoice register (ZATCA Phase 2)', sub, [
+        { key: 'icv', label: 'ICV', kind: 'number' }, { key: 'number', label: 'الرقم', kind: 'text' }, { key: 'type', label: 'النوع', kind: 'text' }, { key: 'sub', label: 'الفئة', kind: 'text' },
+        { key: 'date', label: 'التاريخ', kind: 'date' }, { key: 'status', label: 'حالة الهيئة', kind: 'text' }, { key: 'uuid', label: 'UUID', kind: 'text', width: 38 }, { key: 'hash', label: 'بصمة الفاتورة', kind: 'text', width: 50 },
+      ], data.einvoices.map((d) => ({ cells: { icv: d.icv, number: d.number, type: d.type_code, sub: d.subtype === 'standard' ? 'ضريبية (B2B)' : 'مبسطة (B2C)', date: d.issue_date, status: d.status, uuid: d.uuid, hash: d.invoice_hash } }))),
+    });
+  }
   for (const t of tables) {
     add(`${t.file}.xlsx`, await renderXlsx(actor, t.table));
     if (t.pdf) {
       try { add(`pdf/${t.file}.pdf`, await renderPdf(actor, t.table)); } catch { notes.push(`تعذّر إنشاء ${t.file}.pdf (خدمة PDF غير متاحة) — الملف الأصلي بصيغة Excel موجود.`); }
     }
   }
+  // The legal documents themselves: ZATCA's stamped copy once cleared, the signed XML otherwise.
+  for (const d of data.einvoices) add(`einvoice-xml/${String(d.icv).padStart(6, '0')}-${d.number.replace(/[^\w.-]+/g, '_')}${d.cleared_xml ? '-cleared' : ''}.xml`, d.cleared_xml ?? d.xml);
   const head = ['id', 'at', 'actor_id', 'action', 'entity_type', 'entity_id', 'reason', 'hash'];
   add('18-audit-trail.csv', '﻿' + [head.join(','), ...data.trail.map((r) => head.map((h) => csvCell((r as Record<string, unknown>)[h])).join(','))].join('\r\n'));
   add('README.txt', [
@@ -158,7 +172,7 @@ export async function buildAuditorPack(actor: RequestActor, startParam: string |
     'المحتويات: القوائم المالية (ميزان المراجعة، الدخل، المركز المالي، التدفقات النقدية، حقوق الملكية)، أعمار الذمم، دفتر اليومية،',
     'سجل الأصول الثابتة، إقرارات ضريبة القيمة المضافة، جدول نهاية الخدمة، التسويات البنكية، ورقة الوعاء الزكوي، فحوصات المطابقة،',
     'الفواتير الصادرة وفواتير الموردين وملخص الرواتب، وسجل التدقيق (CSV). ملف manifest.json يحوي بصمة SHA-256 لكل ملف.',
-    'ملاحظة: ملفات XML للفوترة الإلكترونية (المرحلة الثانية) تُضاف عند تفعيلها.', ...notes,
+    data.einvoices.length ? `الفوترة الإلكترونية: ${data.einvoices.length} مستنداً في المجلد einvoice-xml (النسخة المعتمدة من الهيئة عند وجودها) وسجلها في الملف 19.` : 'الفوترة الإلكترونية (المرحلة الثانية) غير مفعّلة في هذه الفترة.', ...notes,
   ].join('\r\n'));
   zip.file('manifest.json', JSON.stringify({ company: data.co.legalNameAr, fiscalYear: data.fy.label, from: p.from, to: p.to, generatedAt: new Date().toISOString(), files: manifest }, null, 2));
   const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });

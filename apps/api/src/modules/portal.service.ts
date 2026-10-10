@@ -7,6 +7,7 @@ import {
 } from '@mmc/db';
 import { APPROVAL_LABELS, halalasToFixed, OTP_MAX_ATTEMPTS, toHalalas, OTP_TTL_MINUTES, PROJECT_STAGE_LABELS, gateFor, normalizeSaudiMobile, riyadhDate, type ApprovalKind, type ProjectStage } from '@mmc/domain';
 import { audit } from '../common/audit.js';
+import { awaitingClearance } from './einvoice.service.js';
 import { getDb } from '../common/db.js';
 import { badRequest, forbidden, notFound } from '../common/errors.js';
 import { storeFile } from '../common/files.js';
@@ -461,11 +462,15 @@ const INVOICE_TYPE: Record<string, { ar: string; en: string }> = {
 
 export async function invoices(tx: Tx, c: PortalCtx) {
   const rows = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.partyId, c.partyId)).orderBy(desc(invoiceMirror.issueDate), desc(invoiceMirror.number));
+  // A standard tax invoice is not shown to the customer (no QR, no PDF) until ZATCA has cleared it.
+  const waiting = await awaitingClearance(tx, rows.map((r) => r.id));
   return {
     rows: rows.map((i) => ({
       id: i.id, number: i.number, typeCode: i.typeCode, typeLabel: INVOICE_TYPE[i.typeCode] ?? null, issueDate: i.issueDate, dueDate: i.dueDate,
-      taxable: i.taxable, vatAmount: i.vatAmount, total: i.total, balanceDue: i.balanceDue, status: i.status, zatcaStatus: i.zatcaStatus, qrPayload: i.qrPayload,
-      pdfUrl: i.pdfFileId ? portalFileUrl(i.pdfFileId) : null,
+      taxable: i.taxable, vatAmount: i.vatAmount, total: i.total, balanceDue: i.balanceDue, status: i.status, zatcaStatus: i.zatcaStatus,
+      awaitingClearance: waiting.has(i.id),
+      qrPayload: waiting.has(i.id) ? null : i.qrPayload,
+      pdfUrl: i.pdfFileId && !waiting.has(i.id) ? portalFileUrl(i.pdfFileId) : null,
     })),
   };
 }

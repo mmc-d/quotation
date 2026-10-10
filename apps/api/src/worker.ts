@@ -11,6 +11,7 @@ import { loadCalendar } from './modules/calendar.controller.js';
 import { agreementRenewalsFor, preventiveVisitsFor, slaEscalationsFor } from './modules/service.service.js';
 import { recalcOpenCommissions } from './modules/commissions.service.js';
 import { postPending } from './modules/gl-posting.service.js';
+import { submitPending } from './modules/einvoice.service.js';
 
 /**
  * Background jobs on pg-boss (Postgres-backed, no extra infrastructure). pg-boss manages its own
@@ -30,6 +31,8 @@ const JOBS = {
   commissions: { name: 'commissions-recalc', cron: '45 1 * * *' },
   // Phase 6B — general ledger: auto-post invoices, payments and vouchers every 10 minutes
   glPost: { name: 'gl-post', cron: '*/10 * * * *' },
+  // Phase 6D — ZATCA: clear / report signed e-invoices in ICV order every 2 minutes (a simplified invoice is due within 24 h)
+  einvoiceSubmit: { name: 'einvoice-submit', cron: '*/2 * * * *' },
 } as const;
 
 async function forEachTenant(fn: (tenantId: string) => Promise<void>) {
@@ -142,6 +145,16 @@ export async function runGlPost() {
   return total;
 }
 
+/** Every 2 min: send pending e-invoice documents to ZATCA (no-op for tenants without a live EGS unit). */
+export async function runEInvoiceSubmit() {
+  const total = { attempted: 0, cleared: 0, reported: 0, rejected: 0, failed: 0 };
+  await forEachTenant(async (tenantId) => {
+    const r = await submitPending(tenantId);
+    total.attempted += r.attempted; total.cleared += r.cleared; total.reported += r.reported; total.rejected += r.rejected; total.failed += r.failed;
+  });
+  return total;
+}
+
 let boss: PgBoss | null = null;
 
 export async function startWorker() {
@@ -160,6 +173,7 @@ export async function startWorker() {
     [JOBS.renewals.name]: runAgreementRenewals,
     [JOBS.commissions.name]: runCommissionsRecalc,
     [JOBS.glPost.name]: runGlPost,
+    [JOBS.einvoiceSubmit.name]: runEInvoiceSubmit,
   };
   for (const j of Object.values(JOBS)) {
     await boss.createQueue(j.name);

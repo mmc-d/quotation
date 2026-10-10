@@ -33,6 +33,8 @@ export const config = {
   },
   payments: { provider: process.env.PAYMENTS_PROVIDER ?? 'sandbox', secretKey: process.env.PAYMENTS_SECRET_KEY ?? '', webhookSecret: process.env.PAYMENTS_WEBHOOK_SECRET ?? 'dev-payments-secret' },
   leadsWebhookSecret: process.env.LEADS_WEBHOOK_SECRET ?? '',
+  /** 32-byte key (base64 or hex) that seals EGS private keys and CSIDs at rest. Required in production for e-invoicing. */
+  einvoiceKey: process.env.EINVOICE_KEY ?? '',
   /** Sandbox payment/e-sign pages and OTP logging. Never true on a public server. */
   allowSandbox: process.env.ALLOW_SANDBOX === 'true' || (process.env.NODE_ENV ?? 'development') !== 'production',
   runWorkerInProcess: process.env.WORKER_IN_PROCESS !== 'false',

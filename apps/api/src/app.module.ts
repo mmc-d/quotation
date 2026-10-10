@@ -38,6 +38,7 @@ import { FixedAssetsController } from './modules/fixed-assets.controller.js';
 import { BankController } from './modules/bank.controller.js';
 import { StatementsController } from './modules/statements.controller.js';
 import { AuditorPackController } from './modules/auditor-pack.controller.js';
+import { EInvoiceController } from './modules/einvoice.controller.js';
 import { AiController } from './ai/ai.controller.js';
 import { McpController } from './ai/mcp.js';
 
@@ -48,7 +49,7 @@ import { McpController } from './ai/mcp.js';
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
     PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, PayablesController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
     IotController, IotBindingController, CommissionsController, KbController, VouchersController, JobOffersController, EmployeesController, EmployeePayController, LeavesController, MyHrController, PayrollController,
-    LedgerController, LedgerReportsController, GlPostingController, VatController, ClosingController, FixedAssetsController, BankController, StatementsController, AuditorPackController,
+    LedgerController, LedgerReportsController, GlPostingController, VatController, ClosingController, FixedAssetsController, BankController, StatementsController, AuditorPackController, EInvoiceController,
     AiController, McpController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

@@ -61,6 +61,8 @@ export const invoiceMirror = pgTable('invoice_mirror', {
   pdfFileId: uuid('pdf_file_id'),
   /** Phase 6D: why the e-invoice document could not be built (cleared when it is) */
   einvoiceError: text('einvoice_error'),
+  /** why a credit / debit note was issued — ZATCA wants the reason on the document (BR-KSA-17) */
+  adjustmentReason: text('adjustment_reason'),
   status: text('status').notNull().default('issued'),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
   ...audit,

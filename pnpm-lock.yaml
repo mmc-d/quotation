@@ -35,6 +35,9 @@ importers:
       '@mmc/erp-connector':
         specifier: workspace:*
         version: link:../../packages/erp-connector
+      '@mmc/zatca':
+        specifier: workspace:*
+        version: link:../../packages/zatca
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(zod@4.6.5)

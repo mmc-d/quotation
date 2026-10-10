@@ -13,18 +13,24 @@ import { getDb, tenantTx } from '../common/db.js';
 import { audit } from '../common/audit.js';
 import { backOffice } from '../common/backoffice.js';
 import { companyBlock, loadCompany } from '../common/company.js';
-import { badRequest, forbidden, notFound } from '../common/errors.js';
+import { badRequest, forbidden, notFound, conflict } from '../common/errors.js';
 import { payments, signSandboxWebhook } from '../common/payments.js';
 import { assertCan, scopeFilter } from '../common/scope.js';
 import { ZodPipe, zDate, zMoney, zPage } from '../common/zod.js';
 import { config } from '../config.js';
+import { awaitingClearance } from './einvoice.service.js';
 import { advanceCredits, applyPayment, CO_TRIGGER, ensureCustomer, issueFinalInvoice, mirrorInvoice, requestMilestone, sendPaymentRequest } from './finance.service.js';
 
 const METHODS = ['bank_transfer', 'mada', 'credit_card', 'apple_pay', 'stc_pay', 'cash', 'cheque', 'payment_link'] as const;
 
-async function invoicePdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0], id: string) {
+/**
+ * `archive` = the PDF/A-3b archival copy carrying the signed (or cleared) XML — also allowed before
+ * clearance, since it is the office copy; the plain PDF is what gets shared, so it waits for ZATCA.
+ */
+export async function invoicePdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0], id: string, archive?: { name: string; xml: string }) {
   const [inv] = await tx.select().from(invoiceMirror).where(eq(invoiceMirror.id, id));
   if (!inv) throw notFound('invoice');
+  if (!archive && (await awaitingClearance(tx, [id])).has(id)) throw conflict('this tax invoice has not been cleared by ZATCA yet — it cannot be shared until it is');
   const [p] = inv.partyId ? await tx.select().from(party).where(eq(party.id, inv.partyId)) : [];
   const [c] = inv.contractId ? await tx.select({ number: contract.number }).from(contract).where(eq(contract.id, inv.contractId)) : [];
   const lines = (inv.lines as { code: string; description: string; qty: string; unitPrice: string; net: string; vat: string; total: string }[]).map((l) => ({ ...l, net: toHalalas(l.net), vat: toHalalas(l.vat), total: toHalalas(l.total) }));
@@ -33,7 +39,7 @@ async function invoicePdf(tx: Parameters<Parameters<typeof tenantTx>[1]>[0], id:
     buyer: { name: p?.nameAr ?? '', vatNumber: p?.vatNumber, crNumber: p?.unifiedNumber ?? p?.crNumber }, contractNumber: c?.number ?? null, lines,
     taxable: toHalalas(inv.taxable), vat: toHalalas(inv.vatAmount), total: toHalalas(inv.total), prepaid: toHalalas(inv.prepaidAmount), balanceDue: toHalalas(inv.balanceDue), qrPayload: inv.qrPayload, zatcaStatus: inv.zatcaStatus,
   });
-  return { pdf: await htmlToPdf(html, config.gotenbergUrl), number: inv.number };
+  return { pdf: await htmlToPdf(html, config.gotenbergUrl, fetch, archive ? { pdfa: 'PDF/A-3b', embeds: [{ name: archive.name, content: archive.xml }] } : {}), number: inv.number };
 }
 
 /** Scope for payment-request lists: contract requests follow the contract, AMC requests the agreement. */
@@ -207,7 +213,7 @@ export class FinanceController {
         vatRate: co.vatRegistered && toHalalas(inv.vatAmount) > 0 ? VAT_RATE : 0, taxInclusive: true, originalErpName: inv.erpName, reason: b.reason,
         core: { contractId: inv.contractId },
       });
-      const row = await mirrorInvoice(tx, note, { partyId: inv.partyId, contractId: inv.contractId, originalInvoiceId: inv.id });
+      const row = await mirrorInvoice(tx, note, { partyId: inv.partyId, contractId: inv.contractId, originalInvoiceId: inv.id, reason: b.reason });
       await audit(tx, actor, 'issue_381', 'invoice', id, null, { creditNote: note.number, amount: halalasToFixed(gross), reason: b.reason });
       return row;
     }, actor.userId);

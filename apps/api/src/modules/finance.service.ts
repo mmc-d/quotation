@@ -15,6 +15,7 @@ import type { RequestActor } from '../auth/actor.js';
 import { addDays, loadCalendar } from './calendar.controller.js';
 import { recomputeCommissions } from './commissions.service.js';
 import { tryPost } from './gl-posting.service.js';
+import { phase2Fields, tryIssue } from './einvoice.service.js';
 
 /** Push the customer to the back office once (and on change); returns its ERP name. */
 export async function ensureCustomer(tx: Tx, tenantId: string, partyId: string): Promise<{ erpName: string; b2b: boolean }> {
@@ -30,20 +31,24 @@ export async function ensureCustomer(tx: Tx, tenantId: string, partyId: string):
 }
 
 /** Upsert the Core mirror of a back-office invoice (only the port writes mirrors). */
-export async function mirrorInvoice(tx: Tx, inv: InvoiceResult, links: { partyId?: string | null; contractId?: string | null; milestoneId?: string | null; paymentRequestId?: string | null; originalInvoiceId?: string | null }) {
+export async function mirrorInvoice(tx: Tx, inv: InvoiceResult, links: { partyId?: string | null; contractId?: string | null; milestoneId?: string | null; paymentRequestId?: string | null; originalInvoiceId?: string | null; reason?: string | null }) {
   const values = {
     erpName: inv.erpName, number: inv.number, typeCode: inv.typeCode, subtype: inv.subtype, issueDate: inv.issueDate, dueDate: inv.dueDate,
     taxable: inv.taxable, vatAmount: inv.vat, total: inv.total, prepaidAmount: inv.prepaid, balanceDue: inv.balanceDue, lines: inv.lines as never,
     zatcaUuid: inv.zatcaUuid, zatcaStatus: inv.zatcaStatus, qrPayload: inv.qrPayload, status: inv.status, syncedAt: new Date(),
   };
-  const [row] = await tx.insert(invoiceMirror).values({ ...values, partyId: links.partyId ?? null, contractId: links.contractId ?? null, milestoneId: links.milestoneId ?? null, paymentRequestId: links.paymentRequestId ?? null, originalInvoiceId: links.originalInvoiceId ?? null })
+  const [row] = await tx.insert(invoiceMirror).values({ ...values, partyId: links.partyId ?? null, contractId: links.contractId ?? null, milestoneId: links.milestoneId ?? null, paymentRequestId: links.paymentRequestId ?? null, originalInvoiceId: links.originalInvoiceId ?? null, adjustmentReason: links.reason ?? null })
     .onConflictDoUpdate({ target: [invoiceMirror.tenantId, invoiceMirror.erpName], set: values }).returning();
+  // Phase 6D: a re-sent invoice must not take the back office's Phase-1 QR / status over the signed document's
+  const p2 = await phase2Fields(tx, row!.id);
+  if (p2) await tx.update(invoiceMirror).set(p2).where(eq(invoiceMirror.id, row!.id));
   // Phase 7a: commissions earned on 388 / clawed back on 381 (own savepoint — never blocks invoicing)
   try {
     await tx.transaction((sp) => recomputeCommissions(sp, row!.id));
   } catch (e) {
     console.warn(`[commissions] ${inv.number}:`, (e as Error).message);
   }
+  await tryIssue(tx, row!.id); // Phase 6D: signed e-invoice document (no-op unless e-invoicing is enabled and a unit is live)
   await tryPost(tx, 'invoice', row!.id); // Phase 6B: into the ledger (no-op before go-live; the 10-minute job retries failures)
   return row!;
 }
@@ -223,7 +228,7 @@ export async function billChangeOrder(tx: Tx, actor: RequestActor, coId: string,
     vatRate: toHalalas(co.vatDelta) !== 0 ? VAT_RATE : 0, originalErpName: target.erpName, reason,
     core: { contractId: c.id, milestoneId, contractNumber: c.number }, remarks: `العقد ${c.number} / ${co.number}`,
   });
-  const row = await mirrorInvoice(tx, note, { partyId: c.partyId, contractId: c.id, milestoneId, originalInvoiceId: target.id });
+  const row = await mirrorInvoice(tx, note, { partyId: c.partyId, contractId: c.id, milestoneId, originalInvoiceId: target.id, reason });
   await tx.update(billingMilestone).set({ status: 'invoiced', updatedAt: new Date() }).where(eq(billingMilestone.id, milestoneId));
   await tx.update(changeOrder).set({ status: 'billed', updatedAt: new Date(), updatedBy: actor.userId }).where(eq(changeOrder.id, co.id));
   await audit(tx, actor, 'issue_381', 'change_order', co.id, { status: co.status }, { status: 'billed', creditNote: note.number, against: target.number, amount: halalasToFixed(gross) });

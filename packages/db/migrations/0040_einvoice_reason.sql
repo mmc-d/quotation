@@ -1,0 +1,1 @@
+ALTER TABLE "invoice_mirror" ADD COLUMN "adjustment_reason" text;
