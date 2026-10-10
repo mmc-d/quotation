@@ -18,3 +18,7 @@ export * from './hr.js';
 export * from './payroll.js';
 export * from './ledger.js';
 export * from './gl-posting.js';
+export * from './vat-return.js';
+export * from './fixed-assets.js';
+export * from './eosb.js';
+export * from './statements.js';

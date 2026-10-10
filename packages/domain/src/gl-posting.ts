@@ -70,6 +70,8 @@ export interface InvoiceFacts {
   creditsAdvance?: boolean;
   /** invoice.prepaid for a 388 (halalas) — compared with the advances for a warning */
   prepaid?: Halalas;
+  /** the company was VAT-registered on the invoice date but charged no VAT: the supply is zero-rated (return code Z) */
+  zeroRated?: boolean;
 }
 
 export function buildInvoiceLines(f: InvoiceFacts): Built {
@@ -86,7 +88,8 @@ export function buildInvoiceLines(f: InvoiceFacts): Built {
     const kinds: RevenueKind[] = ['devices', 'installation', 'service'];
     const sums = kinds.map((k) => f.lines.filter((l) => l.kind === k).reduce((s, l) => s + Math.abs(l.net), 0));
     const parts = allocateProportional(taxable, sums);
-    return kinds.flatMap((k, i) => (parts[i] ? [{ key: REVENUE_KEYS[k], debit: 0, credit: parts[i]!, projectId: f.projectId } as PostLine] : []));
+    const z = !!f.zeroRated && vat === 0;
+    return kinds.flatMap((k, i) => (parts[i] ? [{ key: REVENUE_KEYS[k], debit: 0, credit: parts[i]!, projectId: f.projectId, ...(z ? { vatCode: 'Z', vatBase: parts[i]! } : {}) } as PostLine] : []));
   };
 
   if (f.typeCode === '386') {
@@ -94,7 +97,7 @@ export function buildInvoiceLines(f: InvoiceFacts): Built {
     if (taxable) lines.push(cr('customer_advances', taxable, party));
     if (vat) lines.push(cr('vat_output', vat, { vatCode: 'S', vatBase: taxable }));
   } else if (f.typeCode === '381') {
-    if (f.creditsAdvance) { if (taxable) lines.push(dr('customer_advances', taxable, party)); } else for (const r of revenue()) lines.push({ ...r, debit: r.credit, credit: 0 });
+    if (f.creditsAdvance) { if (taxable) lines.push(dr('customer_advances', taxable, party)); } else for (const r of revenue()) lines.push({ ...r, debit: r.credit, credit: 0, ...(r.vatBase != null ? { vatBase: -r.vatBase } : {}) });
     if (vat) lines.push(dr('vat_output', vat, { vatCode: 'S', vatBase: -taxable }));
     lines.push(cr('ar', total, party));
   } else {

@@ -83,6 +83,7 @@ export const DEFAULT_SERIES: Record<string, SeriesSpec> = {
   job_offer: { pattern: 'OFR-{SEQ:4}', reset: 'never' },
   leave_request: { pattern: 'LV-{SEQ:5}', reset: 'never' },
   journal_entry: { pattern: 'JV-{SEQ:6}', reset: 'never' },
+  fixed_asset: { pattern: 'FA-{SEQ:4}', reset: 'never' },
 };
 
 /** The bucket key a sequence counts within (e.g. the day for daily series). */

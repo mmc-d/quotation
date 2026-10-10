@@ -246,9 +246,12 @@ export function journalProblems(input: {
   return out;
 }
 
-/** Lines of the reversing entry: every line with its sides swapped. */
-export function reverseLines<T extends { debit: Halalas; credit: Halalas }>(lines: readonly T[]): T[] {
-  return lines.map((l) => ({ ...l, debit: l.credit, credit: l.debit }));
+/**
+ * Lines of the reversing entry: every line with its sides swapped. A VAT base is negated too, so the
+ * VAT return nets a reversed document to zero.
+ */
+export function reverseLines<T extends { debit: Halalas; credit: Halalas; vatBase?: Halalas | null }>(lines: readonly T[]): T[] {
+  return lines.map((l) => ({ ...l, debit: l.credit, credit: l.debit, ...(l.vatBase != null ? { vatBase: -l.vatBase } : {}) }));
 }
 
 // ─────────────────────────────── trial balance ───────────────────────────────
