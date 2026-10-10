@@ -253,6 +253,20 @@
       "when": 1791620955440,
       "tag": "0035_gl_posting_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791625114723,
+      "tag": "0036_ledger_close_vat_bank_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791625122124,
+      "tag": "0037_ledger_close_rls",
+      "breakpoints": true
     }
   ]
 }
