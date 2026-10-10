@@ -24,6 +24,7 @@ export const PERMISSIONS = [
   'iot.manage', 'ai.use', 'ai.approve', 'commission.read', 'commission.manage',
   'kb.read', 'kb.write',
   'hr.read', 'hr.write', 'hr.approve',
+  'ledger.read', 'ledger.write', 'ledger.post', 'ledger.close', 'einvoice.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -72,6 +73,7 @@ export const ROLE_TEMPLATES: Record<string, { name_ar: string; name_en: string; 
       'billing.read': 'company', 'billing.write': 'company', 'invoice.read': 'company', 'invoice.issue': 'company',
       'payment.read': 'company', 'payment.record': 'company', 'voucher.read': 'company', 'voucher.write': 'company', 'report.finance': 'company', 'report.sales': 'company',
       'inventory.read': 'company', 'purchase.read': 'company', 'purchase.cost.read': 'company', 'commission.read': 'company', 'commission.manage': 'company',
+      'ledger.read': 'company', 'ledger.write': 'company', 'ledger.post': 'company',
     },
   },
   customer_service: {

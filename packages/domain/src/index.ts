@@ -16,3 +16,4 @@ export * from './service.js';
 export * from './intelligence.js';
 export * from './hr.js';
 export * from './payroll.js';
+export * from './ledger.js';
