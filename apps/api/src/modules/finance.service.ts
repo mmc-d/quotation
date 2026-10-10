@@ -14,6 +14,7 @@ import { config } from '../config.js';
 import type { RequestActor } from '../auth/actor.js';
 import { addDays, loadCalendar } from './calendar.controller.js';
 import { recomputeCommissions } from './commissions.service.js';
+import { tryPost } from './gl-posting.service.js';
 
 /** Push the customer to the back office once (and on change); returns its ERP name. */
 export async function ensureCustomer(tx: Tx, tenantId: string, partyId: string): Promise<{ erpName: string; b2b: boolean }> {
@@ -43,12 +44,14 @@ export async function mirrorInvoice(tx: Tx, inv: InvoiceResult, links: { partyId
   } catch (e) {
     console.warn(`[commissions] ${inv.number}:`, (e as Error).message);
   }
+  await tryPost(tx, 'invoice', row!.id); // Phase 6B: into the ledger (no-op before go-live; the 10-minute job retries failures)
   return row!;
 }
 
 export async function mirrorPayment(tx: Tx, p: PaymentResult, links: { partyId?: string | null; paymentRequestId?: string | null }) {
   const values = { erpName: p.erpName, amount: p.amount, paidOn: p.paidOn, method: p.method, reference: p.reference, allocations: p.allocations, syncedAt: new Date() };
   const [row] = await tx.insert(paymentMirror).values({ ...values, partyId: links.partyId ?? null, paymentRequestId: links.paymentRequestId ?? null }).onConflictDoUpdate({ target: [paymentMirror.tenantId, paymentMirror.erpName], set: values }).returning();
+  await tryPost(tx, 'payment', row!.id);
   return row!;
 }
 

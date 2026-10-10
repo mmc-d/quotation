@@ -10,6 +10,7 @@ import { reconcile } from './modules/finance.controller.js';
 import { loadCalendar } from './modules/calendar.controller.js';
 import { agreementRenewalsFor, preventiveVisitsFor, slaEscalationsFor } from './modules/service.service.js';
 import { recalcOpenCommissions } from './modules/commissions.service.js';
+import { postPending } from './modules/gl-posting.service.js';
 
 /**
  * Background jobs on pg-boss (Postgres-backed, no extra infrastructure). pg-boss manages its own
@@ -27,6 +28,8 @@ const JOBS = {
   renewals: { name: 'service-agreement-renewals', cron: '30 6 * * *' },
   // Phase 7a — commissions: payable share refreshed from collections (nightly)
   commissions: { name: 'commissions-recalc', cron: '45 1 * * *' },
+  // Phase 6B — general ledger: auto-post invoices, payments and vouchers every 10 minutes
+  glPost: { name: 'gl-post', cron: '*/10 * * * *' },
 } as const;
 
 async function forEachTenant(fn: (tenantId: string) => Promise<void>) {
@@ -129,6 +132,16 @@ export async function runCommissionsRecalc() {
   return { updated };
 }
 
+/** Every 10 min: post whatever the instant hooks missed (and cancellations) into the ledger. */
+export async function runGlPost() {
+  const total = { posted: 0, reversed: 0, errors: 0 };
+  await forEachTenant((tenantId) => withTenant(getDb(), tenantId, async (tx) => {
+    const r = await postPending(tx);
+    total.posted += r.posted; total.reversed += r.reversed; total.errors += r.errors;
+  }));
+  return total;
+}
+
 let boss: PgBoss | null = null;
 
 export async function startWorker() {
@@ -146,6 +159,7 @@ export async function startWorker() {
     [JOBS.preventive.name]: runPreventiveVisits,
     [JOBS.renewals.name]: runAgreementRenewals,
     [JOBS.commissions.name]: runCommissionsRecalc,
+    [JOBS.glPost.name]: runGlPost,
   };
   for (const j of Object.values(JOBS)) {
     await boss.createQueue(j.name);

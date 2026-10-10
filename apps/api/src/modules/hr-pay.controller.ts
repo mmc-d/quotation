@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
+import { tryPost } from './gl-posting.service.js';
 import { and, appUser, asc, cashVoucher, desc, employee, eq, gte, inArray, leaveRequest, lte, ne, nextNumber, notification, or, payAdjustment, payrollLine, payrollRun, role, sql, userRole, type Tx } from '@mmc/db';
 import { accruedLeave, BALANCE_LEAVE, computePayslip, daysBetween, halalasToFixed, LEAVE_TYPES, monthRange, riyadhDate, toHalalas, type LeaveType } from '@mmc/domain';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
@@ -294,11 +295,13 @@ const adjBody = z.object({
   /** payroll: with the month's salary · voucher: a bonus paid now by a payment voucher (سند صرف) */
   payBy: z.enum(['payroll', 'voucher']).default('payroll'),
   method: z.enum(['cash', 'transfer', 'cheque']).default('transfer'),
+  /** deductions only: where the ledger credits it — advance (سلفة) | penalty (جزاء) | other */
+  category: z.enum(['advance', 'penalty', 'other']).default('other'),
 });
 
 const adjCols = {
   id: payAdjustment.id, employeeId: payAdjustment.employeeId, month: payAdjustment.month, kind: payAdjustment.kind, amount: payAdjustment.amount, reason: payAdjustment.reason,
-  payMethod: payAdjustment.payMethod, voucherId: payAdjustment.voucherId, createdAt: payAdjustment.createdAt,
+  payMethod: payAdjustment.payMethod, category: payAdjustment.category, voucherId: payAdjustment.voucherId, createdAt: payAdjustment.createdAt,
   voucherNumber: cashVoucher.number, voucherStatus: cashVoucher.status,
 };
 
@@ -345,7 +348,7 @@ export class EmployeePayController {
         voucherId = v!.id;
         await audit(tx, actor, 'create', 'cash_voucher', v!.id, null, { number, kind: 'payment', amount, counterparty: e.nameAr, source: 'hr_bonus' });
       }
-      const [a] = await tx.insert(payAdjustment).values({ employeeId: id, month, kind: b.kind, amount, reason: b.reason, payMethod: b.payBy, voucherId, createdBy: actor.userId, updatedBy: actor.userId }).returning();
+      const [a] = await tx.insert(payAdjustment).values({ employeeId: id, month, kind: b.kind, amount, reason: b.reason, payMethod: b.payBy, voucherId, category: b.kind === 'deduction' ? b.category : 'other', createdBy: actor.userId, updatedBy: actor.userId }).returning();
       await audit(tx, actor, 'create', 'pay_adjustment', a!.id, null, { employee: e.number, month, kind: b.kind, amount, reason: b.reason, payBy: b.payBy });
       if (e.userId && e.userId !== actor.userId) {
         await tx.insert(notification).values({ userId: e.userId, kind: 'hr', titleAr: byVoucher ? `🎉 مكافأة ${amount} ريال — ${b.reason}` : `${b.kind === 'bonus' ? '🎉 مكافأة' : 'خصم'} ${amount} ريال على راتب ${month} — ${b.reason}`, titleEn: `${b.kind} ${amount} SAR`, link: '/hr/me' });
@@ -478,6 +481,7 @@ export class PayrollController {
       if (totals.net !== halalasToFixed(toHalalas(b.expectedNet))) return { changed: true as const };
       await tx.update(payrollRun).set({ status: 'approved', approvedBy: actor.userId, approvedByName: await myName(tx, actor), approvedAt: new Date(), updatedAt: new Date(), updatedBy: actor.userId, version: r.version + 1 }).where(eq(payrollRun.id, id));
       await audit(tx, actor, 'approve', 'payroll_run', id, { status: 'draft' }, { status: 'approved', month: r.month, net: totals.net, employees: totals.employeeCount });
+      await tryPost(tx, 'payroll', id);
       return { changed: false as const };
     }, actor.userId);
     if (result.changed) throw conflict('leave or adjustments changed since you opened it — the payroll was recalculated; review the new figures and approve again');
@@ -493,6 +497,8 @@ export class PayrollController {
       if (b.date > riyadhDate()) throw badRequest('the payment date cannot be in the future');
       await tx.update(payrollRun).set({ status: 'paid', paidAt: b.date, paidRef: b.ref || null, updatedAt: new Date(), updatedBy: actor.userId, version: r.version + 1 }).where(eq(payrollRun.id, id));
       await audit(tx, actor, 'paid', 'payroll_run', id, { status: 'approved' }, { status: 'paid', paidAt: b.date, ref: b.ref ?? null });
+      await tryPost(tx, 'payroll', id);
+      await tryPost(tx, 'payroll_paid', id);
       const lines = await tx.select({ employeeId: payrollLine.employeeId, net: payrollLine.net }).from(payrollLine).where(eq(payrollLine.runId, id));
       const users = lines.length ? await tx.select({ id: employee.id, userId: employee.userId }).from(employee).where(inArray(employee.id, lines.map((l) => l.employeeId))) : [];
       for (const l of lines) {

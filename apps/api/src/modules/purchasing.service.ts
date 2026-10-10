@@ -8,6 +8,7 @@ import {
 } from '@mmc/domain';
 import type { PurchaseOrderDoc } from '@mmc/doc-templates';
 import type { RequestActor } from '../auth/actor.js';
+import { tryPost } from './gl-posting.service.js';
 import { audit } from '../common/audit.js';
 import { companyBlock } from '../common/company.js';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
@@ -379,6 +380,7 @@ export async function postLandedCost(tx: Tx, actor: RequestActor, shipmentId: st
     perProduct.set(r.l.productId!, cur);
   }
   const result: { productId: string; code: string; allocatedSar: string; perUnitSar: string; avgBefore: string | null; avgAfter: string | null }[] = [];
+  let capitalisedTotal = dec(0);
   for (const [productId, a] of perProduct) {
     const [p] = await tx.select().from(product).where(eq(product.id, productId));
     const onHand = await valuationQty(tx, productId);
@@ -389,6 +391,7 @@ export async function postLandedCost(tx: Tx, actor: RequestActor, shipmentId: st
     if (onHand.gt(0)) {
       const share = onHand.div(a.qty).gt(1) ? dec(1) : onHand.div(a.qty);
       capitalised = allocatedSar.times(share);
+      capitalisedTotal = capitalisedTotal.plus(capitalised);
       newAvg = onHand.times(avg).plus(capitalised).div(onHand);
       await tx.update(product).set({ avgCostSar: fx4(newAvg) }).where(eq(product.id, productId));
     }
@@ -399,9 +402,12 @@ export async function postLandedCost(tx: Tx, actor: RequestActor, shipmentId: st
     });
     result.push({ productId, code: p!.code, allocatedSar: allocatedSar.toFixed(2), perUnitSar: fx4(perUnit), avgBefore: p!.avgCostSar, avgAfter: fx4(newAvg) });
   }
-  await tx.update(importShipment).set({ landedBasis: basis, landedPostedAt: new Date(), updatedAt: new Date(), updatedBy: actor.userId, version: sh.version + 1 }).where(eq(importShipment.id, sh.id));
+  // the ledger reads this split: what raised the cost of stock still on hand vs what belongs to cost of sales
+  const capitalisedH = Math.min(charge, Math.max(0, capitalisedTotal.times(100).toDecimalPlaces(0).toNumber()));
+  await tx.update(importShipment).set({ landedBasis: basis, landedPostedAt: new Date(), landedCapitalisedSar: halalasToFixed(capitalisedH), landedExpensedSar: halalasToFixed(charge - capitalisedH), updatedAt: new Date(), updatedBy: actor.userId, version: sh.version + 1 }).where(eq(importShipment.id, sh.id));
   await audit(tx, actor, 'landed_cost', 'import_shipment', sh.id, null, { basis, charge: halalasToFixed(charge), products: result.length });
   await emit(tx, 'import_shipment', sh.id, 'shipment.landed_cost_posted', { number: sh.number, charge: halalasToFixed(charge) });
+  await tryPost(tx, 'landed_cost', sh.id);
   return { shipmentId: sh.id, basis, chargeSar: halalasToFixed(charge), lines: alloc.map((a) => ({ receiptLineId: a.id, allocatedSar: halalasToFixed(a.halalas), perUnitSar: a.perUnitSar })), products: result };
 }
 
@@ -445,6 +451,7 @@ export async function createBill(tx: Tx, actor: RequestActor, b: BillInput) {
   }
   await audit(tx, actor, 'create', 'supplier_bill', row!.id, null, { number, order: po.number, matchStatus: row!.matchStatus, accepted, ...(b.sourceXmlFileId ? { sourceXmlFileId: b.sourceXmlFileId } : {}) });
   await emit(tx, 'supplier_bill', row!.id, match.ok ? 'supplier_bill.matched' : 'supplier_bill.exception', { number, order: po.number });
+  await tryPost(tx, 'bill', row!.id);
   return row!;
 }
 
@@ -470,5 +477,6 @@ export async function approveBill(tx: Tx, actor: RequestActor, id: string) {
   }
   const [row] = await tx.update(supplierBill).set({ status: 'approved', updatedAt: new Date(), updatedBy: actor.userId }).where(eq(supplierBill.id, id)).returning();
   await audit(tx, actor, 'accept_exception', 'supplier_bill', id, { status: bill.status }, { status: 'approved', matchIssues: bill.matchIssues });
+  await tryPost(tx, 'bill', id);
   return row!;
 }

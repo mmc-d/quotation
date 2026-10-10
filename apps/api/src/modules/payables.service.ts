@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  and, desc, emit, eq, ilike, inArray, isNull, nextNumber, or, party, product, project, purchaseOrder, serialNumber, sql, stockBalance, stockMove, stockOpening, supplierBill, warehouse,
+  and, desc, emit, eq, ilike, inArray, isNull, nextNumber, or, party, product, project, purchaseOrder, serialNumber, sql, stockBalance, stockMove, stockOpening, supplierBill, warehouse, purchaseOrderLine,
   type SQL, type SupplierBillLine, type SupplierPayment, type Tx,
 } from '@mmc/db';
 import { addMonths, billPaymentStatus, dec, directBillTotals, halalasToFixed, parseOpeningSheet, payableBucket, riyadhDate, toHalalas } from '@mmc/domain';
@@ -9,6 +9,7 @@ import { audit } from '../common/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
 import { NON_STOCK_TYPES, canCost, ensureMainWarehouse, fq, fx4, isUuid, loadWarehouse, postMove, reserve } from './inventory.service.js';
 import { VAT_RATE, defaultRate, loadSupplier } from './purchasing.service.js';
+import { tryPost } from './gl-posting.service.js';
 
 /**
  * Local purchases entered straight from the supplier's invoice (no purchase order), payments to
@@ -115,6 +116,8 @@ export async function createDirectBill(tx: Tx, actor: RequestActor, b: DirectBil
   }
   await audit(tx, actor, 'create', 'supplier_bill', row!.id, null, { number, kind: 'direct', supplierInvoiceNo: b.supplierInvoiceNo, total: row!.total, received, warehouse: wh?.code ?? null, paidNow: !!b.paidNow });
   await emit(tx, 'supplier_bill', row!.id, 'supplier_bill.posted', { number, kind: 'direct', received });
+  await tryPost(tx, 'bill', row!.id);
+  if (b.paidNow) await tryPost(tx, 'bill_payment', row!.id);
   return billView(tx, actor, row!.id);
 }
 
@@ -149,6 +152,8 @@ export async function addSupplierPayment(tx: Tx, actor: RequestActor, id: string
   await tx.update(supplierBill).set({ payments: [...bill.payments, pay], paidAmount: halalasToFixed(paid), status, updatedAt: new Date(), updatedBy: actor.userId, version: bill.version + 1 }).where(eq(supplierBill.id, bill.id));
   await audit(tx, actor, 'supplier_payment', 'supplier_bill', bill.id, { paidAmount: bill.paidAmount, status: bill.status }, { paidAmount: halalasToFixed(paid), status, payment: pay });
   await emit(tx, 'supplier_bill', bill.id, 'supplier_bill.paid', { number: bill.number, amount: pay.amount, status });
+  await tryPost(tx, 'bill', bill.id); // a bill approved before its first payment is posted first
+  await tryPost(tx, 'bill_payment', bill.id);
   return billView(tx, actor, bill.id);
 }
 
@@ -163,6 +168,33 @@ export async function voidSupplierPayment(tx: Tx, actor: RequestActor, id: strin
   const status = billPaymentStatus(toHalalas(bill.total), paid);
   await tx.update(supplierBill).set({ payments: rest, paidAmount: halalasToFixed(paid), status, updatedAt: new Date(), updatedBy: actor.userId, version: bill.version + 1 }).where(eq(supplierBill.id, bill.id));
   await audit(tx, actor, 'supplier_payment_void', 'supplier_bill', bill.id, { payment: pay, status: bill.status }, { status, reason });
+  await tryPost(tx, 'bill_payment', bill.id); // reverses the entry of the removed payment
+  return billView(tx, actor, bill.id);
+}
+
+/**
+ * Cancel a bill that has not been paid (reason required, audited) so the ledger can reverse it.
+ * A PO bill gives its billed quantities back to the order; a bill that received goods into stock
+ * cannot be cancelled here — return the goods or correct the stock first.
+ */
+export async function cancelBill(tx: Tx, actor: RequestActor, id: string, reason: string) {
+  if (!actor.grants['purchase.approve'] && !actor.grants['payment.record']) throw forbidden('cancelling a supplier bill needs purchase.approve');
+  const bill = await loadBill(tx, id);
+  if (bill.status === 'cancelled') throw conflict(`bill ${bill.number} is already cancelled`);
+  if (toHalalas(bill.paidAmount) > 0 || bill.payments.length) throw badRequest(`bill ${bill.number} has payments — void them first`);
+  const moves = await tx.select({ id: stockMove.id }).from(stockMove).where(and(eq(stockMove.refType, 'supplier_bill'), eq(stockMove.refId, bill.id))).limit(1);
+  if (moves.length) throw badRequest(`bill ${bill.number} received goods into stock — return or correct the stock first`);
+  if (bill.status === 'approved' && bill.kind === 'po') {
+    for (const l of bill.lines) {
+      if (!l.orderLineId) continue;
+      const [line] = await tx.select().from(purchaseOrderLine).where(eq(purchaseOrderLine.id, l.orderLineId));
+      if (line) await tx.update(purchaseOrderLine).set({ billedQty: fq(dec(line.billedQty).minus(l.qty).lt(0) ? dec(0) : dec(line.billedQty).minus(l.qty)), updatedAt: new Date(), updatedBy: actor.userId }).where(eq(purchaseOrderLine.id, line.id));
+    }
+  }
+  await tx.update(supplierBill).set({ status: 'cancelled', updatedAt: new Date(), updatedBy: actor.userId, version: bill.version + 1 }).where(eq(supplierBill.id, bill.id));
+  await audit(tx, actor, 'cancel', 'supplier_bill', bill.id, { status: bill.status }, { status: 'cancelled' }, reason);
+  await emit(tx, 'supplier_bill', bill.id, 'supplier_bill.cancelled', { number: bill.number });
+  await tryPost(tx, 'bill', bill.id); // reverses the posted entry, once
   return billView(tx, actor, bill.id);
 }
 

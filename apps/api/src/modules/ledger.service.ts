@@ -168,19 +168,22 @@ export async function createPosted(tx: Tx, by: { userId: string | null; name: st
 }
 
 /** Reversing entry: same lines with the sides swapped, posted at once, linked both ways. */
-export async function reverseEntry(tx: Tx, actor: RequestActor, id: string, date: string, reason: string): Promise<{ id: string; number: string }> {
+export async function reversePosted(tx: Tx, by: { userId: string | null; name: string | null }, id: string, date: string, reason: string, opts: { sourceEvent?: string } = {}): Promise<{ id: string; number: string }> {
   const e = await loadEntry(tx, id);
   if (e.status !== 'posted') throw conflict('only a posted entry can be reversed — delete a draft instead');
   if (e.reversedById) throw conflict('the entry was already reversed');
   if (e.kind === 'reversal') throw conflict('a reversal cannot itself be reversed — enter a new entry instead');
   const lines = reverseLines(await entryLines(tx, id));
-  const by = { userId: actor.userId, name: await userName(tx, actor.userId, actor.name) };
   const rev = await createPosted(tx, by, {
     entryDate: date, kind: 'reversal', reversesId: id, memo: `عكس القيد ${e.number}${e.memo ? ` — ${e.memo}` : ''} (${reason})`, lines,
-    sourceType: e.sourceType, sourceId: e.sourceId, sourceRef: e.sourceRef,
+    sourceType: e.sourceType, sourceId: e.sourceId, sourceRef: e.sourceRef, sourceEvent: opts.sourceEvent ?? null,
   });
-  await tx.update(journalEntry).set({ reversedById: rev.id, updatedAt: new Date(), updatedBy: actor.userId, version: e.version + 1 }).where(eq(journalEntry.id, id));
+  await tx.update(journalEntry).set({ reversedById: rev.id, updatedAt: new Date(), updatedBy: by.userId, version: e.version + 1 }).where(eq(journalEntry.id, id));
   return rev;
+}
+
+export async function reverseEntry(tx: Tx, actor: RequestActor, id: string, date: string, reason: string): Promise<{ id: string; number: string }> {
+  return reversePosted(tx, { userId: actor.userId, name: await userName(tx, actor.userId, actor.name) }, id, date, reason);
 }
 
 // ─────────────────────────────── report queries (posted entries only) ───────────────────────────────

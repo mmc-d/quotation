@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { and, appUser, cashVoucher, desc, eq, gte, ilike, lte, nextNumber, or, party, project, sql, type Tx } from '@mmc/db';
+import { account, and, appUser, cashVoucher, desc, eq, gte, ilike, lte, nextNumber, or, party, project, sql, type Tx } from '@mmc/db';
 import { halalasToFixed, riyadhDate, toHalalas } from '@mmc/domain';
 import { htmlToPdf, renderVoucherHtml } from '@mmc/doc-templates';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
@@ -11,6 +11,7 @@ import { companyBlock } from '../common/company.js';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
 import { ZodPipe, zDate, zMoney, zPage, zUuid } from '../common/zod.js';
 import { config } from '../config.js';
+import { tryPost } from './gl-posting.service.js';
 
 /**
  * Cash vouchers — سند صرف (payment) and سند قبض (receipt). Finance staff enter a draft; a second
@@ -37,6 +38,7 @@ const voucherSchema = z.object({
   methodDate: zDate.nullish(),
   projectId: zUuid.nullish(),
   costCenter: zText(120).nullish(),
+  accountId: zUuid.nullish(),
   docRef: zText(120).nullish(),
   notes: zText(2000).nullish(),
 });
@@ -53,16 +55,25 @@ async function view(tx: Tx, id: string) {
   const v = await load(tx, id);
   const [pt] = v.partyId ? await tx.select({ id: party.id, nameAr: party.nameAr }).from(party).where(eq(party.id, v.partyId)) : [];
   const [pr] = v.projectId ? await tx.select({ id: project.id, number: project.number, name: project.name }).from(project).where(eq(project.id, v.projectId)) : [];
+  const [ac] = v.accountId ? await tx.select({ id: account.id, code: account.code, nameAr: account.nameAr }).from(account).where(eq(account.id, v.accountId)) : [];
   const [cu] = v.createdBy ? await tx.select({ nameAr: appUser.nameAr }).from(appUser).where(eq(appUser.id, v.createdBy)) : [];
-  return { ...v, party: pt ?? null, project: pr ?? null, createdByName: cu?.nameAr ?? null };
+  return { ...v, party: pt ?? null, project: pr ?? null, account: ac ?? null, createdByName: cu?.nameAr ?? null };
 }
 
 const values = (b: VoucherBody) => ({
   voucherDate: b.voucherDate, partyId: b.partyId ?? null, counterpartyName: b.counterpartyName, counterpartyIdNumber: b.counterpartyIdNumber || null,
   counterpartyMobile: b.counterpartyMobile || null, amount: halalasToFixed(toHalalas(b.amount)), purpose: b.purpose, method: b.method,
   methodRef: b.methodRef || null, bankName: b.bankName || null, methodDate: b.methodDate ?? null, projectId: b.projectId ?? null,
-  costCenter: b.costCenter || null, docRef: b.docRef || null, notes: b.notes || null,
+  costCenter: b.costCenter || null, accountId: b.accountId ?? null, docRef: b.docRef || null, notes: b.notes || null,
 });
+
+/** The counter account must be a postable, active account; accounts that track a customer/supplier need the party chosen. */
+async function checkAccount(tx: Tx, b: { accountId?: string | null; partyId?: string | null }) {
+  if (!b.accountId) return;
+  const [a] = await tx.select().from(account).where(eq(account.id, b.accountId));
+  if (!a || a.isGroup || !a.isActive) throw badRequest('the counter account must be an active, postable account');
+  if (a.requiresParty && !b.partyId) throw badRequest(`account ${a.code} tracks a customer/supplier — choose the party on the voucher`);
+}
 
 @Controller('vouchers')
 export class VouchersController {
@@ -104,6 +115,7 @@ export class VouchersController {
   async create(@Actor() actor: RequestActor, @Body(new ZodPipe(voucherSchema)) b: VoucherBody) {
     return tenantTx(actor.tenantId, async (tx) => {
       if (b.voucherDate > riyadhDate()) throw badRequest('the voucher date cannot be in the future');
+      await checkAccount(tx, b);
       const { number } = await nextNumber(tx, b.kind === 'payment' ? 'payment_voucher' : 'receipt_voucher');
       const [v] = await tx.insert(cashVoucher).values({ kind: b.kind, number, ...values(b), createdBy: actor.userId, updatedBy: actor.userId }).returning();
       await audit(tx, actor, 'create', 'cash_voucher', v!.id, null, { number, kind: b.kind, amount: v!.amount, counterparty: b.counterpartyName });
@@ -120,6 +132,7 @@ export class VouchersController {
       if (b.kind !== before.kind) throw badRequest('the voucher kind cannot be changed');
       if (b.version !== before.version) throw conflict('the voucher was changed by someone else — reload');
       if (b.voucherDate > riyadhDate()) throw badRequest('the voucher date cannot be in the future');
+      await checkAccount(tx, b);
       const next = values(b);
       await tx.update(cashVoucher).set({ ...next, updatedAt: new Date(), updatedBy: actor.userId, version: before.version + 1 }).where(eq(cashVoucher.id, id));
       const d = diff(before as Record<string, unknown>, next as Record<string, unknown>);
@@ -139,6 +152,7 @@ export class VouchersController {
       const [me] = await tx.select({ nameAr: appUser.nameAr }).from(appUser).where(eq(appUser.id, actor.userId));
       await tx.update(cashVoucher).set({ status: 'approved', approvedBy: actor.userId, approvedByName: me?.nameAr || actor.name, approvedAt: new Date(), updatedAt: new Date(), updatedBy: actor.userId, version: v.version + 1 }).where(eq(cashVoucher.id, id));
       await audit(tx, actor, 'approve', 'cash_voucher', id, { status: 'draft' }, { status: 'approved', number: v.number, amount: v.amount });
+      await tryPost(tx, 'voucher', id);
       return view(tx, id);
     }, actor.userId);
   }
@@ -154,6 +168,7 @@ export class VouchersController {
       if (v.status === 'draft' && !actor.grants['voucher.write']) throw forbidden('missing permission: voucher.write');
       await tx.update(cashVoucher).set({ status: 'cancelled', cancelledBy: actor.userId, cancelledAt: new Date(), cancelReason: b.reason, updatedAt: new Date(), updatedBy: actor.userId, version: v.version + 1 }).where(eq(cashVoucher.id, id));
       await audit(tx, actor, 'cancel', 'cash_voucher', id, { status: v.status }, { status: 'cancelled' }, b.reason);
+      if (v.status === 'approved') await tryPost(tx, 'voucher', id); // reverses the entry it posted
       return view(tx, id);
     }, actor.userId);
   }

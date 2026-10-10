@@ -13,6 +13,7 @@ import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { audit, diff } from '../common/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors.js';
+import { postingExceptions, reconciliationChecks } from './gl-posting.service.js';
 import { ZodPipe, zDate, zPage, zUuid } from '../common/zod.js';
 import {
   accountByKey, accountRef, accountSums, BEGINNING, incomeStatement, insertDraft, loadAccounts, loadEntry, loadSettings, netByAccount, postByActor,
@@ -261,15 +262,14 @@ export class LedgerController {
       const [month, year] = await Promise.all([incomeStatement(tx, { from: monthStart, to: today, by: 'none' }), incomeStatement(tx, { from: fy.start, to: today, by: 'none' })]);
       const [drafts] = await tx.select({ n: sql<number>`count(*)::int` }).from(journalEntry).where(eq(journalEntry.status, 'draft'));
       const recent = await tx.select({ id: journalEntry.id, number: journalEntry.number, date: journalEntry.entryDate, memo: journalEntry.memo, kind: journalEntry.kind, total: journalEntry.total, status: journalEntry.status }).from(journalEntry).orderBy(desc(journalEntry.createdAt)).limit(8);
-      const checks = [
-        { key: 'trial_balance', ok: tb.balanced, labelAr: 'ميزان المراجعة متوازن (المدين = الدائن)' },
-        { key: 'suspense', ok: H(bal('suspense')?.balance) === 0, labelAr: 'حساب التسوية (بانتظار التوجيه) رصيده صفر' },
-      ];
+      const checks = await reconciliationChecks(tx);
+      const ex = await postingExceptions(tx);
+      const exceptions = ex.suspense.length + ex.errors.length + ex.changed.length;
       return {
         today, fiscalYear: fy, lockedThrough: s.lockedThrough, goLiveDate: s.goLiveDate,
         balances: { cash: bal('cash'), bank: bal('bank'), ar: bal('ar'), ap: bal('ap'), inventory: bal('inventory'), vatInput: bal('vat_input'), vatOutput: bal('vat_output') },
         profit: { month: fx(month.netProfit.total), year: fx(year.netProfit.total), monthRevenue: fx(month.sections.find((x) => x.key === 'revenue')!.total), yearRevenue: fx(year.sections.find((x) => x.key === 'revenue')!.total) },
-        draftEntries: drafts!.n, recent, checks,
+        draftEntries: drafts!.n, recent, checks, exceptions, autoPosting: ex.live,
       };
     });
   }

@@ -24,6 +24,7 @@ import {
 import {
   approverRank, approveBill, createBill, createPurchaseOrder, defaultRate, insertPoLines, landedMoves, loadPo, loadSupplier, poView, postLandedCost, purchaseOrderDoc, receiptView, receiptsOfShipment, receive, unlinkPoLines, writePoTotals,
 } from './purchasing.service.js';
+import { tryPost } from './gl-posting.service.js';
 import { deliverPurchaseOrder } from './rfq.service.js';
 
 /**
@@ -74,7 +75,7 @@ const shipmentSchema = z.object({
   supplierId: zUuid.nullish(), orderIds: z.array(zUuid).max(50).default([]), mode: z.enum(['sea', 'air', 'land', 'courier']).default('sea'), blNumber: zText(100).nullish(),
   containers: z.array(zText(30)).max(100).default([]), vessel: zText(200).nullish(), etd: zDate.nullish(), eta: zDate.nullish(), broker: zText(200).nullish(), notes: zText(5000).nullish(),
 });
-const declarationSchema = z.object({ fasahNumber: zText(60).min(1), fasahDate: zDate, cifSar: zPrice, dutyRatePercent: zPrice.optional(), dutySar: zPrice.optional(), importVatSar: zPrice.optional() });
+const declarationSchema = z.object({ fasahNumber: zText(60).min(1), fasahDate: zDate, cifSar: zPrice, dutyRatePercent: zPrice.optional(), dutySar: zPrice.optional(), importVatSar: zPrice.optional(), customsPayablePartyId: zUuid.nullish() });
 const countLinesSchema = z.object({ lines: z.array(z.object({ productId: zUuid, counted: zQty0.nullable(), serials: z.array(zText(120)).max(5000).optional() })).max(5000) });
 const billSchema = z.object({
   supplierId: zUuid, orderId: zUuid, supplierInvoiceNo: zText(100).min(1), billDate: zDate, currency: z.enum(CURRENCIES).default('SAR'), rateToSar: zMoney.optional(),
@@ -1121,10 +1122,11 @@ export class InventoryController {
       const cif = toHalalas(b.cifSar);
       const duty = b.dutySar !== undefined ? toHalalas(b.dutySar) : importCharges(cif, b.dutyRatePercent!).duty;
       const importVat = b.importVatSar !== undefined ? toHalalas(b.importVatSar) : importCharges(cif + duty, 0).importVat;
-      const values = { fasahNumber: b.fasahNumber, fasahDate: b.fasahDate, cifSar: halalasToFixed(cif), dutySar: halalasToFixed(duty), importVatSar: halalasToFixed(importVat) };
+      const values = { fasahNumber: b.fasahNumber, fasahDate: b.fasahDate, cifSar: halalasToFixed(cif), dutySar: halalasToFixed(duty), importVatSar: halalasToFixed(importVat), ...(b.customsPayablePartyId !== undefined ? { customsPayablePartyId: b.customsPayablePartyId } : {}) };
       await tx.update(importShipment).set({ ...values, docs: { ...sh.docs, declaration: { done: true, fileId: sh.docs.declaration?.fileId ?? null } }, updatedAt: new Date(), updatedBy: actor.userId, version: sh.version + 1 }).where(eq(importShipment.id, id));
       const d = diff(sh as Record<string, unknown>, values);
       await audit(tx, actor, 'declaration', 'import_shipment', id, d?.before ?? null, { ...(d?.after ?? {}), dutyRatePercent: b.dutyRatePercent ?? null });
+      await tryPost(tx, 'import_vat', id);
       return this.shipmentView(tx, actor, id);
     }, actor.userId);
   }

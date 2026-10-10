@@ -5,7 +5,7 @@ import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
 import { ZodPipe, zDate, zMoney, zPage, zQty, zUuid } from '../common/zod.js';
 import {
-  PAYMENT_METHODS, addSupplierPayment, billView, createDirectBill, listBills, listOpenings, openingStock, openingView, payablesAging, voidSupplierPayment,
+  PAYMENT_METHODS, addSupplierPayment, billView, cancelBill, createDirectBill, listBills, listOpenings, openingStock, openingView, payablesAging, voidSupplierPayment,
 } from './payables.service.js';
 
 /**
@@ -71,6 +71,12 @@ export class PayablesController {
   @Perm('payment.record', 'purchase.approve')
   async pay(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(paymentSchema)) b: z.infer<typeof paymentSchema>) {
     return tenantTx(actor.tenantId, (tx) => addSupplierPayment(tx, actor, id, b), actor.userId);
+  }
+
+  @Post('bills/:id/cancel')
+  @Perm('purchase.approve')
+  async cancel(@Actor() actor: RequestActor, @Param('id') id: string, @Body(new ZodPipe(z.object({ reason: zText(500).min(1) }))) b: { reason: string }) {
+    return tenantTx(actor.tenantId, (tx) => cancelBill(tx, actor, id, b.reason), actor.userId);
   }
 
   @Post('bills/:id/payments/:paymentId/void')
