@@ -17,3 +17,4 @@ export * from './intelligence.js';
 export * from './hr.js';
 export * from './payroll.js';
 export * from './ledger.js';
+export * from './gl-posting.js';
