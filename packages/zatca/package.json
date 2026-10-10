@@ -1,0 +1,13 @@
+{
+  "name": "@mmc/zatca",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZATCA Phase-2 e-invoicing engine (Node only): UBL 2.1 XML, invoice hash, ECDSA stamp, XAdES block, QR tags 1–9, CSR/CSID onboarding and the Fatoora API client. Ported from the SDK-3.4.6-verified iHotel implementation.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
+  "dependencies": { "@xmldom/xmldom": "^0.8.10", "xml-crypto": "^6.1.2" },
+  "devDependencies": { "@types/node": "^22.18.0", "typescript": "^5.9.3", "vitest": "^3.2.4" }
+}

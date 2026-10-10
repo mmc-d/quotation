@@ -19,3 +19,4 @@ LOCAL-TEST-LOGIN.md
 # written by `next dev` (agent notes); regenerated on every run
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+.sdk-out/
