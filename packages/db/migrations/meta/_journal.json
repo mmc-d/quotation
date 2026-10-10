@@ -267,6 +267,20 @@
       "when": 1791625122124,
       "tag": "0037_ledger_close_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791628031352,
+      "tag": "0038_einvoice",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791628035583,
+      "tag": "0039_einvoice_rls",
+      "breakpoints": true
     }
   ]
 }

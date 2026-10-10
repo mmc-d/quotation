@@ -12,3 +12,4 @@ export * from './intelligence.js';
 export * from './extras.js';
 export * from './hr.js';
 export * from './ledger.js';
+export * from './einvoice.js';

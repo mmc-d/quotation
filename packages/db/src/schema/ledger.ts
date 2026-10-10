@@ -54,6 +54,10 @@ export const ledgerSettings = pgTable('ledger_settings', {
   methodAccounts: jsonb('method_accounts').$type<Record<string, string>>().notNull().default({}),
   /** monthly | quarterly */
   vatReturnFrequency: text('vat_return_frequency').notNull().default('quarterly'),
+  /** Phase 6D feature flag: Core signs, clears and reports invoices itself (needs VAT registration + an onboarded EGS unit) */
+  einvoiceEnabled: boolean('einvoice_enabled').notNull().default(false),
+  /** zeroRatedReason / exemptReason: VATEX-SA-… code ZATCA requires on Z / E lines */
+  einvoiceOptions: jsonb('einvoice_options').$type<{ zeroRatedReason?: string; zeroRatedReasonText?: string; paymentMeansCode?: string }>().notNull().default({}),
   ...audit,
 }, (t) => [uniqueIndex('ledger_settings_tenant_uq').on(t.tenantId)]);
 

@@ -59,6 +59,8 @@ export const invoiceMirror = pgTable('invoice_mirror', {
   zatcaStatus: text('zatca_status').notNull().default('pending'),
   qrPayload: text('qr_payload'),
   pdfFileId: uuid('pdf_file_id'),
+  /** Phase 6D: why the e-invoice document could not be built (cleared when it is) */
+  einvoiceError: text('einvoice_error'),
   status: text('status').notNull().default('issued'),
   syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
   ...audit,
