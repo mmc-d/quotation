@@ -7,6 +7,7 @@ import * as schema from './schema/index.js';
 
 export { schema };
 export * from './schema/index.js';
+export { seedLedger } from './seed-ledger.js';
 export type { SQL } from 'drizzle-orm';
 export type { AnyPgColumn } from 'drizzle-orm/pg-core';
 export { alias } from 'drizzle-orm/pg-core';

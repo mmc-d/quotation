@@ -9,13 +9,15 @@ import postgres from 'postgres';
 import { DEFAULT_LOST_REASONS, DEFAULT_PIPELINE, DEFAULT_SERIES, fixedSaudiHolidays, ROLE_TEMPLATES } from '@mmc/domain';
 import * as s from './schema/index.js';
 import { withTenant, type Db } from './index.js';
+import { seedLedger } from './seed-ledger.js';
 import { DEFAULT_MESSAGE_TEMPLATES, DEFAULT_TECH_NOTES, DEFAULT_TERMS } from './seed-data/defaults.js';
 
 /**
  * Idempotent seed: tenant, company (public registration data only — the representative's name and
  * mobile, bank and stamp are entered by an admin in Settings, never committed), Jeddah head-office
  * branch, role templates, numbering series continuing the legacy formats, pipeline, lost reasons,
- * contract clause library (verbatim legacy articles), message templates, and the owner invitation.
+ * contract clause library (verbatim legacy articles), message templates, the starter chart of accounts
+ * and ledger settings (only when the tenant has no accounts), and the owner invitation.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +80,8 @@ export async function seed(db: Db, opts: { ownerEmail: string; tenantSlug?: stri
     for (const m of DEFAULT_MESSAGE_TEMPLATES) {
       await tx.insert(s.messageTemplate).values({ ...m, variables: m.variables }).onConflictDoNothing();
     }
+
+    await seedLedger(tx);
 
     const email = opts.ownerEmail.toLowerCase();
     let [owner] = await tx.select().from(s.appUser).where(eq(s.appUser.email, email));
