@@ -2,60 +2,28 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { and, eq, gte, journalEntry, lte, sql, type Tx } from '@mmc/db';
-import {
-  fiscalYearOf, halalasToFixed, riyadhDate, toHalalas, withRunningBalance, INCOME_SECTIONS,
-  type AccountType, type BalanceRow, type IncomeStatement, type TrialBalance,
-} from '@mmc/domain';
-import { htmlToPdf, renderReportHtml, type ReportTable } from '@mmc/doc-templates';
+import { riyadhDate, withRunningBalance, INCOME_SECTIONS, type AccountType, type BalanceRow, type IncomeStatement, type TrialBalance } from '@mmc/domain';
+import type { ReportTable } from '@mmc/doc-templates';
 import { Actor, Perm, type RequestActor } from '../auth/actor.js';
 import { tenantTx } from '../common/db.js';
-import { companyBlock } from '../common/company.js';
 import { notFound } from '../common/errors.js';
 import { ZodPipe, zDate, zUuid } from '../common/zod.js';
-import { config } from '../config.js';
-import { tableToXlsx } from './ledger-export.js';
-import {
-  accountRef, balanceSheet, incomeStatement, loadAccounts, loadSettings, trialBalance,
-} from './ledger.service.js';
+import { defaultRange, flag, fx, H, reportFormat, send } from './report-kit.js';
+import { accountRef, balanceSheet, incomeStatement, loadAccounts, trialBalance } from './ledger.service.js';
 
 /**
  * Financial reports from the posted ledger. Every report answers JSON (default), or `?format=xlsx`
  * / `?format=pdf` — the same table is rendered to all three so exports always match the screen.
  */
 
-const fx = halalasToFixed;
-const H = (v: string | number | null | undefined) => toHalalas(String(v ?? '0'));
-const format = z.enum(['json', 'xlsx', 'pdf']).default('json');
+const format = reportFormat;
 const level = z.coerce.number().int().min(1).max(6).optional();
-const flag = z.enum(['true', 'false', '1', '0']).optional().transform((v) => v === 'true' || v === '1');
 
 const range = z.object({ from: zDate.optional(), to: zDate.optional(), format }).refine((r) => !r.from || !r.to || r.from <= r.to, 'from must not be after to');
 
-async function defaultRange(tx: Tx, r: { from?: string; to?: string }) {
-  const s = await loadSettings(tx);
-  const to = r.to ?? riyadhDate();
-  return { from: r.from ?? fiscalYearOf(to, s.fiscalYearStartMonth).start, to };
-}
-
-async function send(res: Response, actor: RequestActor, fmt: 'json' | 'xlsx' | 'pdf', json: unknown, table: ReportTable, file: string) {
-  if (fmt === 'json') return res.json(json);
-  const stamp = riyadhDate();
-  if (fmt === 'xlsx') {
-    const company = await tenantTx(actor.tenantId, async (tx) => (await companyBlock(tx)).legalNameAr);
-    const buf = await tableToXlsx(table, company);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${file}-${stamp}.xlsx"`);
-    return res.send(buf);
-  }
-  const pdf = await tenantTx(actor.tenantId, async (tx) => htmlToPdf(renderReportHtml(await companyBlock(tx), table, `طُبع بتاريخ ${stamp}`), config.gotenbergUrl));
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${file}-${stamp}.pdf"`);
-  return res.send(pdf);
-}
-
 // ───────── shapes ─────────
 
-function trialJson(tb: TrialBalance, p: { from: string; to: string }) {
+export function trialJson(tb: TrialBalance, p: { from: string; to: string }) {
   const split = (n: number) => ({ debit: fx(n > 0 ? n : 0), credit: fx(n < 0 ? -n : 0) });
   return {
     from: p.from, to: p.to, balanced: tb.balanced,
@@ -68,7 +36,7 @@ function trialJson(tb: TrialBalance, p: { from: string; to: string }) {
   };
 }
 
-function trialTable(tb: TrialBalance, p: { from: string; to: string }): ReportTable {
+export function trialTable(tb: TrialBalance, p: { from: string; to: string }): ReportTable {
   const cols: ReportTable['columns'] = [
     { key: 'code', label: 'الرمز', kind: 'text', width: 8 }, { key: 'name', label: 'اسم الحساب', kind: 'text', width: 30 },
     { key: 'od', label: 'افتتاحي مدين', kind: 'money' }, { key: 'oc', label: 'افتتاحي دائن', kind: 'money' },
@@ -86,7 +54,7 @@ function trialTable(tb: TrialBalance, p: { from: string; to: string }): ReportTa
 
 const periodLabel = (c: string) => (c === '' ? 'الإجمالي' : c);
 
-function incomeJson(is: IncomeStatement, p: { from: string; to: string; by: string }) {
+export function incomeJson(is: IncomeStatement, p: { from: string; to: string; by: string }) {
   const money = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fx(v)]));
   return {
     from: p.from, to: p.to, by: p.by, columns: is.columns,
@@ -97,7 +65,7 @@ function incomeJson(is: IncomeStatement, p: { from: string; to: string; by: stri
   };
 }
 
-function incomeTable(is: IncomeStatement, p: { from: string; to: string }): ReportTable {
+export function incomeTable(is: IncomeStatement, p: { from: string; to: string }): ReportTable {
   const dimCols = is.columns.map((c) => ({ key: `v:${c}`, label: periodLabel(c), kind: 'money' as const }));
   const columns: ReportTable['columns'] = [{ key: 'code', label: 'الرمز', kind: 'text', width: 8 }, { key: 'name', label: 'البند', kind: 'text', width: 36 }, ...dimCols, { key: 'total', label: 'الإجمالي', kind: 'money' }];
   const line = (code: string, name: string, values: Record<string, number>, total: number, style: ReportTable['rows'][number]['style'], depth = 0): ReportTable['rows'][number] =>
@@ -119,13 +87,13 @@ function incomeTable(is: IncomeStatement, p: { from: string; to: string }): Repo
   return { title: 'قائمة الدخل', titleEn: 'Income statement', subtitle: `من ${p.from} إلى ${p.to}`, columns, rows };
 }
 
-function sheetJson(b: Awaited<ReturnType<typeof balanceSheet>>, asOf: string) {
+export function sheetJson(b: Awaited<ReturnType<typeof balanceSheet>>, asOf: string) {
   const sec = (s: { rows: BalanceRow[]; total: number }) => ({ total: fx(s.total), rows: s.rows.map((r) => ({ ...r, amount: fx(r.amount) })) });
   const s = b.sheet;
   return { asOf, fiscalYear: b.fiscalYear, assets: sec(s.assets), liabilities: sec(s.liabilities), equity: sec(s.equity), currentYearProfit: fx(s.currentYearProfit), priorYearsProfit: fx(s.priorYearsProfit), liabilitiesAndEquity: fx(s.liabilitiesAndEquity), balanced: s.balanced };
 }
 
-function sheetTable(b: Awaited<ReturnType<typeof balanceSheet>>, asOf: string): ReportTable {
+export function sheetTable(b: Awaited<ReturnType<typeof balanceSheet>>, asOf: string): ReportTable {
   const s = b.sheet;
   const rows: ReportTable['rows'] = [];
   const block = (title: string, sec: { rows: BalanceRow[]; total: number }, totalLabel: string) => {
@@ -155,6 +123,40 @@ const ledgerQuery = z.object({
   account: zUuid, party: zUuid.optional(), project: zUuid.optional(), from: zDate.optional(), to: zDate.optional(), format,
 });
 const journalQuery = z.object({ from: zDate.optional(), to: zDate.optional(), account: zUuid.optional(), party: zUuid.optional(), project: zUuid.optional(), format });
+
+/** دفتر اليومية as JSON + table (also used by the auditor pack). */
+export async function journalReport(tx: Tx, p: { from: string; to: string; account?: string; party?: string; project?: string }) {
+  const filt = and(
+    eq(journalEntry.status, 'posted'), gte(journalEntry.entryDate, p.from), lte(journalEntry.entryDate, p.to),
+    p.account ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.account_id = ${p.account})` : undefined,
+    p.party ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.party_id = ${p.party})` : undefined,
+    p.project ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.project_id = ${p.project})` : undefined,
+  );
+  const heads = await tx.select({ id: journalEntry.id, number: journalEntry.number, date: journalEntry.entryDate, memo: journalEntry.memo, kind: journalEntry.kind, total: journalEntry.total, sourceRef: journalEntry.sourceRef }).from(journalEntry).where(filt).orderBy(journalEntry.entryDate, journalEntry.number).limit(20000);
+  type JLine = { entry_id: string; line_no: number; code: string; name: string; debit: string; credit: string; party_name: string | null; project_number: string | null; memo: string | null };
+  const lines: JLine[] = heads.length ? await tx.execute<JLine>(sql`
+    select l.entry_id, l.line_no, a.code, a.name_ar as name, l.debit::text, l.credit::text, pa.name_ar as party_name, pr.number as project_number, l.memo
+    from journal_line l join account a on a.id = l.account_id left join party pa on pa.id = l.party_id left join project pr on pr.id = l.project_id
+    where l.entry_id in (${sql.join(heads.map((h) => sql`${h.id}`), sql`, `)}) order by l.entry_id, l.line_no`) : [];
+  const by = new Map<string, typeof lines>();
+  for (const l of lines) by.set(l.entry_id, [...(by.get(l.entry_id) ?? []), l]);
+  const entries = heads.map((h) => ({ ...h, lines: by.get(h.id) ?? [] }));
+  const json = {
+    from: p.from, to: p.to,
+    entries: entries.map((e) => ({ id: e.id, number: e.number, date: e.date, memo: e.memo, kind: e.kind, total: e.total, sourceRef: e.sourceRef, lines: e.lines.map((l) => ({ lineNo: l.line_no, code: l.code, name: l.name, debit: l.debit, credit: l.credit, party: l.party_name, project: l.project_number, memo: l.memo })) })),
+  };
+  const rows: ReportTable['rows'] = [];
+  for (const e of entries) {
+    rows.push({ style: 'group', cells: { date: e.date, number: e.number, name: e.memo ?? '', debit: H(e.total), credit: H(e.total) } });
+    for (const l of e.lines) rows.push({ cells: { code: l.code, name: l.name + (l.party_name ? ` — ${l.party_name}` : '') + (l.memo ? ` (${l.memo})` : ''), debit: H(l.debit), credit: H(l.credit) }, depth: 1 });
+  }
+  const table: ReportTable = {
+    title: 'دفتر اليومية', titleEn: 'General journal', subtitle: `من ${p.from} إلى ${p.to}`,
+    columns: [{ key: 'date', label: 'التاريخ', kind: 'date' }, { key: 'number', label: 'رقم القيد', kind: 'text' }, { key: 'code', label: 'الرمز', kind: 'text' }, { key: 'name', label: 'الحساب / البيان', kind: 'text', width: 40 }, { key: 'debit', label: 'مدين', kind: 'money' }, { key: 'credit', label: 'دائن', kind: 'money' }],
+    rows,
+  };
+  return { json, table };
+}
 
 @Controller('accounting/reports')
 export class LedgerReportsController {
@@ -238,38 +240,7 @@ export class LedgerReportsController {
   @Get('journal')
   @Perm('ledger.read')
   async journal(@Actor() actor: RequestActor, @Res() res: Response, @Query(new ZodPipe(journalQuery)) q: z.infer<typeof journalQuery>) {
-    const { p, entries } = await tenantTx(actor.tenantId, async (tx) => {
-      const p = await defaultRange(tx, q);
-      const filt = and(
-        eq(journalEntry.status, 'posted'), gte(journalEntry.entryDate, p.from), lte(journalEntry.entryDate, p.to),
-        q.account ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.account_id = ${q.account})` : undefined,
-        q.party ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.party_id = ${q.party})` : undefined,
-        q.project ? sql`exists (select 1 from journal_line x where x.entry_id = ${journalEntry.id} and x.project_id = ${q.project})` : undefined,
-      );
-      const heads = await tx.select({ id: journalEntry.id, number: journalEntry.number, date: journalEntry.entryDate, memo: journalEntry.memo, kind: journalEntry.kind, total: journalEntry.total, sourceRef: journalEntry.sourceRef }).from(journalEntry).where(filt).orderBy(journalEntry.entryDate, journalEntry.number).limit(3000);
-      type JLine = { entry_id: string; line_no: number; code: string; name: string; debit: string; credit: string; party_name: string | null; project_number: string | null; memo: string | null };
-      const lines: JLine[] = heads.length ? await tx.execute<JLine>(sql`
-        select l.entry_id, l.line_no, a.code, a.name_ar as name, l.debit::text, l.credit::text, pa.name_ar as party_name, pr.number as project_number, l.memo
-        from journal_line l join account a on a.id = l.account_id left join party pa on pa.id = l.party_id left join project pr on pr.id = l.project_id
-        where l.entry_id in (${sql.join(heads.map((h) => sql`${h.id}`), sql`, `)}) order by l.entry_id, l.line_no`) : [];
-      const by = new Map<string, typeof lines>();
-      for (const l of lines) by.set(l.entry_id, [...(by.get(l.entry_id) ?? []), l]);
-      return { p, entries: heads.map((h) => ({ ...h, lines: by.get(h.id) ?? [] })) };
-    });
-    const json = {
-      from: p.from, to: p.to,
-      entries: entries.map((e) => ({ id: e.id, number: e.number, date: e.date, memo: e.memo, kind: e.kind, total: e.total, sourceRef: e.sourceRef, lines: e.lines.map((l) => ({ lineNo: l.line_no, code: l.code, name: l.name, debit: l.debit, credit: l.credit, party: l.party_name, project: l.project_number, memo: l.memo })) })),
-    };
-    const rows: ReportTable['rows'] = [];
-    for (const e of entries) {
-      rows.push({ style: 'group', cells: { date: e.date, number: e.number, name: e.memo ?? '', debit: H(e.total), credit: H(e.total) } });
-      for (const l of e.lines) rows.push({ cells: { code: l.code, name: l.name + (l.party_name ? ` — ${l.party_name}` : '') + (l.memo ? ` (${l.memo})` : ''), debit: H(l.debit), credit: H(l.credit) }, depth: 1 });
-    }
-    const table: ReportTable = {
-      title: 'دفتر اليومية', titleEn: 'General journal', subtitle: `من ${p.from} إلى ${p.to}`,
-      columns: [{ key: 'date', label: 'التاريخ', kind: 'date' }, { key: 'number', label: 'رقم القيد', kind: 'text' }, { key: 'code', label: 'الرمز', kind: 'text' }, { key: 'name', label: 'الحساب / البيان', kind: 'text', width: 40 }, { key: 'debit', label: 'مدين', kind: 'money' }, { key: 'credit', label: 'دائن', kind: 'money' }],
-      rows,
-    };
+    const { json, table } = await tenantTx(actor.tenantId, async (tx) => journalReport(tx, { ...(await defaultRange(tx, q)), account: q.account, party: q.party, project: q.project }));
     return send(res, actor, q.format, json, table, 'journal');
   }
 }

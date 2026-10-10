@@ -32,6 +32,12 @@ import { EmployeePayController, LeavesController, MyHrController, PayrollControl
 import { LedgerController } from './modules/ledger.controller.js';
 import { LedgerReportsController } from './modules/ledger-reports.controller.js';
 import { GlPostingController } from './modules/gl-posting.controller.js';
+import { VatController } from './modules/vat.controller.js';
+import { ClosingController } from './modules/closing.controller.js';
+import { FixedAssetsController } from './modules/fixed-assets.controller.js';
+import { BankController } from './modules/bank.controller.js';
+import { StatementsController } from './modules/statements.controller.js';
+import { AuditorPackController } from './modules/auditor-pack.controller.js';
 import { AiController } from './ai/ai.controller.js';
 import { McpController } from './ai/mcp.js';
 
@@ -42,7 +48,7 @@ import { McpController } from './ai/mcp.js';
     CrmController, PublicController, WhatsAppWebhookController, LeadsWebhookController, FinanceController, FinancePublicController, JobsController,
     PriceListsController, ChangeOrdersController, CalendarController, ProjectsController, FieldServiceController, InventoryController, PayablesController, RfqController, ServiceController, PortalController, InsightsController, ErpSyncController,
     IotController, IotBindingController, CommissionsController, KbController, VouchersController, JobOffersController, EmployeesController, EmployeePayController, LeavesController, MyHrController, PayrollController,
-    LedgerController, LedgerReportsController, GlPostingController,
+    LedgerController, LedgerReportsController, GlPostingController, VatController, ClosingController, FixedAssetsController, BankController, StatementsController, AuditorPackController,
     AiController, McpController,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],

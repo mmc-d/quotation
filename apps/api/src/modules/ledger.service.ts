@@ -82,7 +82,8 @@ export async function entryProblems(tx: Tx, e: Pick<EntryInput, 'entryDate' | 'l
   const ids = new Set(e.lines.map((l) => l.accountId));
   const map = new Map<string, AccountInfo>(accounts.filter((a) => ids.has(a.id)).map((a) => [a.id, accountInfo(a)]));
   const lines: JournalLineIn[] = e.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit, partyId: l.partyId }));
-  return journalProblems({ entryDate: e.entryDate, lines, accounts: map, lockedThrough: settings.lockedThrough, goLiveDate: settings.goLiveDate, allowBeforeGoLive: e.kind === 'opening' || e.kind === 'closing' });
+  // a year-end closing entry may land in a locked period: closing is what locks the year
+  return journalProblems({ entryDate: e.entryDate, lines, accounts: map, lockedThrough: e.kind === 'closing' ? null : settings.lockedThrough, goLiveDate: settings.goLiveDate, allowBeforeGoLive: e.kind === 'opening' || e.kind === 'closing' });
 }
 
 export function assertProblems(problems: JournalProblem[], forPost: boolean): void {

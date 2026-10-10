@@ -7,6 +7,7 @@ import {
   buildPoBillLines, buildStockMoveLines, buildVoucherLines, dec, isSaudiNationality, lastDayOfMonth, mergeLines, revenueKind, riyadhDate, toHalalas,
   type Built, type PayrollEmployeeFacts, type PostLine, type RevenueKind,
 } from '@mmc/domain';
+import { loadCompany } from '../common/company.js';
 import { NON_STOCK_TYPES } from './inventory.service.js';
 import { SYSTEM, dateOf, effectiveDate, H, liveEntries, postEntry, setState, type Ctx, type Handler } from './gl-core.js';
 import { reversePosted } from './ledger.service.js';
@@ -66,8 +67,10 @@ async function buildInvoice(tx: Tx, inv: InvoiceRow): Promise<Built> {
     const [o] = await tx.select({ typeCode: invoiceMirror.typeCode }).from(invoiceMirror).where(eq(invoiceMirror.id, inv.originalInvoiceId));
     creditsAdvance = o?.typeCode === '386';
   }
+  const co = await loadCompany(tx);
+  const zeroRated = co.vatRegistered && (!co.vatEffectiveFrom || co.vatEffectiveFrom <= inv.issueDate);
   const built = buildInvoiceLines({
-    typeCode: inv.typeCode, taxable: H(inv.taxable), vat: H(inv.vatAmount), partyId: inv.partyId, projectId,
+    typeCode: inv.typeCode, taxable: H(inv.taxable), vat: H(inv.vatAmount), partyId: inv.partyId, projectId, zeroRated,
     lines: raw.map((l) => ({ net: H(l.net), kind: revenueKind(l.code ?? '', { isAmc, serviceCodes }) as RevenueKind })),
     advances, creditsAdvance, prepaid: inv.typeCode === '388' ? H(inv.prepaidAmount) : undefined,
   });

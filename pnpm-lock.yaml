@@ -62,6 +62,9 @@ importers:
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
+      jszip:
+        specifier: 3.10.1
+        version: 3.10.1
       nodemailer:
         specifier: ^7.0.10
         version: 7.0.13
@@ -2284,8 +2287,8 @@ packages:
   json-schema-typed@8.0.2:
     resolution: {integrity: sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA==}
 
-  jszip@3.10.2:
-    resolution: {integrity: sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ==}
+  jszip@3.10.1:
+    resolution: {integrity: sha512-xXDvecyTpGLrqFrvkrUSoxxfJI5AH7U8zxxtVclpsUtMCq4JQ290LY8AW5c7Ggnr/Y/oK+bQMbqK2qmtk3pN4g==}
 
   kysely@0.29.6:
     resolution: {integrity: sha512-hHaB8C/rfzDDtr/t8YZwxAuPJTT0zHyaPoVzcXwDYhYNAgH/4sIfVhi/XLLIY+bL/FqaIJnjATDbi8ObSELmxg==}
@@ -4698,7 +4701,7 @@ snapshots:
       archiver: 5.3.2
       dayjs: 1.11.23
       fast-csv: 4.3.6
-      jszip: 3.10.2
+      jszip: 3.10.1
       readable-stream: 3.6.2
       saxes: 5.0.1
       tmp: 0.2.7
@@ -4943,7 +4946,7 @@ snapshots:
 
   json-schema-typed@8.0.2: {}
 
-  jszip@3.10.2:
+  jszip@3.10.1:
     dependencies:
       lie: 3.3.0
       pako: 1.0.11

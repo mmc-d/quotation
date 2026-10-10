@@ -185,5 +185,33 @@ export async function reconciliationChecks(tx: Tx): Promise<Check[]> {
     check('inventory', 'رصيد المخزون في الدفتر = تقييم المخزون (الكمية × متوسط التكلفة)', inv, H(stock[0]?.s), 500 + 10 * (stock[0]?.n ?? 0), 'فروق تقريب متوسط التكلفة مقبولة بحدود'),
     check('grni', 'بضائع مستلمة لم تُفوتر في الدفتر = تقرير «مستلم غير مفوتر»', g, H(grni.total), 500 + 10 * grni.rows.length),
     { key: 'suspense', ok: susp === 0, labelAr: 'حساب التسوية (بانتظار التوجيه) رصيده صفر', ledger: fx(susp) },
+    ...(await phase6cChecks(tx, check)),
   ];
+}
+
+type CheckFn = (key: string, labelAr: string, ledger: number, source: number, tol: number, note?: string) => Check;
+
+/** Phase 6C reconciliations: VAT coding, the fixed-asset register and the end-of-service provision. */
+async function phase6cChecks(tx: Tx, check: CheckFn): Promise<Check[]> {
+  const out: Check[] = [];
+  // VAT: every movement on the VAT accounts carries a VAT code (settlements excluded), so the return can explain the books
+  const [vat] = await tx.execute<{ coded: string; total: string }>(sql`
+    select coalesce(sum(case when l.vat_code is not null then (case when a.posting_key = 'vat_output' then l.credit - l.debit else -(l.debit - l.credit) end) else 0 end), 0)::text as coded,
+           coalesce(sum(case when a.posting_key = 'vat_output' then l.credit - l.debit else -(l.debit - l.credit) end), 0)::text as total
+    from journal_line l join journal_entry e on e.id = l.entry_id join account a on a.id = l.account_id
+    where e.status = 'posted' and a.posting_key in ('vat_output', 'vat_input') and coalesce(e.source_type, '') <> 'vat_return'`);
+  out.push(check('vat', 'حركة ضريبة القيمة المضافة في الدفتر = مجموع البنود المُرمَّزة بكود ضريبي (أساس الإقرار)', H(vat?.total), H(vat?.coded), 0, 'الفرق = قيود يدوية على حسابات الضريبة بلا كود ضريبي'));
+  // fixed assets: register cost and accumulated depreciation vs the ledger balances of the accounts they use
+  const [fa] = await tx.execute<{ reg_cost: string; reg_acc: string; n: number }>(sql`
+    select coalesce(sum(a.cost), 0)::text as reg_cost,
+           coalesce(sum(a.opening_accumulated + coalesce((select sum(d.amount) from fixed_asset_dep d where d.asset_id = a.id), 0)), 0)::text as reg_acc, count(*)::int as n
+    from fixed_asset a where a.status = 'active'`);
+  if ((fa?.n ?? 0) > 0) {
+    const [gl] = await tx.execute<{ cost: string; acc: string }>(sql`
+      select coalesce(sum(case when t.id in (select account_id from fixed_asset where status = 'active') then l.debit - l.credit else 0 end), 0)::text as cost,
+             coalesce(sum(case when t.id in (select accum_account_id from fixed_asset where status = 'active') then l.credit - l.debit else 0 end), 0)::text as acc
+      from journal_line l join journal_entry e on e.id = l.entry_id join account t on t.id = l.account_id where e.status = 'posted'`);
+    out.push(check('fixed_assets', 'صافي الأصول الثابتة في الدفتر = صافي القيمة الدفترية في سجل الأصول', H(gl?.cost) - H(gl?.acc), H(fa?.reg_cost) - H(fa?.reg_acc), 100 * (fa?.n ?? 0), 'يظهر فرق إذا سُجلت أصول في حسابات الأصول دون إدراجها في السجل'));
+  }
+  return out;
 }
