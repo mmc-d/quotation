@@ -173,3 +173,14 @@ describe.skipIf(!process.env.ZATCA_SDK_HOME)('official ZATCA SDK validator', () 
     expect(out).toMatch(/all \d+ documents passed SDK validation/);
   }, 600_000);
 });
+
+describe('test CA', () => {
+  it('certifies the key found in a CSR, so a signed document verifies against the issued certificate', async () => {
+    const { issueTestCertificate } = await import('../src/index.js');
+    const ca = makeTestIdentity('MMC-TEST-CA');
+    const { csrPem, privateKeyPem } = generateCsr({ environment: 'simulation', commonName: 'c', serialNumber: egsSerial(), organizationIdentifier: '399999999900003', organizationUnitName: 'u', organizationName: 'o', locationAddress: 'a', businessCategory: 'b' });
+    const certificatePem = issueTestCertificate(csrPem, ca);
+    const s = buildSignedDocument(doc(), { privateKeyPem, certificatePem });
+    expect(verifySignedDocument(s.xml).ok).toBe(true);
+  });
+});

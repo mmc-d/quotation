@@ -7,4 +7,4 @@ export * from './xades.js';
 export * from './csr.js';
 export * from './client.js';
 export * from './document.js';
-export { makeTestIdentity } from './testing.js';
+export { makeTestIdentity, issueTestCertificate, publicKeyFromCsr } from './testing.js';
