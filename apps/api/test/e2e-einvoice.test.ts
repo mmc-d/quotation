@@ -188,7 +188,7 @@ describe('Issuing, chain and clearance', () => {
   it('signs a document for every invoice, in a gapless ICV / PIH chain', async () => {
     if (!pdfs) return;
     const p = await owner.post('/api/parties', {
-      nameAr: 'شركة الفوترة الإلكترونية', vatNumber: '311111111100003', b2b: true, contacts: [{ name: 'سالم', mobile: '0551112233', isPrimary: true }],
+      nameAr: 'شركة الفوترة الإلكترونية', vatNumber: '311222333400003', b2b: true, contacts: [{ name: 'سالم', mobile: '0551112233', isPrimary: true }],
       sites: [{ type: 'billing', name: 'المقر', buildingNumber: '1111', street: 'صلاح الدين', district: 'المروج', city: 'الرياض', postalCode: '12222', additionalNumber: '1234' }],
     });
     S.party = p;
