@@ -9,3 +9,4 @@ export * from './purchase-order.js';
 export * from './rfq.js';
 export * from './voucher.js';
 export * from './offer.js';
+export * from './report.js';
