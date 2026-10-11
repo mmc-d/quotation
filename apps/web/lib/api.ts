@@ -10,7 +10,16 @@ async function handle<T>(res: Response): Promise<T> {
     location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
   }
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: any = null;
+  if (text) {
+    try { body = JSON.parse(text); } catch {
+      // Not JSON: the `/api/*` rewrite answers with plain-text "Internal Server Error" when the API is down or restarting.
+      throw new ApiError(
+        res.ok ? 'Unexpected non-JSON response from the server' : `تعذّر الوصول إلى الخادم (HTTP ${res.status}) — أعد المحاولة بعد لحظات · The server is unreachable (HTTP ${res.status}), try again shortly`,
+        res.status,
+      );
+    }
+  }
   if (!res.ok) {
     const details = body?.details;
     const detailMsg = Array.isArray(details) ? details.map((d: { path?: string; message?: string }) => `${d.path ? `${d.path}: ` : ''}${d.message}`).join(' · ') : '';
